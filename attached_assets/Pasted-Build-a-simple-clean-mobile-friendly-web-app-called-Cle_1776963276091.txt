@@ -1,0 +1,63 @@
+Build a simple, clean, mobile-friendly web app called “CleanSpot” that allows citizens to report waste locations using a photo and automatic geolocation, and ensures the report is automatically sent to the correct government officer based on their assigned area.
+
+🌐 Tech Stack
+Frontend: React + Tailwind CSS (minimal, clean UI)
+Backend: Node.js with Express
+Database: MongoDB
+Maps: Mapbox or Google Maps
+Image Upload: Cloudinary or local storage (simple setup)
+Notifications: Firebase Cloud Messaging (or simple push/email alerts)
+👤 Citizen Features (Keep it very simple)
+No login required OR simple OTP login
+Home screen:
+One big button: “Report Waste”
+When clicked:
+Open camera
+Capture image
+Auto-detect location (GPS)
+Show map preview with pin
+Button: Submit
+After submission:
+Show message: “Reported successfully”
+Show status: Reported / Cleaning / Cleaned
+👮 Government Officer Features
+Login required
+Each officer is assigned:
+A geographical radius or area
+Dashboard:
+List of reports within their assigned area
+Each report shows:
+Image
+Location map
+Time
+Actions:
+Button: Mark as Cleaning
+Button: Mark as Cleaned
+Upload cleanup photo (optional but preferred)
+🛠️ Admin Features
+Create and manage officers
+Assign each officer:
+A radius (in km) OR map area (polygon)
+View all reports
+Reassign reports if needed
+📍 Core Logic (Important)
+When a user submits a report:
+Capture latitude & longitude
+Check which officer’s assigned area includes this location
+Automatically assign report to that officer
+Send notification to that officer
+🔔 Notifications
+Officer gets alert when a new report is assigned
+Citizen sees status updates when officer updates progress
+🎨 UI Requirements
+Very simple and clean design
+Large buttons
+Minimal text
+Mobile-first layout
+Fast loading
+🔒 Basic Safeguards
+Prevent duplicate reports within 30–50 meters
+Limit submissions per user per hour (basic spam control)
+🎯 Goal
+
+Build a lightweight, easy-to-use reporting tool that helps citizens quickly report waste and ensures it reaches the correct government officer without manual intervention.

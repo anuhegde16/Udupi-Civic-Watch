@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "CleanSpot"
+version = "1.0.0"
+id = "artifacts/cleanspot"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18338
+
+[services.development]
+run = "pnpm --filter @workspace/cleanspot run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/cleanspot", "run", "build" ]
+publicDir = "artifacts/cleanspot/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18338"
+BASE_PATH = "/"

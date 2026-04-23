@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: CleanSpot API - Waste reporting platform
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: reports
+    description: Waste report operations
+  - name: officers
+    description: Government officer operations
+  - name: admin
+    description: Admin operations
+  - name: auth
+    description: Authentication operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,386 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login for officer or admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current logged-in user
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "401":
+          description: Not authenticated
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: List all reports (admin) or assigned reports (officer)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [reported, cleaning, cleaned]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportList"
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Submit a new waste report (citizen)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportBody"
+      responses:
+        "201":
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "409":
+          description: Duplicate report nearby
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reports/{id}:
+    get:
+      operationId: getReport
+      tags: [reports]
+      summary: Get a single report by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateReport
+      tags: [reports]
+      summary: Update report status (officer)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportBody"
+      responses:
+        "200":
+          description: Updated report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+
+  /reports/{id}/track:
+    get:
+      operationId: trackReport
+      tags: [reports]
+      summary: Track report status by ID (public, no auth required)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportStatus"
+        "404":
+          description: Not found
+
+  /reports/stats/summary:
+    get:
+      operationId: getReportsSummary
+      tags: [reports]
+      summary: Get report stats summary
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportsSummary"
+
+  /officers:
+    get:
+      operationId: listOfficers
+      tags: [officers]
+      summary: List all officers (admin only)
+      responses:
+        "200":
+          description: List of officers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfficerList"
+    post:
+      operationId: createOfficer
+      tags: [officers]
+      summary: Create new officer (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOfficerBody"
+      responses:
+        "201":
+          description: Officer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Officer"
+
+  /officers/{id}:
+    get:
+      operationId: getOfficer
+      tags: [officers]
+      summary: Get officer details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Officer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Officer"
+    patch:
+      operationId: updateOfficer
+      tags: [officers]
+      summary: Update officer (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOfficerBody"
+      responses:
+        "200":
+          description: Updated officer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Officer"
+    delete:
+      operationId: deleteOfficer
+      tags: [officers]
+      summary: Delete officer (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /officers/{id}/reports:
+    get:
+      operationId: getOfficerReports
+      tags: [officers]
+      summary: Get reports assigned to a specific officer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [reported, cleaning, cleaned]
+      responses:
+        "200":
+          description: Officer's reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportList"
+
+  /admin/reports:
+    get:
+      operationId: adminListReports
+      tags: [admin]
+      summary: Admin view of all reports with full details
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [reported, cleaning, cleaned]
+        - name: officerId
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: All reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportList"
+
+  /admin/reports/{id}/reassign:
+    post:
+      operationId: reassignReport
+      tags: [admin]
+      summary: Reassign report to a different officer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignReportBody"
+      responses:
+        "200":
+          description: Report reassigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+
+  /uploads/image:
+    post:
+      operationId: uploadImage
+      tags: [reports]
+      summary: Upload an image and get back a URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadImageBody"
+      responses:
+        "200":
+          description: Image URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadImageResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +418,305 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserInfo"
+        token:
+          type: string
+      required: [user]
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [officer, admin]
+        officerId:
+          type: integer
+          nullable: true
+      required: [id, email, name, role]
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: integer
+        imageUrl:
+          type: string
+          nullable: true
+        cleanupImageUrl:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        address:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [reported, cleaning, cleaned]
+        reporterIp:
+          type: string
+          nullable: true
+        assignedOfficerId:
+          type: integer
+          nullable: true
+        assignedOfficer:
+          $ref: "#/components/schemas/OfficerBasic"
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, latitude, longitude, status, createdAt, updatedAt]
+
+    ReportList:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/Report"
+        total:
+          type: integer
+      required: [reports, total]
+
+    ReportStatus:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [reported, cleaning, cleaned]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        cleanupImageUrl:
+          type: string
+          nullable: true
+      required: [id, status, createdAt, updatedAt]
+
+    ReportsSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+        reported:
+          type: integer
+        cleaning:
+          type: integer
+        cleaned:
+          type: integer
+        last24h:
+          type: integer
+        last7d:
+          type: integer
+      required: [total, reported, cleaning, cleaned, last24h, last7d]
+
+    CreateReportBody:
+      type: object
+      properties:
+        imageUrl:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+        longitude:
+          type: number
+        address:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+      required: [latitude, longitude]
+
+    UpdateReportBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [reported, cleaning, cleaned]
+        cleanupImageUrl:
+          type: string
+          nullable: true
+
+    ReassignReportBody:
+      type: object
+      properties:
+        officerId:
+          type: integer
+      required: [officerId]
+
+    Officer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        areaName:
+          type: string
+          nullable: true
+        centerLat:
+          type: number
+          nullable: true
+        centerLng:
+          type: number
+          nullable: true
+        radiusKm:
+          type: number
+          nullable: true
+        reportCount:
+          type: integer
+        pendingCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, reportCount, pendingCount, createdAt]
+
+    OfficerBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        areaName:
+          type: string
+          nullable: true
+      required: [id, name, email]
+
+    OfficerList:
+      type: object
+      properties:
+        officers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Officer"
+        total:
+          type: integer
+      required: [officers, total]
+
+    CreateOfficerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        areaName:
+          type: string
+          nullable: true
+        centerLat:
+          type: number
+          nullable: true
+        centerLng:
+          type: number
+          nullable: true
+        radiusKm:
+          type: number
+          nullable: true
+      required: [name, email, password]
+
+    UpdateOfficerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        areaName:
+          type: string
+          nullable: true
+        centerLat:
+          type: number
+          nullable: true
+        centerLng:
+          type: number
+          nullable: true
+        radiusKm:
+          type: number
+          nullable: true
+
+    UploadImageBody:
+      type: object
+      properties:
+        dataUrl:
+          type: string
+          description: Base64 data URL of the image
+      required: [dataUrl]
+
+    UploadImageResponse:
+      type: object
+      properties:
+        url:
+          type: string
+      required: [url]
