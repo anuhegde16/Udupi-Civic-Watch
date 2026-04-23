@@ -1,0 +1,26 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "wbcuLdx1bXjfzjM7cU4kS"
+uri = "file://artifacts/cleanspot/public/hero-coast.png"
+type = "image"
+title = "Arabian sea coast at dusk"
+
+[[generated]]
+id = "mcv9CLwuVNDeyQ7PXGQyO"
+uri = "file://artifacts/cleanspot/public/plastic-water.png"
+type = "image"
+title = "Plastic bag in sea water"
+
+[[generated]]
+id = "r76cu1o5Rw488Si4grlS2"
+uri = "file://artifacts/cleanspot/public/clean-sand.png"
+type = "image"
+title = "Clean golden beach sand"
+
+[[generated]]
+id = "9-qc4Xng80Uc4f1nUkiBe"
+uri = "file://artifacts/cleanspot/public/login-bg.png"
+type = "image"
+title = "Coastal fishing boats"

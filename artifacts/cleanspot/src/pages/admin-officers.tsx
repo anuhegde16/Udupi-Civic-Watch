@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Users, MapPin, Phone, Mail, Trash2 } from "lucide-react";
+import { Loader2, Plus, Users, MapPin, Phone, Mail, Trash2, Shield, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const createOfficerSchema = z.object({
@@ -92,203 +92,215 @@ export default function AdminOfficers() {
   const officers = officersData?.officers || [];
 
   return (
-    <div className="pb-12">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">Team Roster</h1>
-          <p className="text-gray-600 font-medium">Manage sanitation officers and their assigned zones.</p>
-        </div>
+    <div className="pb-12 animate-in fade-in duration-500">
+      <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden mb-8">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-bl-[120px] pointer-events-none" />
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
+          <div>
+            <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">Team Roster</h1>
+            <p className="text-muted-foreground font-medium text-lg">Manage coastal sanitation officers and their assigned zones.</p>
+          </div>
 
-        <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
-          <DialogTrigger asChild>
-            <Button size="lg" className="h-12 rounded-xl font-bold shadow-md shadow-primary/20">
-              <Plus className="w-5 h-5 mr-2" /> Add Officer
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] rounded-3xl p-6 max-h-[90vh] overflow-y-auto">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="text-2xl font-black">New Officer</DialogTitle>
-            </DialogHeader>
-            
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Full Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Jane Doe" {...field} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Email (Login)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="jane@cleanspot.city" type="email" {...field} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+            <DialogTrigger asChild>
+              <Button size="lg" className="h-14 rounded-2xl font-black shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-1 transition-all">
+                <Plus className="w-5 h-5 mr-2" /> Add Officer
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-2xl rounded-[2rem] p-8 border-border/50 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader className="mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+                  <Shield className="w-7 h-7" />
+                </div>
+                <DialogTitle className="text-3xl font-black font-display tracking-tight">New Officer</DialogTitle>
+              </DialogHeader>
+              
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Jane Doe" {...field} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="jane@cleanspot.city" type="email" {...field} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Temporary Password</FormLabel>
-                        <FormControl>
-                          <Input type="text" placeholder="min 6 characters" {...field} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Temporary Password</FormLabel>
+                          <FormControl>
+                            <Input type="text" placeholder="min 6 characters" {...field} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Phone <span className="text-gray-400 font-normal">(Optional)</span></FormLabel>
-                        <FormControl>
-                          <Input placeholder="(555) 123-4567" {...field} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="font-bold text-foreground">Phone <span className="text-muted-foreground font-medium ml-1">(Optional)</span></FormLabel>
+                          <FormControl>
+                            <Input placeholder="+91 98765 43210" {...field} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  <div className="col-span-2 pt-4 pb-2">
-                    <h3 className="text-sm font-bold text-primary uppercase tracking-wider mb-1">Assignment Area</h3>
-                    <div className="h-px w-full bg-gray-100" />
+                    <div className="md:col-span-2 pt-4 pb-2">
+                      <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
+                        <h3 className="font-black text-primary flex items-center gap-2 mb-1">
+                          <MapPin className="w-5 h-5" /> Coastal Sector Assignment
+                        </h3>
+                        <p className="text-sm text-foreground/70 font-medium">Assign a specific beach or coastal zone for this officer to manage.</p>
+                      </div>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="areaName"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="font-bold text-foreground">Sector Name <span className="text-muted-foreground font-medium ml-1">(Optional)</span></FormLabel>
+                          <FormControl>
+                            <Input placeholder="Malpe Beach South" {...field} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="centerLat"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Center Lat</FormLabel>
+                          <FormControl>
+                            <Input placeholder="13.3409" type="number" step="any" {...field} value={field.value ?? ""} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="centerLng"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Center Lng</FormLabel>
+                          <FormControl>
+                            <Input placeholder="74.7421" type="number" step="any" {...field} value={field.value ?? ""} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="radiusKm"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="font-bold text-foreground">Radius (km)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="5" type="number" step="any" {...field} value={field.value ?? ""} className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="areaName"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Area Name <span className="text-gray-400 font-normal">(Optional)</span></FormLabel>
-                        <FormControl>
-                          <Input placeholder="Downtown District" {...field} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="centerLat"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold text-gray-700">Center Lat</FormLabel>
-                        <FormControl>
-                          <Input placeholder="13.3409" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="centerLng"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold text-gray-700">Center Lng</FormLabel>
-                        <FormControl>
-                          <Input placeholder="74.7421" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="radiusKm"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel className="font-bold text-gray-700">Radius (km)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="5" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="pt-6 flex justify-end gap-3">
-                  <Button type="button" variant="ghost" onClick={() => setCreateModalOpen(false)} className="rounded-xl">Cancel</Button>
-                  <Button type="submit" className="rounded-xl font-bold px-6" disabled={createOfficer.isPending}>
-                    {createOfficer.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                    Create Officer
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                  <div className="pt-6 flex justify-end gap-3 mt-8 border-t border-border/50 pt-8">
+                    <Button type="button" variant="ghost" onClick={() => setCreateModalOpen(false)} className="rounded-xl h-12 font-bold px-6">Cancel</Button>
+                    <Button type="submit" className="rounded-xl h-12 font-black px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20" disabled={createOfficer.isPending}>
+                      {createOfficer.isPending ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
+                      Create Officer
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-gray-200 border-dashed">
-          <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-          <p className="font-medium text-gray-500">Loading officers...</p>
+        <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed shadow-sm">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mb-6" />
+          <p className="font-bold text-lg text-foreground">Loading officers...</p>
         </div>
       ) : officers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-gray-200 border-dashed text-center px-4">
-          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-            <Users className="w-8 h-8 text-gray-400" />
+        <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed text-center px-4 shadow-sm">
+          <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mb-6">
+            <Users className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">No officers on roster</h3>
-          <p className="text-gray-500 max-w-md">Add your first sanitation officer to start assigning reports.</p>
+          <h3 className="text-2xl font-black text-foreground mb-3">No officers on roster</h3>
+          <p className="text-muted-foreground font-medium max-w-md">Add your first sanitation officer to start assigning coastal cleanup reports.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {officers.map(officer => (
-            <div key={officer.id} className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 flex flex-col hover:border-primary/50 transition-colors group">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-lg font-black shrink-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {officers.map((officer, i) => (
+            <div key={officer.id} className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 md:p-8 flex flex-col hover:border-primary/30 transition-all hover:shadow-lg group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4" style={{ animationDelay: `${i * 50}ms` }}>
+              <div className="absolute top-0 right-0 w-24 h-24 bg-secondary/5 rounded-bl-[80px] transition-transform duration-500 group-hover:scale-125" />
+              
+              <div className="flex items-start justify-between mb-6 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-secondary/20 text-secondary-foreground flex items-center justify-center text-xl font-black shrink-0 font-display shadow-inner">
                     {officer.name.charAt(0)}
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg leading-tight">{officer.name}</h3>
-                    <p className="text-sm text-gray-500 font-medium">Joined {format(new Date(officer.createdAt), "MMM yyyy")}</p>
+                    <h3 className="font-black text-foreground text-xl leading-tight mb-1 group-hover:text-primary transition-colors">{officer.name}</h3>
+                    <p className="text-sm text-muted-foreground font-medium">Joined {format(new Date(officer.createdAt), "MMM yyyy")}</p>
                   </div>
                 </div>
                 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-gray-400 hover:text-red-500 hover:bg-red-50 -mt-2 -mr-2">
-                      <Trash2 className="w-4 h-4" />
+                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-2 -mr-2 h-10 w-10 rounded-full">
+                      <Trash2 className="w-5 h-5" />
                     </Button>
                   </AlertDialogTrigger>
-                  <AlertDialogContent className="rounded-3xl">
+                  <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
                     <AlertDialogHeader>
-                      <AlertDialogTitle className="font-black text-xl">Remove Officer?</AlertDialogTitle>
-                      <AlertDialogDescription className="text-base text-gray-600">
-                        This will permanently delete <strong>{officer.name}</strong> from the system. Any currently assigned reports will become unassigned. This action cannot be undone.
+                      <AlertDialogTitle className="font-black text-3xl text-foreground font-display">Remove Officer?</AlertDialogTitle>
+                      <AlertDialogDescription className="text-lg text-muted-foreground font-medium mt-4 leading-relaxed">
+                        This will permanently delete <strong className="text-foreground">{officer.name}</strong> from the system. Any currently assigned reports will become unassigned. This action cannot be undone.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="mt-6">
-                      <AlertDialogCancel className="rounded-xl font-bold">Cancel</AlertDialogCancel>
+                    <AlertDialogFooter className="mt-8 gap-3 sm:gap-0">
+                      <AlertDialogCancel className="rounded-xl font-bold h-12 px-6 border-border/50">Cancel</AlertDialogCancel>
                       <AlertDialogAction 
-                        className="bg-red-500 hover:bg-red-600 rounded-xl font-bold"
+                        className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 rounded-xl font-black h-12 px-6"
                         onClick={() => handleDelete(officer.id)}
                       >
                         Yes, remove officer
@@ -298,31 +310,31 @@ export default function AdminOfficers() {
                 </AlertDialog>
               </div>
 
-              <div className="space-y-3 mb-6 flex-1">
-                <div className="flex items-center gap-2.5 text-sm text-gray-600">
-                  <Mail className="w-4 h-4 text-gray-400 shrink-0" />
+              <div className="space-y-4 mb-8 flex-1 relative z-10">
+                <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
+                  <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
                   <span className="truncate">{officer.email}</span>
                 </div>
                 {officer.phone && (
-                  <div className="flex items-center gap-2.5 text-sm text-gray-600">
-                    <Phone className="w-4 h-4 text-gray-400 shrink-0" />
+                  <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
+                    <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
                     <span>{officer.phone}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2.5 text-sm text-gray-600">
-                  <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="font-medium text-gray-900">{officer.areaName || "No specific area"}</span>
+                <div className="flex items-center gap-3 text-sm text-foreground font-bold bg-muted/30 p-3 rounded-xl">
+                  <MapPin className="w-5 h-5 text-primary shrink-0" />
+                  <span>{officer.areaName || "Unassigned"}</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
-                <div className="bg-gray-50 rounded-xl p-3 text-center">
-                  <div className="text-2xl font-black text-gray-900">{officer.pendingCount}</div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-gray-500 mt-1">Pending</div>
+              <div className="grid grid-cols-2 gap-4 relative z-10">
+                <div className="bg-muted/50 rounded-2xl p-4 text-center border border-border/50">
+                  <div className="text-3xl font-black text-foreground mb-1 font-display">{officer.pendingCount}</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
                 </div>
-                <div className="bg-primary/5 rounded-xl p-3 text-center">
-                  <div className="text-2xl font-black text-primary">{officer.reportCount - officer.pendingCount}</div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-primary/70 mt-1">Resolved</div>
+                <div className="bg-primary/5 rounded-2xl p-4 text-center border border-primary/10">
+                  <div className="text-3xl font-black text-primary mb-1 font-display">{officer.reportCount - officer.pendingCount}</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-primary">Resolved</div>
                 </div>
               </div>
             </div>

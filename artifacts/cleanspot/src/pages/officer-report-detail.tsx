@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning } from "lucide-react";
+import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function OfficerReportDetail() {
@@ -26,9 +26,9 @@ export default function OfficerReportDetail() {
 
   if (isLoading || !report) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-500 h-full">
-        <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-        <p className="font-medium">Loading report details...</p>
+      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground h-full animate-in fade-in duration-500">
+        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <p className="font-bold text-lg text-foreground">Loading report details...</p>
       </div>
     );
   }
@@ -86,9 +86,9 @@ export default function OfficerReportDetail() {
 
   const getStatusBadge = () => {
     switch (report.status) {
-      case 'reported': return <Badge className="bg-red-100 text-red-800 border-red-200 px-3 py-1 text-sm"><FileWarning className="w-3.5 h-3.5 mr-1.5"/> New Report</Badge>;
-      case 'cleaning': return <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 px-3 py-1 text-sm"><HardHat className="w-3.5 h-3.5 mr-1.5"/> In Progress</Badge>;
-      case 'cleaned': return <Badge className="bg-green-100 text-green-800 border-green-200 px-3 py-1 text-sm"><CheckCircle2 className="w-3.5 h-3.5 mr-1.5"/> Cleaned</Badge>;
+      case 'reported': return <Badge className="bg-destructive text-destructive-foreground px-4 py-1.5 text-sm font-black uppercase tracking-wider"><FileWarning className="w-4 h-4 mr-2"/> New Report</Badge>;
+      case 'cleaning': return <Badge className="bg-secondary text-secondary-foreground px-4 py-1.5 text-sm font-black uppercase tracking-wider"><HardHat className="w-4 h-4 mr-2"/> In Progress</Badge>;
+      case 'cleaned': return <Badge className="bg-primary text-primary-foreground px-4 py-1.5 text-sm font-black uppercase tracking-wider"><CheckCircle2 className="w-4 h-4 mr-2"/> Cleaned</Badge>;
       default: return null;
     }
   };
@@ -97,130 +97,161 @@ export default function OfficerReportDetail() {
   const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${report.longitude - 0.008},${report.latitude - 0.006},${report.longitude + 0.008},${report.latitude + 0.006}&layer=mapnik&marker=${report.latitude},${report.longitude}`;
 
   return (
-    <div className="max-w-2xl mx-auto w-full pb-10">
-      <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => window.history.back()} className="rounded-full hover:bg-gray-200">
+    <div className="max-w-3xl mx-auto w-full pb-10 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-8">
+        <Button variant="outline" size="icon" onClick={() => window.history.back()} className="rounded-full h-12 w-12 border-border/50 hover:bg-muted shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Report #{report.id}</h1>
+        <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-foreground tracking-tight">Report #{report.id}</h1>
+            <p className="text-muted-foreground font-medium">Assigned task in your coastal sector</p>
+          </div>
+          <div className="self-start sm:self-auto">
             {getStatusBadge()}
           </div>
         </div>
       </div>
 
-      {/* Location Map Preview */}
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden mb-4 h-[180px] relative">
-        <iframe
-          title="Location on Map"
-          src={osmEmbedUrl}
-          className="w-full h-full border-0"
-          loading="lazy"
-        />
-        <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-3 py-1.5 flex items-center gap-2 text-xs">
-          <MapPin className="w-3 h-3 text-primary shrink-0" />
-          <span className="font-mono text-gray-600">{report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</span>
-          <span className="text-gray-400 ml-auto">Udupi District, Karnataka</span>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Left Col - Images */}
+        <div className="space-y-6">
+          <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden group relative">
+            <div className="absolute top-4 left-4 z-10">
+              <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-xs">Original Photo</Badge>
+            </div>
+            <div className="aspect-[4/3] bg-muted w-full relative">
+              {report.imageUrl ? (
+                <img src={report.imageUrl} alt="Waste report" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
+                  <Camera className="w-12 h-12 mb-3 opacity-50" />
+                  <p className="font-medium">No photo provided</p>
+                </div>
+              )}
+            </div>
+          </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-        {/* Original Photo */}
-        <div className="aspect-video bg-gray-100 w-full relative">
-          {report.imageUrl ? (
-            <img src={report.imageUrl} alt="Waste report" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400">
-              <Camera className="w-12 h-12 mb-2 opacity-50" />
-              <p>No photo provided</p>
+          {report.status === 'cleaned' && report.cleanupImageUrl && (
+            <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden group relative animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="absolute top-4 left-4 z-10">
+                <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-xs shadow-lg shadow-green-500/20 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Cleaned Up
+                </Badge>
+              </div>
+              <div className="aspect-[4/3] bg-muted w-full relative">
+                <img src={report.cleanupImageUrl} alt="Cleaned up" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              </div>
             </div>
           )}
         </div>
 
-        <div className="p-6 md:p-8 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Location</p>
-              <div className="flex items-start gap-3 text-gray-900 font-medium">
-                <MapPin className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                <p>{report.address || `${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}`}</p>
-              </div>
+        {/* Right Col - Details & Actions */}
+        <div className="space-y-6">
+          {/* Location Map Preview */}
+          <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden flex flex-col">
+            <div className="h-[200px] relative w-full">
+              <iframe
+                title="Location on Map"
+                src={osmEmbedUrl}
+                className="w-full h-full border-0 grayscale-[0.2] contrast-125 sepia-[0.2]"
+                loading="lazy"
+              />
+              <div className="absolute inset-0 pointer-events-none border-[6px] border-card rounded-3xl z-10" />
             </div>
             
-            <div>
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Reported At</p>
-              <div className="flex items-center gap-3 text-gray-900 font-medium">
-                <Clock className="w-5 h-5 text-primary shrink-0" />
-                <p>{format(new Date(report.createdAt), "MMM d, yyyy 'at' h:mm a")}</p>
+            <div className="p-6">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Location Details</p>
+              <div className="flex items-start gap-3 text-foreground font-bold text-lg mb-4">
+                <MapPin className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+                <p className="leading-snug">{report.address || `${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}`}</p>
               </div>
+              
+              <div className="flex flex-col gap-1 mb-6">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Reported At</p>
+                <div className="flex items-center gap-2 text-foreground font-medium bg-muted/50 p-3 rounded-xl">
+                  <Clock className="w-5 h-5 text-primary shrink-0" />
+                  <p>{format(new Date(report.createdAt), "MMM d, yyyy 'at' h:mm a")}</p>
+                </div>
+              </div>
+
+              <a href={osmUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
+                <Button variant="outline" className="w-full h-12 font-bold rounded-xl border-primary/20 text-primary hover:bg-primary/5 group">
+                  Open in Maps
+                  <ArrowUpRight className="w-4 h-4 ml-2 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 transition-transform" />
+                </Button>
+              </a>
             </div>
           </div>
 
           {report.description && (
-            <div className="pt-6 border-t border-gray-100">
-              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Description</p>
-              <p className="text-gray-800 bg-gray-50 p-4 rounded-xl italic">"{report.description}"</p>
+            <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Description from Citizen</p>
+              <div className="relative">
+                <div className="absolute top-0 left-0 w-1 h-full bg-secondary rounded-full" />
+                <p className="text-foreground pl-4 font-medium italic leading-relaxed">"{report.description}"</p>
+              </div>
             </div>
           )}
+
+          {/* Action Area */}
+          <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 space-y-4">
+            <h3 className="font-black text-lg text-foreground mb-4">Officer Actions</h3>
+            
+            {report.status === 'reported' && (
+              <Button 
+                size="lg" 
+                className="w-full h-14 text-lg font-bold rounded-xl bg-secondary hover:bg-secondary/90 text-secondary-foreground shadow-lg shadow-secondary/20 transition-all hover:-translate-y-1"
+                onClick={() => handleStatusChange("cleaning")}
+                disabled={updateReport.isPending}
+              >
+                {updateReport.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                  <>
+                    <HardHat className="w-5 h-5 mr-2" /> Mark as In Progress
+                  </>
+                )}
+              </Button>
+            )}
+
+            {(report.status === 'reported' || report.status === 'cleaning') && (
+              <div className="pt-2">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment"
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                />
+                <Button 
+                  size="lg" 
+                  className="w-full h-14 text-lg font-black rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:-translate-y-1"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading || updateReport.isPending}
+                >
+                  {isUploading ? (
+                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Uploading Photo...</>
+                  ) : (
+                    <><Camera className="w-5 h-5 mr-2" /> Snap Cleanup Photo & Resolve</>
+                  )}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground font-medium mt-3">
+                  Taking a photo of the cleaned area will automatically resolve this report.
+                </p>
+              </div>
+            )}
+
+            {report.status === 'cleaned' && (
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
+                <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-primary font-bold">Great job!</p>
+                  <p className="text-sm text-foreground/70 font-medium mt-1">This report is fully resolved. Your work helps keep Udupi's coast clean for everyone.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Action Area */}
-      <div className="space-y-4">
-        <a href={osmUrl} target="_blank" rel="noopener noreferrer" className="block">
-          <Button variant="outline" size="lg" className="w-full h-14 text-lg font-bold rounded-2xl bg-white">
-            <MapPin className="w-5 h-5 mr-2" />
-            Navigate to Location
-          </Button>
-        </a>
-
-        {report.status === 'reported' && (
-          <Button 
-            size="lg" 
-            className="w-full h-14 text-lg font-bold rounded-2xl bg-yellow-500 hover:bg-yellow-600 text-white shadow-lg shadow-yellow-500/25"
-            onClick={() => handleStatusChange("cleaning")}
-            disabled={updateReport.isPending}
-          >
-            {updateReport.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "Mark as In Progress"}
-          </Button>
-        )}
-
-        {(report.status === 'reported' || report.status === 'cleaning') && (
-          <div className="pt-2">
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="environment"
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handleFileChange}
-            />
-            <Button 
-              size="lg" 
-              className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || updateReport.isPending}
-            >
-              {isUploading ? (
-                <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Uploading Photo...</>
-              ) : (
-                <><Camera className="w-5 h-5 mr-2" /> Snap Cleanup Photo & Resolve</>
-              )}
-            </Button>
-          </div>
-        )}
-
-        {report.status === 'cleaned' && report.cleanupImageUrl && (
-          <div className="mt-8">
-            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <CheckCircle2 className="text-primary w-6 h-6" /> Resolution Photo
-            </h3>
-            <div className="rounded-3xl overflow-hidden border border-gray-200 shadow-sm">
-              <img src={report.cleanupImageUrl} alt="Cleaned up" className="w-full h-auto" />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

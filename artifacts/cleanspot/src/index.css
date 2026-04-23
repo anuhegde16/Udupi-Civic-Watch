@@ -4,6 +4,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -37,81 +39,87 @@
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+  --font-display: var(--app-font-display);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
 }
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 15%;
+  --background: 40 33% 98%;
+  --foreground: 190 60% 10%;
 
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 15%;
-  --card-border: 240 5.9% 90%;
+  --card-foreground: 190 60% 10%;
+  --card-border: 40 20% 90%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 15%;
-  --popover-border: 240 5.9% 90%;
+  --popover-foreground: 190 60% 10%;
+  --popover-border: 40 20% 90%;
 
-  /* Bold, purposeful green */
-  --primary: 142 76% 36%;
-  --primary-foreground: 0 0% 100%;
+  /* Deep Coastal Teal */
+  --primary: 190 70% 25%;
+  --primary-foreground: 40 33% 98%;
 
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
+  /* Golden Sand */
+  --secondary: 40 80% 60%;
+  --secondary-foreground: 190 80% 15%;
 
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  --muted: 40 20% 92%;
+  --muted-foreground: 190 20% 40%;
 
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
+  --accent: 40 60% 85%;
+  --accent-foreground: 190 70% 20%;
 
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
+  /* Rust Orange */
+  --destructive: 15 80% 55%;
+  --destructive-foreground: 0 0% 100%;
 
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 142 76% 36%;
+  --border: 40 20% 88%;
+  --input: 40 20% 88%;
+  --ring: 190 70% 25%;
 
-  --radius: 0.75rem;
+  --radius: 0.5rem;
 
   --app-font-sans: "Inter", sans-serif;
-  --app-font-mono: "Menlo", monospace;
+  --app-font-display: "Bricolage Grotesque", sans-serif;
+  --app-font-mono: "Space Mono", monospace;
 }
 
 .dark {
-  --background: 240 10% 10%;
-  --foreground: 0 0% 95%;
+  --background: 190 50% 5%;
+  --foreground: 40 33% 96%;
 
-  --card: 240 10% 12%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 240 10% 20%;
+  --card: 190 50% 8%;
+  --card-foreground: 40 33% 96%;
+  --card-border: 190 30% 15%;
 
-  --popover: 240 10% 12%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 240 10% 20%;
+  --popover: 190 50% 8%;
+  --popover-foreground: 40 33% 96%;
+  --popover-border: 190 30% 15%;
 
-  --primary: 142 70% 45%;
-  --primary-foreground: 144 100% 10%;
+  --primary: 190 60% 45%;
+  --primary-foreground: 190 90% 5%;
 
-  --secondary: 240 10% 20%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: 40 70% 50%;
+  --secondary-foreground: 190 90% 10%;
 
-  --muted: 240 10% 20%;
-  --muted-foreground: 240 5% 65%;
+  --muted: 190 30% 15%;
+  --muted-foreground: 190 10% 65%;
 
-  --accent: 240 10% 20%;
-  --accent-foreground: 0 0% 98%;
+  --accent: 190 40% 20%;
+  --accent-foreground: 40 33% 96%;
 
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive: 15 70% 50%;
+  --destructive-foreground: 0 0% 100%;
 
-  --border: 240 10% 20%;
-  --input: 240 10% 20%;
-  --ring: 142 70% 45%;
+  --border: 190 30% 15%;
+  --input: 190 30% 15%;
+  --ring: 190 60% 45%;
 }
 
 @layer base {
@@ -119,6 +127,15 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased bg-background text-foreground selection:bg-secondary selection:text-secondary-foreground;
   }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+.bg-texture-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
 }
