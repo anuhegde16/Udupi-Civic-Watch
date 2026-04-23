@@ -93,7 +93,8 @@ export default function OfficerReportDetail() {
     }
   };
 
-  const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${report.latitude},${report.longitude}`;
+  const osmUrl = `https://www.openstreetmap.org/directions?from=&to=${report.latitude}%2C${report.longitude}#map=15/${report.latitude}/${report.longitude}`;
+  const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${report.longitude - 0.008},${report.latitude - 0.006},${report.longitude + 0.008},${report.latitude + 0.006}&layer=mapnik&marker=${report.latitude},${report.longitude}`;
 
   return (
     <div className="max-w-2xl mx-auto w-full pb-10">
@@ -106,6 +107,21 @@ export default function OfficerReportDetail() {
             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Report #{report.id}</h1>
             {getStatusBadge()}
           </div>
+        </div>
+      </div>
+
+      {/* Location Map Preview */}
+      <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden mb-4 h-[180px] relative">
+        <iframe
+          title="Location on Map"
+          src={osmEmbedUrl}
+          className="w-full h-full border-0"
+          loading="lazy"
+        />
+        <div className="absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm px-3 py-1.5 flex items-center gap-2 text-xs">
+          <MapPin className="w-3 h-3 text-primary shrink-0" />
+          <span className="font-mono text-gray-600">{report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</span>
+          <span className="text-gray-400 ml-auto">Udupi District, Karnataka</span>
         </div>
       </div>
 
@@ -152,7 +168,7 @@ export default function OfficerReportDetail() {
 
       {/* Action Area */}
       <div className="space-y-4">
-        <a href={googleMapsUrl} target="_blank" rel="noopener noreferrer" className="block">
+        <a href={osmUrl} target="_blank" rel="noopener noreferrer" className="block">
           <Button variant="outline" size="lg" className="w-full h-14 text-lg font-bold rounded-2xl bg-white">
             <MapPin className="w-5 h-5 mr-2" />
             Navigate to Location

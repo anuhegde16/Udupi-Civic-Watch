@@ -195,7 +195,7 @@ export default function AdminOfficers() {
                       <FormItem>
                         <FormLabel className="font-bold text-gray-700">Center Lat</FormLabel>
                         <FormControl>
-                          <Input placeholder="40.7128" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
+                          <Input placeholder="13.3409" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -209,7 +209,7 @@ export default function AdminOfficers() {
                       <FormItem>
                         <FormLabel className="font-bold text-gray-700">Center Lng</FormLabel>
                         <FormControl>
-                          <Input placeholder="-74.0060" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
+                          <Input placeholder="74.7421" type="number" step="any" {...field} value={field.value ?? ""} className="bg-gray-50 rounded-xl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
