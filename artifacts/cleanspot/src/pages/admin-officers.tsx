@@ -6,6 +6,7 @@ import {
   useUpdateOfficer,
   getListOfficersQueryKey,
 } from "@workspace/api-client-react";
+import type { Officer, OfficerList } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -195,12 +196,12 @@ export default function AdminOfficers() {
       {
         onMutate: async () => {
           await queryClient.cancelQueries({ queryKey: getListOfficersQueryKey() });
-          const previous = queryClient.getQueryData(getListOfficersQueryKey());
-          queryClient.setQueryData(getListOfficersQueryKey(), (old: any) => {
+          const previous = queryClient.getQueryData<OfficerList>(getListOfficersQueryKey());
+          queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), (old) => {
             if (!old) return old;
             return {
               ...old,
-              officers: old.officers.map((o: any) =>
+              officers: old.officers.map((o: Officer) =>
                 o.id === snapshot.officerId
                   ? {
                       ...o,
@@ -215,13 +216,13 @@ export default function AdminOfficers() {
           });
           return { previous };
         },
-        onError: (_err, _vars, context: any) => {
+        onError: (err, _vars, context: { previous?: OfficerList } | undefined) => {
           if (context?.previous) {
-            queryClient.setQueryData(getListOfficersQueryKey(), context.previous);
+            queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), context.previous);
           }
           toast({
             title: "Failed to save zone",
-            description: _err.message,
+            description: err.message,
             variant: "destructive",
           });
         },
