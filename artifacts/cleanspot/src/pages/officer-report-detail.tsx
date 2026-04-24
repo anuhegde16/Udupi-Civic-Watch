@@ -93,7 +93,7 @@ export default function OfficerReportDetail() {
     }
   };
 
-  const osmUrl = `https://www.openstreetmap.org/directions?from=&to=${report.latitude}%2C${report.longitude}#map=15/${report.latitude}/${report.longitude}`;
+  const osmUrl = `https://www.google.com/maps?q=${report.latitude},${report.longitude}`;
   const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${report.longitude - 0.008},${report.latitude - 0.006},${report.longitude + 0.008},${report.latitude + 0.006}&layer=mapnik&marker=${report.latitude},${report.longitude}`;
 
   return (
