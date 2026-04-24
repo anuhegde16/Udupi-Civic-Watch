@@ -9,6 +9,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import Home from "@/pages/home";
 import Report from "@/pages/report";
 import Track from "@/pages/track";
+import TrackSearch from "@/pages/track-search";
 import Login from "@/pages/login";
 import OfficerDashboard from "@/pages/officer-dashboard";
 import OfficerReportDetail from "@/pages/officer-report-detail";
@@ -24,8 +25,11 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/report" component={Report} />
+        <Route path="/track" component={TrackSearch} />
         <Route path="/track/:id" component={Track} />
         <Route path="/login" component={Login} />
+        <Route path="/staff/login">{() => <Login portalType="staff" />}</Route>
+        <Route path="/admin/login">{() => <Login portalType="admin" />}</Route>
         
         {/* Protected Officer Routes */}
         <Route path="/officer/dashboard">
