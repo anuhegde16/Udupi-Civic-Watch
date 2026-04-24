@@ -30,6 +30,8 @@ export default function Report() {
   const createReport = useCreateReport();
   const uploadImage = useUploadImage();
 
+  const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
+
   useEffect(() => {
     getLocation();
   }, []);
@@ -39,19 +41,46 @@ export default function Report() {
     if (!navigator.geolocation) {
       setIsLocating(false);
       setLocationMode("manual");
+      setGeoLocation((cur) => cur ?? UDUPI_CENTER);
+      toast({ title: "GPS not available", description: "Drag the pin on the map to mark the exact location.", variant: "destructive" });
       return;
     }
+
+    let resolved = false;
+
+    // Hard fallback: if the browser never calls back (e.g. iframe sandbox), bail after 5s
+    const fallbackTimer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        setIsLocating(false);
+        setLocationMode("manual");
+        setGeoLocation((cur) => cur ?? UDUPI_CENTER);
+        toast({ title: "Location unavailable", description: "Could not get your GPS location. Drag the pin on the map to the correct spot.", variant: "destructive" });
+      }
+    }, 5000);
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(fallbackTimer);
         setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setLocationMode("auto");
         setIsLocating(false);
       },
-      () => {
+      (err) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(fallbackTimer);
         setIsLocating(false);
         setLocationMode("manual");
+        setGeoLocation((cur) => cur ?? UDUPI_CENTER);
+        const msg = err.code === 1
+          ? "Location permission denied. Please allow location access or drag the pin to mark the spot."
+          : "Could not get your location. Drag the pin on the map to the correct spot.";
+        toast({ title: "Location unavailable", description: msg, variant: "destructive" });
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   };
 
@@ -198,7 +227,11 @@ export default function Report() {
             </button>
             <button
               type="button"
-              onClick={() => setLocationMode("manual")}
+              onClick={() => {
+                setLocationMode("manual");
+                // Drop a marker at current location or Udupi center so it's immediately draggable
+                if (!location) setGeoLocation(UDUPI_CENTER);
+              }}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${locationMode === "manual" ? "bg-card shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Hand className="w-4 h-4" />
@@ -218,10 +251,10 @@ export default function Report() {
             )}
           </div>
 
-          {locationMode === "manual" && !location && (
+          {locationMode === "manual" && location && (
             <p className="text-sm text-center text-muted-foreground font-medium flex items-center justify-center gap-2 animate-in fade-in duration-300">
               <MapPin className="w-4 h-4 text-primary shrink-0" />
-              Tap anywhere on the map above to drop a pin. Drag it to adjust.
+              Drag the pin to the exact waste location. You can also tap anywhere to move it.
             </p>
           )}
 
