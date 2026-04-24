@@ -1,13 +1,17 @@
 import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, isNull } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
 import { requireAuth, requireAdmin, hashPassword } from "../lib/auth";
 
 const router: IRouter = Router();
 
 router.get("/officers", requireAdmin, async (req, res): Promise<void> => {
-  const officers = await db.select().from(officersTable).orderBy(officersTable.createdAt);
+  const officers = await db
+    .select()
+    .from(officersTable)
+    .where(isNull(officersTable.deletedAt))
+    .orderBy(officersTable.createdAt);
 
   const withCounts = await Promise.all(
     officers.map(async (officer) => {
@@ -39,13 +43,21 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
 
   const { name, email, password, phone, areaName, centerLat, centerLng, radiusKm } = parsed.data;
 
-  const existing = await db.select().from(officersTable).where(eq(officersTable.email, email)).limit(1);
+  const existing = await db
+    .select()
+    .from(officersTable)
+    .where(and(eq(officersTable.email, email), isNull(officersTable.deletedAt)))
+    .limit(1);
   if (existing.length > 0) {
     res.status(409).json({ error: "Email already in use" });
     return;
   }
 
   const passwordHash = await hashPassword(password);
+
+  // Remove any stale user account with this email (left over from a previous hard-delete
+  // before soft-delete was introduced) so the new insert doesn't hit a unique violation.
+  await db.delete(usersTable).where(and(eq(usersTable.email, email), eq(usersTable.role, "officer")));
 
   const [officer] = await db
     .insert(officersTable)
@@ -140,14 +152,28 @@ router.delete("/officers/:id", requireAdmin, async (req, res): Promise<void> => 
     return;
   }
 
-  const [officer] = await db.delete(officersTable).where(eq(officersTable.id, id)).returning();
+  const [existing] = await db
+    .select()
+    .from(officersTable)
+    .where(and(eq(officersTable.id, id), isNull(officersTable.deletedAt)))
+    .limit(1);
 
-  if (!officer) {
+  if (!existing) {
     res.status(404).json({ error: "Officer not found" });
     return;
   }
 
-  res.json({ success: true, message: "Officer deleted" });
+  // Soft-delete: tombstone the email so it can be reused, preserve the record
+  // for report accountability. Remove the login account.
+  const tombstoneEmail = `__deleted_${id}__${Date.now()}`;
+  await db
+    .update(officersTable)
+    .set({ email: tombstoneEmail, deletedAt: new Date() })
+    .where(eq(officersTable.id, id));
+
+  await db.delete(usersTable).where(and(eq(usersTable.email, existing.email), eq(usersTable.role, "officer")));
+
+  res.json({ success: true, message: "Officer removed" });
 });
 
 router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void> => {

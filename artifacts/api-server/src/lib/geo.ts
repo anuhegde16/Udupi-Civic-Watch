@@ -1,5 +1,6 @@
 import { db, officersTable } from "@workspace/db";
 import type { Officer } from "@workspace/db";
+import { isNull } from "drizzle-orm";
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -19,7 +20,7 @@ export async function findOfficerForLocation(
   lat: number,
   lng: number
 ): Promise<Officer | null> {
-  const officers = await db.select().from(officersTable);
+  const officers = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
 
   let bestOfficer: Officer | null = null;
   let bestDist = Infinity;
