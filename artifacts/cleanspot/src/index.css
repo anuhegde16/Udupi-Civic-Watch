@@ -148,3 +148,60 @@
 .leaflet-control {
   z-index: 11 !important;
 }
+
+/* Pulsating waste marker */
+.pulse-marker {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-core {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--pulse-color);
+  border: 2.5px solid white;
+  box-shadow: 0 0 0 2px var(--pulse-color), 0 2px 8px rgba(0,0,0,0.35);
+  z-index: 2;
+  position: relative;
+}
+
+.pulse-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2.5px solid var(--pulse-color);
+  opacity: 0;
+  animation: pulse-beat 2.4s ease-out infinite;
+}
+
+.pulse-ring-1 {
+  width: 26px;
+  height: 26px;
+  animation-delay: 0s;
+}
+
+.pulse-ring-2 {
+  width: 38px;
+  height: 38px;
+  animation-delay: 0.7s;
+}
+
+@keyframes pulse-beat {
+  0%   { transform: scale(0.5); opacity: 0.8; }
+  60%  { opacity: 0.3; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* Waste map popup */
+.waste-popup .leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.waste-popup .leaflet-popup-tip {
+  box-shadow: none;
+}

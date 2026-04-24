@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, MapPin, Camera, ArrowRight, Activity, Map, ArrowDown, Droplets, Fish, AlertCircle } from "lucide-react";
+import { LiveWasteMap } from "@/components/live-waste-map";
 
 export default function Home() {
   return (
@@ -39,6 +40,25 @@ export default function Home() {
               </Button>
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* Live Waste Map */}
+      <section className="mb-16">
+        <div className="max-w-4xl mx-auto space-y-5">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black text-foreground">Active waste spots near you</h2>
+              <p className="text-muted-foreground mt-1">Each pulsing dot is an unattended garbage report. Tap to see details.</p>
+            </div>
+            <Link href="/report">
+              <Button variant="outline" size="sm" className="rounded-xl shrink-0 ml-4 mt-1">
+                <Camera className="w-3.5 h-3.5 mr-2" />
+                Report
+              </Button>
+            </Link>
+          </div>
+          <LiveWasteMap />
         </div>
       </section>
 

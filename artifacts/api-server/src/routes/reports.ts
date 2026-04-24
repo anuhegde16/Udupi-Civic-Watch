@@ -40,6 +40,24 @@ router.get("/reports/stats/summary", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/reports/public/map", async (req, res): Promise<void> => {
+  const spots = await db
+    .select({
+      id: reportsTable.id,
+      latitude: reportsTable.latitude,
+      longitude: reportsTable.longitude,
+      status: reportsTable.status,
+      description: reportsTable.description,
+      address: reportsTable.address,
+      createdAt: reportsTable.createdAt,
+    })
+    .from(reportsTable)
+    .where(sql`${reportsTable.status} IN ('reported', 'cleaning')`)
+    .orderBy(sql`${reportsTable.createdAt} DESC`);
+
+  res.json(spots);
+});
+
 router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const user = (req as any).user;
   const query = ListReportsQueryParams.safeParse(req.query);
