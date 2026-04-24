@@ -181,31 +181,59 @@ export default function AdminOfficers() {
 
   const handleSaveZone = () => {
     if (!editingZone) return;
+    const snapshot = editingZone;
     updateOfficer.mutate(
       {
-        id: editingZone.officerId,
+        id: snapshot.officerId,
         data: {
-          areaName: editingZone.areaName || undefined,
-          centerLat: editingZone.lat,
-          centerLng: editingZone.lng,
-          radiusKm: editingZone.radiusKm,
+          areaName: snapshot.areaName || undefined,
+          centerLat: snapshot.lat,
+          centerLng: snapshot.lng,
+          radiusKm: snapshot.radiusKm,
         },
       },
       {
+        onMutate: async () => {
+          await queryClient.cancelQueries({ queryKey: getListOfficersQueryKey() });
+          const previous = queryClient.getQueryData(getListOfficersQueryKey());
+          queryClient.setQueryData(getListOfficersQueryKey(), (old: any) => {
+            if (!old) return old;
+            return {
+              ...old,
+              officers: old.officers.map((o: any) =>
+                o.id === snapshot.officerId
+                  ? {
+                      ...o,
+                      areaName: snapshot.areaName || o.areaName,
+                      centerLat: snapshot.lat,
+                      centerLng: snapshot.lng,
+                      radiusKm: snapshot.radiusKm,
+                    }
+                  : o
+              ),
+            };
+          });
+          return { previous };
+        },
+        onError: (_err, _vars, context: any) => {
+          if (context?.previous) {
+            queryClient.setQueryData(getListOfficersQueryKey(), context.previous);
+          }
+          toast({
+            title: "Failed to save zone",
+            description: _err.message,
+            variant: "destructive",
+          });
+        },
         onSuccess: () => {
           toast({
             title: "Zone saved",
-            description: `${editingZone.name}'s coverage area has been updated.`,
+            description: `${snapshot.name}'s coverage area has been updated.`,
           });
           setEditingZone(null);
-          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
         },
-        onError: (err) => {
-          toast({
-            title: "Failed to save zone",
-            description: err.message,
-            variant: "destructive",
-          });
+        onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
         },
       }
     );
@@ -494,8 +522,9 @@ export default function AdminOfficers() {
             return (
               <div
                 key={officer.id}
-                className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 md:p-8 flex flex-col hover:border-primary/30 transition-all hover:shadow-lg group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
+                className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 md:p-8 flex flex-col hover:border-primary/30 transition-all hover:shadow-lg group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 cursor-pointer"
                 style={{ animationDelay: `${i * 50}ms` }}
+                onClick={() => openZoneEditor(officer.id)}
               >
                 <div
                   className="absolute top-0 right-0 w-24 h-24 rounded-bl-[80px] transition-transform duration-500 group-hover:scale-125"
@@ -526,6 +555,7 @@ export default function AdminOfficers() {
                         variant="ghost"
                         size="icon"
                         className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-2 -mr-2 h-10 w-10 rounded-full"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         <Trash2 className="w-5 h-5" />
                       </Button>
@@ -609,7 +639,7 @@ export default function AdminOfficers() {
                 <Button
                   variant="outline"
                   className="w-full rounded-2xl h-11 font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5 relative z-10"
-                  onClick={() => openZoneEditor(officer.id)}
+                  onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
                 >
                   <Map className="w-4 h-4 mr-2" style={{ color }} />
                   Edit Zone
@@ -687,6 +717,9 @@ export default function AdminOfficers() {
                               }
                             : z
                         )
+                      }
+                      onRadiusChange={(r) =>
+                        setEditingZone((z) => (z ? { ...z, radiusKm: r } : z))
                       }
                       height="280px"
                     />

@@ -20,12 +20,50 @@ function buildCenterIcon(color: string) {
   });
 }
 
+function buildEdgeIcon(color: string) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: white;
+      border: 3px solid ${color};
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      cursor: ew-resize;
+    "></div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+  });
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function eastEdgeLatLng(
+  centerLat: number,
+  centerLng: number,
+  radiusKm: number
+): [number, number] {
+  const deltaLng = radiusKm / (111.32 * Math.cos((centerLat * Math.PI) / 180));
+  return [centerLat, centerLng + deltaLng];
+}
+
 interface OfficerAreaEditMapProps {
   lat: number;
   lng: number;
   radiusKm: number;
   color?: string;
   onCenterChange: (lat: number, lng: number) => void;
+  onRadiusChange: (radiusKm: number) => void;
   height?: string;
 }
 
@@ -35,12 +73,21 @@ export function OfficerAreaEditMap({
   radiusKm,
   color = "#0d9488",
   onCenterChange,
+  onRadiusChange,
   height = "280px",
 }: OfficerAreaEditMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
+  const edgeHandleRef = useRef<L.Marker | null>(null);
+
+  const onCenterChangeRef = useRef(onCenterChange);
+  const onRadiusChangeRef = useRef(onRadiusChange);
+  const centerRef = useRef({ lat, lng });
+  useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
+  useEffect(() => { onRadiusChangeRef.current = onRadiusChange; }, [onRadiusChange]);
+  useEffect(() => { centerRef.current = { lat, lng }; }, [lat, lng]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -62,63 +109,100 @@ export function OfficerAreaEditMap({
       weight: 2.5,
     }).addTo(map);
 
-    const marker = L.marker(center, {
+    const centerMarker = L.marker(center, {
       draggable: true,
       icon: buildCenterIcon(color),
+      zIndexOffset: 100,
     }).addTo(map);
 
-    marker.on("drag", () => {
-      const { lat: mlat, lng: mlng } = marker.getLatLng();
+    const edgePos = eastEdgeLatLng(center[0], center[1], radiusKm);
+    const edgeHandle = L.marker(edgePos, {
+      draggable: true,
+      icon: buildEdgeIcon(color),
+      zIndexOffset: 50,
+    }).addTo(map);
+
+    centerMarker.on("drag", () => {
+      const { lat: mlat, lng: mlng } = centerMarker.getLatLng();
       circle.setLatLng([mlat, mlng]);
+      const currentRadiusM = circle.getRadius();
+      const currentRadiusKm = currentRadiusM / 1000;
+      const newEdge = eastEdgeLatLng(mlat, mlng, currentRadiusKm);
+      edgeHandle.setLatLng(newEdge);
     });
 
-    marker.on("dragend", () => {
-      const { lat: mlat, lng: mlng } = marker.getLatLng();
-      onCenterChange(mlat, mlng);
+    centerMarker.on("dragend", () => {
+      const { lat: mlat, lng: mlng } = centerMarker.getLatLng();
+      onCenterChangeRef.current(mlat, mlng);
+    });
+
+    edgeHandle.on("drag", () => {
+      const { lat: elat, lng: elng } = edgeHandle.getLatLng();
+      const { lat: clat, lng: clng } = centerMarker.getLatLng();
+      const newRadius = Math.max(0.5, haversineKm(clat, clng, elat, elng));
+      circle.setRadius(newRadius * 1000);
+      const newEdge = eastEdgeLatLng(clat, clng, newRadius);
+      edgeHandle.setLatLng(newEdge);
+    });
+
+    edgeHandle.on("dragend", () => {
+      const { lat: elat, lng: elng } = edgeHandle.getLatLng();
+      const { lat: clat, lng: clng } = centerMarker.getLatLng();
+      const newRadius = Math.max(0.5, haversineKm(clat, clng, elat, elng));
+      onRadiusChangeRef.current(parseFloat(newRadius.toFixed(2)));
     });
 
     map.on("click", (e: L.LeafletMouseEvent) => {
       const { lat: clat, lng: clng } = e.latlng;
-      marker.setLatLng([clat, clng]);
+      centerMarker.setLatLng([clat, clng]);
       circle.setLatLng([clat, clng]);
-      onCenterChange(clat, clng);
+      const currentRadiusKm = circle.getRadius() / 1000;
+      edgeHandle.setLatLng(eastEdgeLatLng(clat, clng, currentRadiusKm));
+      onCenterChangeRef.current(clat, clng);
     });
 
-    markerRef.current = marker;
+    markerRef.current = centerMarker;
     circleRef.current = circle;
+    edgeHandleRef.current = edgeHandle;
     mapRef.current = map;
+
+    const bounds = circle.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
 
     return () => {
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
       circleRef.current = null;
+      edgeHandleRef.current = null;
     };
   }, []);
 
   useEffect(() => {
     if (!mapRef.current) return;
-    setTimeout(() => {
-      mapRef.current?.invalidateSize();
-    }, 50);
+    setTimeout(() => mapRef.current?.invalidateSize(), 50);
   }, [height]);
 
   useEffect(() => {
-    if (!markerRef.current || !circleRef.current) return;
+    if (!markerRef.current || !circleRef.current || !edgeHandleRef.current) return;
     const latlng: [number, number] = [lat, lng];
     markerRef.current.setLatLng(latlng);
     circleRef.current.setLatLng(latlng);
+    const currentRadiusKm = circleRef.current.getRadius() / 1000;
+    edgeHandleRef.current.setLatLng(eastEdgeLatLng(lat, lng, currentRadiusKm));
     mapRef.current?.setView(latlng, mapRef.current.getZoom());
   }, [lat, lng]);
 
   useEffect(() => {
-    if (!circleRef.current) return;
+    if (!circleRef.current || !markerRef.current || !edgeHandleRef.current) return;
     circleRef.current.setRadius(radiusKm * 1000);
-    if (mapRef.current && circleRef.current) {
-      const bounds = circleRef.current.getBounds();
-      if (bounds.isValid()) {
-        mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-      }
+    const { lat: clat, lng: clng } = markerRef.current.getLatLng();
+    edgeHandleRef.current.setLatLng(eastEdgeLatLng(clat, clng, radiusKm));
+    const bounds = circleRef.current.getBounds();
+    if (mapRef.current && bounds.isValid()) {
+      mapRef.current.fitBounds(bounds, { padding: [30, 30] });
     }
   }, [radiusKm]);
 
