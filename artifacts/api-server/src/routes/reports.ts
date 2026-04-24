@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable } from "@workspace/db";
 import { eq, sql, and, gte } from "drizzle-orm";
+import { sendAssignmentEmail } from "../lib/email";
 import {
   CreateReportBody,
   UpdateReportBody,
@@ -161,6 +162,7 @@ router.post("/reports", async (req, res): Promise<void> => {
   let assignedOfficer = null;
   if (officer) {
     assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName };
+    sendAssignmentEmail(officer, report).catch(() => {});
   }
 
   res.status(201).json({ ...report, assignedOfficer });

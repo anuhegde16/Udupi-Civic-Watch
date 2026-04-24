@@ -3,6 +3,7 @@ import { db, reportsTable, officersTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin } from "../lib/auth";
+import { sendAssignmentEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -71,6 +72,8 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
     res.status(404).json({ error: "Report not found" });
     return;
   }
+
+  sendAssignmentEmail(officer, report).catch(() => {});
 
   res.json({
     ...report,
