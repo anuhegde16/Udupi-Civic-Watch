@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { ReportLocationMap } from "@/components/report-location-map";
 
 export default function OfficerReportDetail() {
   const [, params] = useRoute("/officer/report/:id");
@@ -94,7 +95,6 @@ export default function OfficerReportDetail() {
   };
 
   const osmUrl = `https://www.google.com/maps?q=${report.latitude},${report.longitude}`;
-  const osmEmbedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${report.longitude - 0.008},${report.latitude - 0.006},${report.longitude + 0.008},${report.latitude + 0.006}&layer=mapnik&marker=${report.latitude},${report.longitude}`;
 
   return (
     <div className="max-w-3xl mx-auto w-full pb-10 animate-in fade-in duration-500">
@@ -150,14 +150,8 @@ export default function OfficerReportDetail() {
         <div className="space-y-6">
           {/* Location Map Preview */}
           <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden flex flex-col">
-            <div className="h-[200px] relative w-full">
-              <iframe
-                title="Location on Map"
-                src={osmEmbedUrl}
-                className="w-full h-full border-0 grayscale-[0.2] contrast-125 sepia-[0.2]"
-                loading="lazy"
-              />
-              <div className="absolute inset-0 pointer-events-none border-[6px] border-card rounded-3xl z-10" />
+            <div className="relative w-full rounded-t-3xl overflow-hidden">
+              <ReportLocationMap latitude={report.latitude} longitude={report.longitude} height="220px" />
             </div>
             
             <div className="p-6">
