@@ -171,6 +171,10 @@ export function OfficerAreaEditMap({
       map.fitBounds(bounds, { padding: [30, 30] });
     }
 
+    // Invalidate after mount + again after sheet open animation finishes
+    setTimeout(() => map.invalidateSize(), 50);
+    setTimeout(() => map.invalidateSize(), 350);
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -186,13 +190,16 @@ export function OfficerAreaEditMap({
   }, [height]);
 
   useEffect(() => {
-    if (!markerRef.current || !circleRef.current || !edgeHandleRef.current) return;
+    if (!markerRef.current || !circleRef.current || !edgeHandleRef.current || !mapRef.current) return;
     const latlng: [number, number] = [lat, lng];
     markerRef.current.setLatLng(latlng);
     circleRef.current.setLatLng(latlng);
     const currentRadiusKm = circleRef.current.getRadius() / 1000;
     edgeHandleRef.current.setLatLng(eastEdgeLatLng(lat, lng, currentRadiusKm));
-    mapRef.current?.setView(latlng, mapRef.current.getZoom());
+    // Only pan the map if the new center is outside the currently visible area
+    if (!mapRef.current.getBounds().contains(latlng)) {
+      mapRef.current.setView(latlng, mapRef.current.getZoom(), { animate: true });
+    }
   }, [lat, lng]);
 
   useEffect(() => {

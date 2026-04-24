@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListOfficers,
   useCreateOfficer,
@@ -100,6 +100,19 @@ export default function AdminOfficers() {
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<OfficerZoneDraft | null>(null);
+
+  // Local string state for coordinate inputs — updated on blur, not every keystroke
+  const [latStr, setLatStr] = useState("");
+  const [lngStr, setLngStr] = useState("");
+  const [radiusStr, setRadiusStr] = useState("");
+
+  // Keep string inputs in sync when editingZone changes externally (map drag)
+  useEffect(() => {
+    if (!editingZone) return;
+    setLatStr(editingZone.lat.toFixed(6));
+    setLngStr(editingZone.lng.toFixed(6));
+    setRadiusStr(String(editingZone.radiusKm));
+  }, [editingZone?.lat, editingZone?.lng, editingZone?.radiusKm]);
 
   const form = useForm<CreateOfficerValues>({
     resolver: zodResolver(createOfficerSchema),
@@ -760,10 +773,15 @@ export default function AdminOfficers() {
                     <Input
                       type="number"
                       step="any"
-                      value={editingZone.lat}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) setEditingZone((z) => (z ? { ...z, lat: v } : z));
+                      value={latStr}
+                      onChange={(e) => setLatStr(e.target.value)}
+                      onBlur={() => {
+                        const v = parseFloat(latStr);
+                        if (!isNaN(v)) {
+                          setEditingZone((z) => (z ? { ...z, lat: v } : z));
+                        } else {
+                          setLatStr(editingZone.lat.toFixed(6));
+                        }
                       }}
                       className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
                     />
@@ -775,10 +793,15 @@ export default function AdminOfficers() {
                     <Input
                       type="number"
                       step="any"
-                      value={editingZone.lng}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v)) setEditingZone((z) => (z ? { ...z, lng: v } : z));
+                      value={lngStr}
+                      onChange={(e) => setLngStr(e.target.value)}
+                      onBlur={() => {
+                        const v = parseFloat(lngStr);
+                        if (!isNaN(v)) {
+                          setEditingZone((z) => (z ? { ...z, lng: v } : z));
+                        } else {
+                          setLngStr(editingZone.lng.toFixed(6));
+                        }
                       }}
                       className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
                     />
@@ -792,11 +815,15 @@ export default function AdminOfficers() {
                       step="0.5"
                       min={1}
                       max={50}
-                      value={editingZone.radiusKm}
-                      onChange={(e) => {
-                        const v = parseFloat(e.target.value);
-                        if (!isNaN(v) && v >= 1 && v <= 50)
+                      value={radiusStr}
+                      onChange={(e) => setRadiusStr(e.target.value)}
+                      onBlur={() => {
+                        const v = parseFloat(radiusStr);
+                        if (!isNaN(v) && v >= 1 && v <= 50) {
                           setEditingZone((z) => (z ? { ...z, radiusKm: v } : z));
+                        } else {
+                          setRadiusStr(String(editingZone.radiusKm));
+                        }
                       }}
                       className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
                     />
