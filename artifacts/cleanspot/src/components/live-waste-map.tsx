@@ -47,7 +47,7 @@ export function LiveWasteMap() {
       map = L.map(mapRef.current, {
         center: [13.3409, 74.7421],
         zoom: 11,
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: false,
         scrollWheelZoom: false,
       });
@@ -139,6 +139,14 @@ export function LiveWasteMap() {
     }
   };
 
+  const handleZoomIn = () => leafletMapRef.current?.zoomIn();
+  const handleZoomOut = () => leafletMapRef.current?.zoomOut();
+  const handleCenter = () =>
+    leafletMapRef.current?.setView([13.3409, 74.7421], 11, { animate: true });
+
+  const btnBase =
+    "w-11 h-11 flex items-center justify-center bg-white/95 backdrop-blur-sm text-gray-700 shadow-md rounded-xl border border-gray-200/80 hover:bg-primary/10 hover:text-primary hover:border-primary/30 active:scale-95 transition-all duration-150 cursor-pointer select-none";
+
   return (
     <div className="relative w-full rounded-3xl overflow-hidden border border-border/50 shadow-xl bg-card">
       <div className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-4 py-3 bg-card/90 backdrop-blur-md border-b border-border/50">
@@ -164,6 +172,26 @@ export function LiveWasteMap() {
       </div>
 
       <div ref={mapRef} style={{ height: "420px", width: "100%" }} className="z-0" />
+
+      {/* Custom map controls */}
+      <div className="absolute top-[60px] right-3 z-[1000] flex flex-col gap-1.5">
+        <button className={btnBase} onClick={handleZoomIn} aria-label="Zoom in" title="Zoom in">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button className={btnBase} onClick={handleZoomOut} aria-label="Zoom out" title="Zoom out">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button className={btnBase} onClick={handleCenter} aria-label="Re-center map" title="Re-center map">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+            <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+          </svg>
+        </button>
+      </div>
 
       <div className="absolute bottom-0 left-0 right-0 z-[1000] flex items-center gap-4 px-4 py-2 bg-card/90 backdrop-blur-md border-t border-border/50">
         <div className="flex items-center gap-1.5">
