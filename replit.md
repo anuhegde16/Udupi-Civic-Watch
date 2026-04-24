@@ -25,6 +25,17 @@ CleanSpot is a mobile-first civic waste reporting platform. Citizens can report 
 - **Officer (Kundapur Taluk)**: sujata@cleanspot.gov / officer123
 - **Officer (Karkala Taluk)**: vinay@cleanspot.gov / officer123
 
+## Interactive Maps
+- **Report page**: Leaflet.js interactive map — click to drop pin, drag to adjust, "Use My Location" / "Place on Map" toggle
+- **Officer report detail**: OpenStreetMap iframe embed + OSM navigation link
+- **Admin Reports**: Click any report row to open a map modal; "Open Navigation" button opens OSM routing
+- All maps use OpenStreetMap tiles — no API key required
+
+## Branding
+- Official government identity bar: "Government of Karnataka · Udupi District Administration · Swachh Bharat Mission"
+- Login page: official portal feel with IT Act notice, `officer@udupi.gov.in` placeholder
+- Footer: full official attribution on all pages
+
 ## Geographic Coverage
 
 - **District**: Udupi, Karnataka, India
