@@ -4,6 +4,7 @@ import { eq, sql, and } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin } from "../lib/auth";
 import { sendAssignmentEmail } from "../lib/email";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -73,7 +74,7 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
     return;
   }
 
-  sendAssignmentEmail(officer, report).catch(() => {});
+  sendAssignmentEmail(officer, report).catch((err) => logger.warn({ err }, "Unhandled error in assignment email"));
 
   res.json({
     ...report,

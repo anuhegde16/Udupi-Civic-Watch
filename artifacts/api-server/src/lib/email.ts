@@ -20,7 +20,7 @@ function googleMapsUrl(lat: number, lng: number): string {
 function buildAssignmentEmail(officer: Officer, report: Report): { subject: string; html: string } {
   const base = appBaseUrl();
   const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const dashboardUrl = `${base}/officer`;
+  const dashboardUrl = `${base}/officer/dashboard`;
   const coordsText = `${report.latitude.toFixed(6)}, ${report.longitude.toFixed(6)}`;
 
   const subject = `[CleanSpot] New waste report assigned — #${report.id}`;
@@ -177,16 +177,20 @@ export async function sendAssignmentEmail(officer: Officer, report: Report): Pro
 
   const { subject, html } = buildAssignmentEmail(officer, report);
 
-  const { error } = await resend.emails.send({
-    from: FROM_ADDRESS,
-    to: officer.email,
-    subject,
-    html,
-  });
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: officer.email,
+      subject,
+      html,
+    });
 
-  if (error) {
-    logger.warn({ error, officerId: officer.id, reportId: report.id }, "Failed to send assignment email");
-  } else {
-    logger.info({ officerId: officer.id, reportId: report.id }, "Assignment email sent");
+    if (error) {
+      logger.warn({ error, officerId: officer.id, reportId: report.id }, "Failed to send assignment email");
+    } else {
+      logger.info({ officerId: officer.id, reportId: report.id }, "Assignment email sent");
+    }
+  } catch (err) {
+    logger.warn({ err, officerId: officer.id, reportId: report.id }, "Unexpected error sending assignment email");
   }
 }
