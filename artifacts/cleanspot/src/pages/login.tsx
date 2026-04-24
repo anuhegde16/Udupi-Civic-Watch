@@ -79,7 +79,7 @@ export default function Login({ portalType = "staff" }: LoginProps) {
                 Udupi District<br />Administration
               </h2>
               <div className="mt-2 text-[11px] font-semibold text-white/60 uppercase tracking-wider">
-                {isAdmin ? "System Administration · CleanSpot" : "Swachh Bharat Mission · Coastal Sanitation"}
+                {isAdmin ? "System Administration · Udupi Civic Watch" : "Swachh Bharat Mission · Coastal Sanitation"}
               </div>
             </div>
 
@@ -117,7 +117,7 @@ export default function Login({ portalType = "staff" }: LoginProps) {
                   {isAdmin ? "Admin Portal" : "Staff Portal"}
                 </h1>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-                  {isAdmin ? "System Administrator Access" : "Udupi District Municipality"}
+                  {isAdmin ? "System Administrator Access" : "Udupi District Administration"}
                 </p>
               </div>
             </div>

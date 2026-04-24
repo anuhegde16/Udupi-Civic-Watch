@@ -143,7 +143,7 @@ export default function Home() {
       </section>
       
       <div className="mt-12 text-center text-sm text-muted-foreground pb-8">
-        <p>CleanSpot Udupi • Protecting the Arabian Sea</p>
+        <p>Udupi Civic Watch • Protecting the Arabian Sea</p>
       </div>
     </div>
   );

@@ -27,9 +27,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <Waves className="w-5 h-5" />
             </div>
             <div className="flex flex-col leading-none">
-              <span className="text-base font-black text-primary tracking-tight">CleanSpot Udupi</span>
+              <span className="text-base font-black text-primary tracking-tight">Udupi Civic Watch</span>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
-                Udupi District Municipality
+                Udupi District Administration
               </span>
             </div>
           </Link>
@@ -56,7 +56,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-6">
-                    Udupi District Municipality
+                    Udupi District Administration
                   </p>
 
                   <nav className="flex flex-col gap-1 flex-1">
@@ -93,7 +93,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <Waves className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="font-black text-foreground text-base leading-none">CleanSpot Udupi</p>
+                      <p className="font-black text-foreground text-base leading-none">Udupi Civic Watch</p>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Citizen Menu</p>
                     </div>
                   </div>
@@ -140,7 +140,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-border/50 bg-card/50 py-4 px-4 text-center">
         <p className="text-xs text-muted-foreground font-medium">
-          CleanSpot &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Government of Karnataka &nbsp;·&nbsp; Swachh Bharat Mission
+          Udupi Civic Watch &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Government of Karnataka &nbsp;·&nbsp; Swachh Bharat Mission
         </p>
       </footer>
     </div>
