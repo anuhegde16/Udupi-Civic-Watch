@@ -164,33 +164,31 @@ function formatDate(date: Date): string {
   });
 }
 
-export async function sendAssignmentEmail(officer: Officer, report: Report): Promise<void> {
+export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   if (!resend) {
-    logger.warn("RESEND_API_KEY is not set — skipping assignment email notification");
+    logger.warn("RESEND_API_KEY is not set — skipping email notification");
     return;
   }
 
+  try {
+    const { error } = await resend.emails.send({ from: FROM_ADDRESS, to, subject, html });
+    if (error) {
+      logger.warn({ error, to }, "Failed to send email");
+    } else {
+      logger.info({ to, subject }, "Email sent successfully");
+    }
+  } catch (err) {
+    logger.warn({ err, to }, "Unexpected error sending email");
+  }
+}
+
+export async function sendAssignmentEmail(officer: Officer, report: Report): Promise<void> {
   if (!officer.email) {
     logger.warn({ officerId: officer.id }, "Officer has no email address — skipping notification");
     return;
   }
 
   const { subject, html } = buildAssignmentEmail(officer, report);
-
-  try {
-    const { error } = await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: officer.email,
-      subject,
-      html,
-    });
-
-    if (error) {
-      logger.warn({ error, officerId: officer.id, reportId: report.id }, "Failed to send assignment email");
-    } else {
-      logger.info({ officerId: officer.id, reportId: report.id }, "Assignment email sent");
-    }
-  } catch (err) {
-    logger.warn({ err, officerId: officer.id, reportId: report.id }, "Unexpected error sending assignment email");
-  }
+  logger.info({ officerId: officer.id, reportId: report.id }, "Sending assignment email");
+  await sendEmail(officer.email, subject, html);
 }
