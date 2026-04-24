@@ -139,7 +139,7 @@ export function OfficerAreaEditMap({
     edgeHandle.on("drag", () => {
       const { lat: elat, lng: elng } = edgeHandle.getLatLng();
       const { lat: clat, lng: clng } = centerMarker.getLatLng();
-      const newRadius = Math.max(0.5, haversineKm(clat, clng, elat, elng));
+      const newRadius = Math.max(1, Math.min(50, haversineKm(clat, clng, elat, elng)));
       circle.setRadius(newRadius * 1000);
       const newEdge = eastEdgeLatLng(clat, clng, newRadius);
       edgeHandle.setLatLng(newEdge);
@@ -148,7 +148,7 @@ export function OfficerAreaEditMap({
     edgeHandle.on("dragend", () => {
       const { lat: elat, lng: elng } = edgeHandle.getLatLng();
       const { lat: clat, lng: clng } = centerMarker.getLatLng();
-      const newRadius = Math.max(0.5, haversineKm(clat, clng, elat, elng));
+      const newRadius = Math.max(1, Math.min(50, haversineKm(clat, clng, elat, elng)));
       onRadiusChangeRef.current(parseFloat(newRadius.toFixed(2)));
     });
 

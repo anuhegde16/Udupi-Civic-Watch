@@ -187,7 +187,7 @@ export default function AdminOfficers() {
       {
         id: snapshot.officerId,
         data: {
-          areaName: snapshot.areaName || undefined,
+          areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
           centerLat: snapshot.lat,
           centerLng: snapshot.lng,
           radiusKm: snapshot.radiusKm,
@@ -205,7 +205,7 @@ export default function AdminOfficers() {
                 o.id === snapshot.officerId
                   ? {
                       ...o,
-                      areaName: snapshot.areaName || o.areaName,
+                      areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
                       centerLat: snapshot.lat,
                       centerLng: snapshot.lng,
                       radiusKm: snapshot.radiusKm,
@@ -795,7 +795,7 @@ export default function AdminOfficers() {
                       value={editingZone.radiusKm}
                       onChange={(e) => {
                         const v = parseFloat(e.target.value);
-                        if (!isNaN(v) && v >= 0.5)
+                        if (!isNaN(v) && v >= 1 && v <= 50)
                           setEditingZone((z) => (z ? { ...z, radiusKm: v } : z));
                       }}
                       className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
