@@ -9,7 +9,7 @@ export function useAuth() {
   const logout = () => {
     logoutMutation.mutate(undefined, {
       onSuccess: () => {
-        setLocation("/login");
+        setLocation("/");
       },
     });
   };
