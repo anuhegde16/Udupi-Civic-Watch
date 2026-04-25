@@ -2,12 +2,12 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useLogin } from "@workspace/api-client-react";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -17,16 +17,15 @@ const schema = z.object({
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const login = useLogin();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "" },
   });
 
-  const isAdmin = false;
-
   const loginMutation = useMutation({
     mutationFn: async (values: z.infer<typeof schema>) => {
-      return apiRequest("POST", "/api/auth/login", values);
+      return login.mutateAsync({ data: values });
     },
     onSuccess: async () => {
       toast({ title: "Signed in" });
@@ -45,7 +44,7 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-black text-foreground tracking-tight leading-none mb-2">Simple Login</h1>
       <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-        {isAdmin ? "Administrator Email" : "Official Email Address"}
+        Official Email Address
       </p>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
@@ -55,7 +54,7 @@ export default function LoginPage() {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Input placeholder={isAdmin ? "admin@udupicivicwatch.com" : "byndoor@udupicivicspot.com"} {...field} />
+                  <Input placeholder="byndoor@udupicivicspot.com" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
