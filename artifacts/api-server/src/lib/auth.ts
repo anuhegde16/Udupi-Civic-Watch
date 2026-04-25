@@ -75,13 +75,13 @@ export async function comparePassword(password: string, hash: string): Promise<b
 export async function ensureAdminExists(): Promise<void> {
   const existing = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
   if (existing.length === 0) {
-    const hash = await hashPassword("admin123");
+    const hash = await hashPassword("Password@123");
     await db.insert(usersTable).values({
-      email: "admin@cleanspot.gov",
+      email: "admin@udupicivicwatch.com",
       passwordHash: hash,
       name: "System Admin",
       role: "admin",
     });
-    logger.info("Created default admin user: admin@cleanspot.gov / admin123");
+    logger.info("Created default admin user: admin@udupicivicwatch.com / Password@123");
   }
 }

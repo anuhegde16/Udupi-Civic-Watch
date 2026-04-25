@@ -38,13 +38,13 @@ async function seedSampleData() {
     const existingOfficers = await db.select().from(officersTable).limit(1);
     if (existingOfficers.length > 0) return;
 
-    const hash = await hashPassword("officer123");
+    const hash = await hashPassword("Password@123");
     const { usersTable } = await import("@workspace/db");
 
     // Udupi district officers — Udupi Taluk and Kundapur Taluk
     const [officer1] = await db.insert(officersTable).values({
       name: "Ramesh Shetty",
-      email: "ramesh@cleanspot.gov",
+      email: "byndoor@udupicivicspot.com",
       passwordHash: hash,
       phone: "+91-94480-11001",
       areaName: "Udupi Taluk",
@@ -55,7 +55,7 @@ async function seedSampleData() {
 
     const [officer2] = await db.insert(officersTable).values({
       name: "Sujata Rao",
-      email: "sujata@cleanspot.gov",
+      email: "Udupi@udupicivicspot.com",
       passwordHash: hash,
       phone: "+91-94480-11002",
       areaName: "Kundapur Taluk",
@@ -66,7 +66,7 @@ async function seedSampleData() {
 
     const [officer3] = await db.insert(officersTable).values({
       name: "Vinay Hegde",
-      email: "vinay@cleanspot.gov",
+      email: "kundapur@udupicivicspot.com",
       passwordHash: hash,
       phone: "+91-94480-11003",
       areaName: "Karkala Taluk",
@@ -76,9 +76,9 @@ async function seedSampleData() {
     }).returning();
 
     await db.insert(usersTable).values([
-      { email: "ramesh@cleanspot.gov", passwordHash: hash, name: "Ramesh Shetty", role: "officer", officerId: String(officer1.id) },
-      { email: "sujata@cleanspot.gov", passwordHash: hash, name: "Sujata Rao", role: "officer", officerId: String(officer2.id) },
-      { email: "vinay@cleanspot.gov", passwordHash: hash, name: "Vinay Hegde", role: "officer", officerId: String(officer3.id) },
+      { email: "byndoor@udupicivicspot.com", passwordHash: hash, name: "Ramesh Shetty", role: "officer", officerId: String(officer1.id) },
+      { email: "Udupi@udupicivicspot.com", passwordHash: hash, name: "Sujata Rao", role: "officer", officerId: String(officer2.id) },
+      { email: "kundapur@udupicivicspot.com", passwordHash: hash, name: "Vinay Hegde", role: "officer", officerId: String(officer3.id) },
     ]);
 
     await db.insert(reportsTable).values([
