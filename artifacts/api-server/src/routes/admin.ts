@@ -138,14 +138,14 @@ router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<v
   `);
 
   res.json({
-    dailyTrend: (dailyRows as any[]).map((r) => ({ day: r.day, count: r.count })),
+    dailyTrend: ((dailyRows as any).rows ?? dailyRows as any[]).map((r: any) => ({ day: r.day, count: r.count })),
     byStatus: {
       total: total.count,
       reported: reported.count,
       cleaning: cleaning.count,
       cleaned: cleaned.count,
     },
-    officers: (officerStats as any[]).map((r) => ({
+    officers: ((officerStats as any).rows ?? officerStats as any[]).map((r: any) => ({
       name: r.name,
       pending: r.pending,
       resolved: r.resolved,

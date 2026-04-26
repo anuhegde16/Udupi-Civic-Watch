@@ -23,6 +23,40 @@ type Report = {
   assignedOfficerId?: number | null;
 };
 
+const STATUS_CONFIG: Record<string, { label: string; border: string; bg: string; badge: string; icon: typeof FileWarning }> = {
+  reported: {
+    label: "New Report",
+    border: "border-l-red-500",
+    bg: "bg-red-50/60",
+    badge: "bg-red-100 text-red-700 border-red-200",
+    icon: FileWarning,
+  },
+  cleaning: {
+    label: "In Progress",
+    border: "border-l-amber-500",
+    bg: "bg-amber-50/60",
+    badge: "bg-amber-100 text-amber-800 border-amber-200",
+    icon: HardHat,
+  },
+  cleaned: {
+    label: "Cleaned",
+    border: "border-l-green-500",
+    bg: "bg-green-50/60",
+    badge: "bg-green-100 text-green-700 border-green-200",
+    icon: CheckCircle2,
+  },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? { label: status, badge: "bg-muted text-muted-foreground border-border", icon: FileWarning };
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border ${cfg.badge}`}>
+      <Icon className="w-3 h-3" />{cfg.label}
+    </span>
+  );
+}
+
 export default function AdminReports() {
   const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">("all");
   const [officerFilter, setOfficerFilter] = useState<string>("all");
@@ -40,7 +74,6 @@ export default function AdminReports() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<string>("");
 
   const [mapReport, setMapReport] = useState<Report | null>(null);
-
   const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
 
   const reassignMutation = useReassignReport();
@@ -75,47 +108,31 @@ export default function AdminReports() {
     );
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "reported": return "bg-destructive/10 text-destructive border-destructive/20";
-      case "cleaning": return "bg-secondary/20 text-secondary-foreground border-secondary/30";
-      case "cleaned": return "bg-primary/10 text-primary border-primary/20";
-      default: return "bg-muted text-muted-foreground border-border";
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "reported": return <FileWarning className="w-3.5 h-3.5 mr-1.5" />;
-      case "cleaning": return <HardHat className="w-3.5 h-3.5 mr-1.5" />;
-      case "cleaned": return <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />;
-      default: return null;
-    }
-  };
-
-  const reports = (reportsData?.reports || []) as Report[];
-  const officers = officersData?.officers || [];
-
   const osmEmbedUrl = (lat: number, lng: number) =>
     `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.012},${lat - 0.009},${lng + 0.012},${lat + 0.009}&layer=mapnik&marker=${lat},${lng}`;
 
   const osmNavUrl = (lat: number, lng: number) =>
     `https://www.openstreetmap.org/directions?from=&to=${lat}%2C${lng}#map=15/${lat}/${lng}`;
 
+  const reports = (reportsData?.reports || []) as Report[];
+  const officers = officersData?.officers || [];
+
   return (
     <div className="pb-12 animate-in fade-in duration-500">
-      <div className="mb-8 bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-bl-[120px] pointer-events-none" />
-        <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">All Reports</h1>
-        <p className="text-muted-foreground font-medium text-lg">Manage and dispatch civic waste reports across the coast.</p>
+      {/* Header */}
+      <div className="mb-5 sm:mb-8 bg-card rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-border/50 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 bg-primary/5 rounded-bl-[80px] sm:rounded-bl-[120px] pointer-events-none" />
+        <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight mb-1 sm:mb-2">All Reports</h1>
+        <p className="text-muted-foreground font-medium text-sm sm:text-lg">Manage and dispatch civic waste reports across the coast.</p>
       </div>
 
-      <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 mb-8 flex flex-col md:flex-row gap-6 items-center">
-        <div className="flex-1 w-full flex flex-col md:flex-row gap-6">
-          <div className="w-full md:w-64">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Filter by Status</label>
+      {/* Filters */}
+      <div className="bg-card rounded-2xl sm:rounded-3xl shadow-sm border border-border/50 p-4 sm:p-6 mb-5 sm:mb-8 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
+          <div className="flex-1">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Status</label>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AdminListReportsStatus | "all")}>
-              <SelectTrigger className="bg-muted/50 border-border/50 h-12 rounded-xl focus:ring-primary font-medium text-foreground">
+              <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/50 shadow-lg">
@@ -126,10 +143,10 @@ export default function AdminReports() {
               </SelectContent>
             </Select>
           </div>
-          <div className="w-full md:w-64">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Filter by Officer</label>
+          <div className="flex-1">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Officer</label>
             <Select value={officerFilter} onValueChange={setOfficerFilter}>
-              <SelectTrigger className="bg-muted/50 border-border/50 h-12 rounded-xl focus:ring-primary font-medium text-foreground">
+              <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
                 <SelectValue placeholder="All Officers" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/50 shadow-lg">
@@ -140,186 +157,176 @@ export default function AdminReports() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-        <div className="text-right whitespace-nowrap self-end pb-2 md:pb-1 bg-primary/5 px-6 py-3 rounded-2xl border border-primary/10">
-          <span className="text-3xl font-black text-primary font-display">{reportsData?.total || 0}</span>
-          <span className="text-primary/70 font-bold ml-2 uppercase text-sm tracking-wider">Reports Found</span>
+          <div className="sm:self-end bg-primary/5 px-5 py-2.5 rounded-2xl border border-primary/10 flex items-center gap-2">
+            <span className="text-2xl sm:text-3xl font-black text-primary">{reportsData?.total || 0}</span>
+            <span className="text-primary/70 font-bold uppercase text-xs tracking-wider">Found</span>
+          </div>
         </div>
       </div>
 
+      {/* Report list */}
       {isLoadingReports ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed shadow-sm">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mb-6" />
-          <p className="font-bold text-lg text-foreground">Loading reports...</p>
+        <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl sm:rounded-[2.5rem] border border-border/50 border-dashed shadow-sm">
+          <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
+          <p className="font-bold text-foreground">Loading reports...</p>
         </div>
       ) : reports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed text-center px-4 shadow-sm">
-          <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mb-6">
-            <Search className="w-10 h-10 text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl sm:rounded-[2.5rem] border border-border/50 border-dashed text-center px-4 shadow-sm">
+          <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
+            <Search className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-2xl font-black text-foreground mb-3">No reports matched</h3>
-          <p className="text-muted-foreground font-medium max-w-md">Try adjusting your filters to find what you are looking for.</p>
+          <h3 className="text-xl font-black text-foreground mb-2">No reports matched</h3>
+          <p className="text-muted-foreground font-medium max-w-md text-sm">Try adjusting your filters.</p>
         </div>
       ) : (
-        <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-muted/50 text-muted-foreground font-bold border-b border-border/50 uppercase tracking-wider text-xs">
-                <tr>
-                  <th className="px-6 py-5">ID & Status</th>
-                  <th className="px-6 py-5">Location</th>
-                  <th className="px-6 py-5">Assigned To</th>
-                  <th className="px-6 py-5">Date</th>
-                  <th className="px-6 py-5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {reports.map((report, i) => (
-                  <tr
-                    key={report.id}
-                    className="hover:bg-muted/30 transition-colors animate-in fade-in slide-in-from-bottom-2 cursor-pointer"
-                    style={{ animationDelay: `${i * 30}ms` }}
-                    onClick={() => setMapReport(report)}
-                  >
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col gap-2 items-start">
-                        <span className="font-mono font-black text-foreground text-base">#{report.id}</span>
-                        <Badge className={`${getStatusColor(report.status)} uppercase tracking-wider text-[10px] font-black px-2.5 py-1 rounded-md`}>
-                          {getStatusIcon(report.status)}{report.status}
-                        </Badge>
+        <div className="space-y-3">
+          {reports.map((report, i) => {
+            const cfg = STATUS_CONFIG[report.status] ?? STATUS_CONFIG["reported"];
+            return (
+              <div
+                key={report.id}
+                className={`bg-card rounded-2xl border border-border/50 border-l-4 ${cfg.border} shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2 cursor-pointer hover:shadow-md transition-all`}
+                style={{ animationDelay: `${i * 25}ms` }}
+                onClick={() => setMapReport(report)}
+              >
+                <div className="flex gap-0">
+                  {/* Photo thumbnail */}
+                  <div className="w-24 sm:w-32 shrink-0 relative bg-muted">
+                    {report.imageUrl ? (
+                      <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" style={{ minHeight: "100px" }} />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/40 min-h-[100px]">
+                        <Camera className="w-7 h-7" />
                       </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col gap-1.5 max-w-[250px]">
-                        <span className="font-bold text-foreground truncate flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-primary shrink-0" />
-                          <span className="truncate">{report.address || "No address provided"}</span>
+                    )}
+                    {/* Status color strip overlay at bottom of thumb */}
+                    {report.imageUrl && (
+                      <div className={`absolute inset-0 pointer-events-none`} />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 p-3 sm:p-4 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-black text-foreground text-sm">#{report.id}</span>
+                        <StatusBadge status={report.status} />
+                      </div>
+                      <span className="text-[11px] text-muted-foreground font-medium shrink-0">
+                        {format(new Date(report.createdAt), "MMM d")}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-1.5 mb-2">
+                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                      <p className="text-sm font-medium text-foreground/80 leading-snug line-clamp-2">
+                        {report.address || `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}
+                      </p>
+                    </div>
+
+                    {/* Officer row */}
+                    <div className="flex items-center gap-2 mb-3">
+                      {report.assignedOfficer ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-6 h-6 rounded-full bg-secondary/20 text-secondary-foreground flex items-center justify-center font-black text-[10px] shrink-0">
+                            {report.assignedOfficer.name.charAt(0)}
+                          </div>
+                          <span className="text-xs font-bold text-foreground/80">{report.assignedOfficer.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-black uppercase tracking-wider text-destructive bg-destructive/10 px-2 py-0.5 rounded-md">
+                          Unassigned
                         </span>
-                        <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded inline-block w-max">
-                          {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-3">
-                        {report.assignedOfficer ? (
-                          <>
-                            <div className="w-9 h-9 rounded-full bg-secondary/20 text-secondary-foreground flex items-center justify-center font-black text-sm shrink-0">
-                              {report.assignedOfficer.name.charAt(0)}
-                            </div>
-                            <span className="font-bold text-foreground">{report.assignedOfficer.name}</span>
-                          </>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-destructive/10 text-destructive text-xs font-black uppercase tracking-wider">
-                            Unassigned
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col gap-1 text-foreground/80">
-                        <span className="font-bold flex items-center gap-2">
-                          <CalendarIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                          {format(new Date(report.createdAt), "MMM d, yyyy")}
-                        </span>
-                        <span className="text-xs text-muted-foreground font-medium ml-6">{format(new Date(report.createdAt), "h:mm a")}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="font-bold rounded-xl text-primary hover:bg-primary/10"
-                          onClick={(e) => { e.stopPropagation(); setMapReport(report); }}
-                        >
-                          <Map className="w-4 h-4 mr-1" /> Map
-                        </Button>
-                        <Button
-                          variant={report.assignedOfficer ? "outline" : "default"}
-                          size="sm"
-                          className={`font-bold rounded-xl ${!report.assignedOfficer ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/20" : "border-border hover:border-primary hover:bg-primary/5 hover:text-primary"}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedReportId(report.id);
-                            setSelectedOfficerId(report.assignedOfficerId?.toString() || "");
-                            setReassignModalOpen(true);
-                          }}
-                        >
-                          {report.assignedOfficer ? "Reassign" : "Dispatch"}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="font-bold rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={(e) => { e.stopPropagation(); setDeleteReportId(report.id); }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs font-bold rounded-lg text-primary hover:bg-primary/10 px-2.5"
+                        onClick={(e) => { e.stopPropagation(); setMapReport(report); }}
+                      >
+                        <Map className="w-3.5 h-3.5 mr-1" /> View
+                      </Button>
+                      <Button
+                        variant={report.assignedOfficer ? "outline" : "default"}
+                        size="sm"
+                        className={`h-8 text-xs font-bold rounded-lg px-2.5 ${!report.assignedOfficer ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/20" : "border-border hover:border-primary hover:bg-primary/5 hover:text-primary"}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedReportId(report.id);
+                          setSelectedOfficerId(report.assignedOfficerId?.toString() || "");
+                          setReassignModalOpen(true);
+                        }}
+                      >
+                        {report.assignedOfficer ? "Reassign" : "Dispatch"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs font-bold rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive px-2"
+                        onClick={(e) => { e.stopPropagation(); setDeleteReportId(report.id); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Map Modal */}
+      {/* Map / Detail Modal */}
       <Dialog open={!!mapReport} onOpenChange={(open) => { if (!open) setMapReport(null); }}>
-        <DialogContent className="sm:max-w-2xl rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
-          <DialogHeader className="px-8 pt-8 pb-4">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-2xl font-black font-display tracking-tight flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                  <MapPin className="w-5 h-5" />
-                </div>
-                Report #{mapReport?.id} — Location
-              </DialogTitle>
+        <DialogContent className="sm:max-w-2xl rounded-2xl sm:rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="px-6 sm:px-8 pt-6 sm:pt-8 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl sm:text-2xl font-black font-display tracking-tight flex items-center gap-3">
+                  Report #{mapReport?.id}
+                  {mapReport && <StatusBadge status={mapReport.status} />}
+                </DialogTitle>
+                {mapReport?.address && (
+                  <p className="text-muted-foreground font-medium text-sm mt-0.5">{mapReport.address}</p>
+                )}
+              </div>
             </div>
-            {mapReport?.address && (
-              <p className="text-muted-foreground font-medium mt-1">{mapReport.address}</p>
-            )}
           </DialogHeader>
 
-          {/* Report photo */}
-          {mapReport?.imageUrl && (
-            <div className="px-8 pb-4">
-              <div className="rounded-2xl overflow-hidden border border-border/50 relative">
-                <div className="absolute top-3 left-3 z-10">
-                  <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-[10px] px-2 py-1">
-                    Submitted Photo
-                  </Badge>
+          {/* Photos side by side if both exist, else full width */}
+          {(mapReport?.imageUrl || mapReport?.cleanupImageUrl) && (
+            <div className={`px-6 sm:px-8 pb-4 grid gap-3 ${mapReport.imageUrl && mapReport.cleanupImageUrl ? "grid-cols-2" : "grid-cols-1"}`}>
+              {mapReport?.imageUrl && (
+                <div className="rounded-xl overflow-hidden border border-border/50 relative">
+                  <div className="absolute top-2 left-2 z-10">
+                    <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-[10px] px-2 py-1">
+                      Photo
+                    </Badge>
+                  </div>
+                  <img src={mapReport.imageUrl} alt="Waste report photo" className="w-full h-40 object-cover" />
                 </div>
-                <img
-                  src={mapReport.imageUrl}
-                  alt="Waste report photo"
-                  className="w-full h-48 object-cover"
-                />
-              </div>
+              )}
+              {mapReport?.cleanupImageUrl && (
+                <div className="rounded-xl overflow-hidden border border-border/50 relative">
+                  <div className="absolute top-2 left-2 z-10">
+                    <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-[10px] px-2 py-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> After
+                    </Badge>
+                  </div>
+                  <img src={mapReport.cleanupImageUrl} alt="Cleanup photo" className="w-full h-40 object-cover" />
+                </div>
+              )}
             </div>
           )}
 
-          {/* Cleanup photo for resolved reports */}
-          {mapReport?.cleanupImageUrl && (
-            <div className="px-8 pb-4">
-              <div className="rounded-2xl overflow-hidden border border-border/50 relative">
-                <div className="absolute top-3 left-3 z-10">
-                  <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-[10px] px-2 py-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> After Cleanup
-                  </Badge>
-                </div>
-                <img
-                  src={mapReport.cleanupImageUrl}
-                  alt="Cleanup photo"
-                  className="w-full h-48 object-cover"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="h-[300px] w-full relative">
+          <div className="h-[260px] sm:h-[300px] w-full relative">
             {mapReport && (
               <iframe
                 key={mapReport.id}
@@ -330,28 +337,25 @@ export default function AdminReports() {
               />
             )}
             {mapReport && (
-              <div className="absolute bottom-4 left-4 right-4 bg-background/95 backdrop-blur-md rounded-xl border border-border/50 px-4 py-3 flex items-center gap-3 shadow-lg">
+              <div className="absolute bottom-3 left-3 right-3 bg-background/95 backdrop-blur-md rounded-xl border border-border/50 px-3 py-2.5 flex items-center gap-3 shadow-lg">
                 <div className="flex flex-col flex-1">
                   <span className="text-xs font-mono font-bold text-foreground">
                     {mapReport.latitude.toFixed(5)}, {mapReport.longitude.toFixed(5)}
                   </span>
                   <span className="text-xs text-muted-foreground font-medium">Udupi District, Karnataka</span>
                 </div>
-                <Badge className={`${getStatusColor(mapReport.status)} uppercase tracking-wider text-[10px] font-black px-2.5 py-1 rounded-md shrink-0`}>
-                  {getStatusIcon(mapReport.status)}{mapReport.status}
-                </Badge>
               </div>
             )}
           </div>
 
-          <div className="px-8 py-5 flex gap-3 border-t border-border/50 bg-muted/20">
-            <Button variant="ghost" className="rounded-xl font-bold h-11" onClick={() => setMapReport(null)}>
+          <div className="px-6 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row gap-2 sm:gap-3 border-t border-border/50 bg-muted/20">
+            <Button variant="ghost" className="rounded-xl font-bold h-11 order-last sm:order-first" onClick={() => setMapReport(null)}>
               Close
             </Button>
             {mapReport && (
               <a href={osmNavUrl(mapReport.latitude, mapReport.longitude)} target="_blank" rel="noopener noreferrer" className="flex-1">
                 <Button className="w-full rounded-xl font-bold h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Map className="w-4 h-4 mr-2" /> Open Navigation
+                  <Map className="w-4 h-4 mr-2" /> Navigate
                 </Button>
               </a>
             )}
@@ -366,7 +370,7 @@ export default function AdminReports() {
                   setReassignModalOpen(true);
                 }}
               >
-                <Anchor className="w-4 h-4 mr-2" /> Dispatch Officer
+                <Anchor className="w-4 h-4 mr-2" /> Dispatch
               </Button>
             )}
           </div>
@@ -375,15 +379,15 @@ export default function AdminReports() {
 
       {/* Delete Confirmation Modal */}
       <Dialog open={deleteReportId !== null} onOpenChange={(open) => { if (!open) setDeleteReportId(null); }}>
-        <DialogContent className="sm:max-w-sm rounded-[2rem] p-8 border-border/50 shadow-2xl">
+        <DialogContent className="sm:max-w-sm rounded-2xl sm:rounded-[2rem] p-6 sm:p-8 border-border/50 shadow-2xl">
           <DialogHeader className="mb-2">
             <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-4">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <DialogTitle className="text-2xl font-black tracking-tight">Delete Report #{deleteReportId}?</DialogTitle>
+            <DialogTitle className="text-xl sm:text-2xl font-black tracking-tight">Delete Report #{deleteReportId}?</DialogTitle>
           </DialogHeader>
-          <p className="text-muted-foreground font-medium py-2">
-            This will permanently remove the report and all its data. This action cannot be undone.
+          <p className="text-muted-foreground font-medium py-2 text-sm sm:text-base">
+            This will permanently remove the report and all its data. This cannot be undone.
           </p>
           <DialogFooter className="mt-6 gap-3 sm:gap-0">
             <Button variant="ghost" className="rounded-xl font-bold h-12 px-6" onClick={() => setDeleteReportId(null)}>
@@ -404,14 +408,14 @@ export default function AdminReports() {
 
       {/* Reassign Modal */}
       <Dialog open={reassignModalOpen} onOpenChange={setReassignModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-[2rem] p-8 border-border/50 shadow-2xl">
+        <DialogContent className="sm:max-w-md rounded-2xl sm:rounded-[2rem] p-6 sm:p-8 border-border/50 shadow-2xl">
           <DialogHeader className="mb-2">
             <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
               <Anchor className="w-6 h-6" />
             </div>
-            <DialogTitle className="text-3xl font-black font-display tracking-tight">Dispatch Officer</DialogTitle>
+            <DialogTitle className="text-2xl sm:text-3xl font-black font-display tracking-tight">Dispatch Officer</DialogTitle>
           </DialogHeader>
-          <div className="py-6">
+          <div className="py-5">
             <label className="text-sm font-bold text-foreground mb-3 block">Select Officer for Report #{selectedReportId}</label>
             <Select value={selectedOfficerId} onValueChange={setSelectedOfficerId}>
               <SelectTrigger className="w-full h-14 bg-muted/50 border-border/50 rounded-xl focus:ring-primary text-base font-medium">
