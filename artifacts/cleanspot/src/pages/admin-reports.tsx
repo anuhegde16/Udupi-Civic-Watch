@@ -47,7 +47,7 @@ export default function AdminReports() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
-      customFetch(`/admin/reports/${id}`, { method: "DELETE" }),
+      customFetch(`/api/admin/reports/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       toast({ title: "Report deleted successfully" });
       setDeleteReportId(null);

@@ -24,7 +24,7 @@ function useAnalytics() {
       dailyTrend: { day: string; count: number }[];
       byStatus: { total: number; reported: number; cleaning: number; cleaned: number };
       officers: { name: string; pending: number; resolved: number }[];
-    }>("/admin/reports/analytics"),
+    }>("/api/admin/reports/analytics"),
     retry: false,
   });
 }
