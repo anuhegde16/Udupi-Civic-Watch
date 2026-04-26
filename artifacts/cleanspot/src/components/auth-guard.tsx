@@ -10,7 +10,11 @@ export function AuthGuard({ children, roles }: { children: React.ReactNode, role
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        setLocation("/login");
+        // Redirect to the appropriate login portal based on required roles
+        const loginPath = roles?.includes("admin") && !roles.includes("officer")
+          ? "/admin/login"
+          : "/staff/login";
+        setLocation(loginPath);
       } else if (roles && user?.role && !roles.includes(user.role)) {
         setLocation(user.role === "admin" ? "/admin/dashboard" : "/officer/dashboard");
       }

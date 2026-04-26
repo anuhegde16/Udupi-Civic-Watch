@@ -82,4 +82,75 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
   });
 });
 
+router.delete("/admin/reports/:id", requireAdmin, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [deleted] = await db
+    .delete(reportsTable)
+    .where(eq(reportsTable.id, id))
+    .returning();
+
+  if (!deleted) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  logger.info({ reportId: id }, "Report deleted by admin");
+  res.json({ success: true, id });
+});
+
+router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<void> => {
+  // Daily counts for last 14 days
+  const dailyRows = await db.execute(sql`
+    SELECT
+      TO_CHAR(DATE_TRUNC('day', created_at), 'Mon DD') AS day,
+      COUNT(*)::int AS count
+    FROM ${reportsTable}
+    WHERE created_at >= NOW() - INTERVAL '14 days'
+    GROUP BY DATE_TRUNC('day', created_at)
+    ORDER BY DATE_TRUNC('day', created_at)
+  `);
+
+  // Status breakdown
+  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable);
+  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "reported"));
+  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaning"));
+  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaned"));
+
+  // Officer performance
+  const officerStats = await db.execute(sql`
+    SELECT
+      o.name,
+      COUNT(r.id)::int AS total,
+      COUNT(CASE WHEN r.status != 'cleaned' THEN 1 END)::int AS pending,
+      COUNT(CASE WHEN r.status = 'cleaned' THEN 1 END)::int AS resolved
+    FROM ${officersTable} o
+    LEFT JOIN ${reportsTable} r ON r.assigned_officer_id = o.id
+    WHERE o.deleted_at IS NULL
+    GROUP BY o.id, o.name
+    ORDER BY total DESC
+    LIMIT 6
+  `);
+
+  res.json({
+    dailyTrend: (dailyRows as any[]).map((r) => ({ day: r.day, count: r.count })),
+    byStatus: {
+      total: total.count,
+      reported: reported.count,
+      cleaning: cleaning.count,
+      cleaned: cleaned.count,
+    },
+    officers: (officerStats as any[]).map((r) => ({
+      name: r.name,
+      pending: r.pending,
+      resolved: r.resolved,
+    })),
+  });
+});
+
 export default router;

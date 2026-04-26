@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useAdminListReports, useListOfficers, useReassignReport, getAdminListReportsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAdminListReports, useListOfficers, useReassignReport, getAdminListReportsQueryKey, customFetch } from "@workspace/api-client-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, UserIcon, CalendarIcon, Anchor, Map, X } from "lucide-react";
+import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, CalendarIcon, Anchor, Map, Trash2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
@@ -39,9 +39,24 @@ export default function AdminReports() {
 
   const [mapReport, setMapReport] = useState<Report | null>(null);
 
+  const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
+
   const reassignMutation = useReassignReport();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/admin/reports/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast({ title: "Report deleted successfully" });
+      setDeleteReportId(null);
+      queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed to delete", description: err.message, variant: "destructive" }),
+  });
 
   const handleReassign = () => {
     if (!selectedReportId || !selectedOfficerId) return;
@@ -231,6 +246,14 @@ export default function AdminReports() {
                         >
                           {report.assignedOfficer ? "Reassign" : "Dispatch"}
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="font-bold rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setDeleteReportId(report.id); }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -309,6 +332,35 @@ export default function AdminReports() {
               </Button>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteReportId !== null} onOpenChange={(open) => { if (!open) setDeleteReportId(null); }}>
+        <DialogContent className="sm:max-w-sm rounded-[2rem] p-8 border-border/50 shadow-2xl">
+          <DialogHeader className="mb-2">
+            <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-2xl font-black tracking-tight">Delete Report #{deleteReportId}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground font-medium py-2">
+            This will permanently remove the report and all its data. This action cannot be undone.
+          </p>
+          <DialogFooter className="mt-6 gap-3 sm:gap-0">
+            <Button variant="ghost" className="rounded-xl font-bold h-12 px-6" onClick={() => setDeleteReportId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-xl font-bold h-12 px-6"
+              onClick={() => deleteReportId && deleteMutation.mutate(deleteReportId)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete Permanently
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
