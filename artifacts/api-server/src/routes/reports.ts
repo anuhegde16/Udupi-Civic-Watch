@@ -55,7 +55,7 @@ router.get("/reports/public/map", async (req, res): Promise<void> => {
       imageUrl: reportsTable.imageUrl,
     })
     .from(reportsTable)
-    .where(sql`${reportsTable.status} IN ('reported', 'cleaning')`)
+    .where(sql`${reportsTable.status} IN ('reported', 'cleaning', 'cleaned')`)
     .orderBy(sql`${reportsTable.createdAt} DESC`);
 
   res.json(spots);

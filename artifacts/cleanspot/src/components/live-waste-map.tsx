@@ -87,23 +87,23 @@ export function LiveWasteMap() {
     markersRef.current = [];
 
     data.forEach((spot) => {
-      const isReported = spot.status === "reported";
-      const color = isReported ? "#ef4444" : "#f97316";
-      const label = isReported ? "Unattended" : "Being Cleaned";
+      const color = spot.status === "reported" ? "#ef4444" : spot.status === "cleaning" ? "#f97316" : "#22c55e";
+      const label = spot.status === "reported" ? "Unattended" : spot.status === "cleaning" ? "Being Cleaned" : "Completed";
 
-      const iconHtml = `
-        <div class="pulse-marker" style="--pulse-color: ${color}">
-          <div class="pulse-ring pulse-ring-1"></div>
-          <div class="pulse-ring pulse-ring-2"></div>
-          <div class="pulse-core"></div>
-        </div>
-      `;
+      const isCleaned = spot.status === "cleaned";
+      const iconHtml = isCleaned
+        ? `<div style="width:22px;height:22px;border-radius:50%;background:${color};border:3px solid #fff;box-shadow:0 0 0 2px ${color}40,0 2px 6px rgba(0,0,0,0.18);"></div>`
+        : `<div class="pulse-marker" style="--pulse-color: ${color}">
+             <div class="pulse-ring pulse-ring-1"></div>
+             <div class="pulse-ring pulse-ring-2"></div>
+             <div class="pulse-core"></div>
+           </div>`;
 
       const icon = L.divIcon({
         html: iconHtml,
         className: "",
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
+        iconSize: isCleaned ? [22, 22] : [40, 40],
+        iconAnchor: isCleaned ? [11, 11] : [20, 20],
       });
 
       const timeAgo = getTimeAgo(spot.createdAt);
@@ -166,7 +166,7 @@ export function LiveWasteMap() {
             Live Waste Map
           </span>
           <span className="text-xs text-muted-foreground font-medium ml-1">
-            — {count} unattended {count === 1 ? "spot" : "spots"} in Udupi District
+            — {count} active {count === 1 ? "report" : "reports"} in Udupi District
           </span>
         </div>
         <button
@@ -200,14 +200,24 @@ export function LiveWasteMap() {
         </button>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-[1000] flex items-center gap-4 px-4 py-2 bg-card/90 backdrop-blur-md border-t border-border/50">
+      <div className="absolute bottom-0 left-0 right-0 z-[1000] flex items-center gap-3 px-4 py-2 bg-card/90 backdrop-blur-md border-t border-border/50">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm shadow-red-400/60" />
-          <span className="text-xs text-muted-foreground">Unattended</span>
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-60"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+          </span>
+          <span className="text-xs text-muted-foreground font-medium">Unattended</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm shadow-orange-400/60" />
-          <span className="text-xs text-muted-foreground">Being cleaned</span>
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-60"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+          </span>
+          <span className="text-xs text-muted-foreground font-medium">Being cleaned</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 shadow-sm shadow-green-400/60"></span>
+          <span className="text-xs text-muted-foreground font-medium">Completed</span>
         </div>
         <div className="ml-auto text-xs text-muted-foreground">
           Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
