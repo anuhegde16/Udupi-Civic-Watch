@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isAdmin, isOfficer, logout } = useAuth();
   const [location] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background relative overflow-hidden">
@@ -35,7 +38,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
 
           {/* Menu — always visible, content changes based on auth */}
-          <Sheet>
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="text-foreground hover:bg-primary/5 hover:text-primary rounded-full">
                 <Menu className="h-5 w-5" />
@@ -62,13 +65,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <nav className="flex flex-col gap-1 flex-1">
                     {isAdmin && (
                       <>
-                        <Link href="/admin/dashboard" className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Dashboard</Link>
-                        <Link href="/admin/reports" className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">All Reports</Link>
-                        <Link href="/admin/officers" className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Officers</Link>
+                        <Link href="/admin/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Dashboard</Link>
+                        <Link href="/admin/reports" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">All Reports</Link>
+                        <Link href="/admin/officers" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Officers</Link>
                       </>
                     )}
                     {isOfficer && (
-                      <Link href="/officer/dashboard" className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Area</Link>
+                      <Link href="/officer/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Area</Link>
                     )}
                   </nav>
 
@@ -76,7 +79,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <Button
                       variant="outline"
                       className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 rounded-xl h-12"
-                      onClick={() => logout()}
+                      onClick={() => { logout(); closeMenu(); }}
                     >
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign Out
@@ -101,15 +104,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <nav className="flex flex-col gap-1 flex-1">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-4 mb-2">Navigation</p>
 
-                    <Link href="/" className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
+                    <Link href="/" onClick={closeMenu} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
                       <Home className="w-4 h-4" />
                       Home
                     </Link>
-                    <Link href="/report" className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/report" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
+                    <Link href="/report" onClick={closeMenu} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/report" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
                       <Camera className="w-4 h-4" />
                       Report Waste
                     </Link>
-                    <Link href="/track" className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location.startsWith("/track") ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
+                    <Link href="/track" onClick={closeMenu} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location.startsWith("/track") ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
                       <Search className="w-4 h-4" />
                       Track a Report
                     </Link>
@@ -118,11 +121,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   {/* Discreet staff access — at the bottom, small */}
                   <div className="pt-4 border-t border-border/50 mt-4 space-y-1">
                     <p className="text-[10px] font-bold text-muted-foreground/60 uppercase tracking-widest px-4 mb-2">Staff Access</p>
-                    <Link href="/staff/login" className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
+                    <Link href="/staff/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Field Officer Login
                     </Link>
-                    <Link href="/admin/login" className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm font-medium">
+                    <Link href="/admin/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm font-medium">
                       <Lock className="w-3.5 h-3.5" />
                       Administrator Login
                     </Link>
