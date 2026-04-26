@@ -1,6 +1,6 @@
 import { useGetReportsSummary, useListOfficers, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
+
 import {
   Loader2, Users, FileWarning, CheckCircle2, Clock,
   Activity, ArrowRight, Anchor, TrendingUp
@@ -50,18 +50,20 @@ export default function AdminDashboard() {
     { name: "Cleaned", value: summary?.cleaned || 0, color: STATUS_COLORS.cleaned },
   ].filter((d) => d.value > 0);
 
-  const StatCard = ({ title, value, icon: Icon, colorClass, desc }: any) => (
-    <Card className="p-4 sm:p-6 border-border/50 shadow-sm rounded-2xl sm:rounded-3xl relative overflow-hidden group hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-      <div className={`absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 rounded-bl-[80px] sm:rounded-bl-[100px] opacity-10 transition-transform duration-500 group-hover:scale-125 ${colorClass}`} />
-      <div className="relative z-10 flex flex-col h-full">
-        <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center mb-3 sm:mb-5 ${colorClass} bg-opacity-10 shadow-inner`}>
-          <Icon className="w-5 h-5 sm:w-7 sm:h-7" />
+  const StatCard = ({ title, value, icon: Icon, colorClass, iconBg, desc, href }: any) => (
+    <Link href={href}>
+      <div className={`group flex items-center gap-3 p-3 sm:p-4 bg-card border border-border/50 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-200 cursor-pointer`}>
+        <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+          <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${colorClass}`} />
         </div>
-        <p className="text-3xl sm:text-5xl font-black text-foreground mb-1 sm:mb-2">{value}</p>
-        <p className="font-bold text-foreground/80 text-sm sm:text-lg leading-tight">{title}</p>
-        {desc && <p className="text-xs sm:text-sm text-muted-foreground mt-1 sm:mt-2 font-medium">{desc}</p>}
+        <div className="flex-1 min-w-0">
+          <p className="text-xl sm:text-2xl font-black text-foreground leading-none mb-0.5">{value}</p>
+          <p className="text-xs font-bold text-muted-foreground truncate leading-tight">{title}</p>
+          {desc && <p className="text-[10px] text-muted-foreground/70 font-medium mt-0.5 truncate">{desc}</p>}
+        </div>
+        <ArrowRight className={`w-4 h-4 shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground/70 transition-colors`} />
       </div>
-    </Card>
+    </Link>
   );
 
   return (
@@ -74,11 +76,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stat cards — 2 col on mobile, 4 on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-10">
-        <StatCard title="Total Reports" value={summary?.total || 0} icon={Activity} colorClass="bg-blue-500 text-blue-500" desc={`${summary?.last7d || 0} this week`} />
-        <StatCard title="Needs Attention" value={summary?.reported || 0} icon={FileWarning} colorClass="bg-red-500 text-red-500" />
-        <StatCard title="In Progress" value={summary?.cleaning || 0} icon={Clock} colorClass="bg-amber-500 text-amber-500" />
-        <StatCard title="Cleaned" value={summary?.cleaned || 0} icon={CheckCircle2} colorClass="bg-green-500 text-green-500" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-6 sm:mb-10">
+        <StatCard title="Total Reports" value={summary?.total || 0} icon={Activity} colorClass="text-blue-600" iconBg="bg-blue-50" desc={`${summary?.last7d || 0} this week`} href="/admin/reports" />
+        <StatCard title="Needs Attention" value={summary?.reported || 0} icon={FileWarning} colorClass="text-red-600" iconBg="bg-red-50" href="/admin/reports?status=reported" />
+        <StatCard title="In Progress" value={summary?.cleaning || 0} icon={Clock} colorClass="text-amber-600" iconBg="bg-amber-50" href="/admin/reports?status=cleaning" />
+        <StatCard title="Cleaned" value={summary?.cleaned || 0} icon={CheckCircle2} colorClass="text-green-600" iconBg="bg-green-50" href="/admin/reports?status=cleaned" />
       </div>
 
       {/* Charts row */}

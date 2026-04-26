@@ -58,7 +58,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AdminReports() {
-  const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">("all");
+  const initialStatus = (new URLSearchParams(window.location.search).get("status") as AdminListReportsStatus | null) ?? "all";
+  const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">(initialStatus as AdminListReportsStatus | "all");
   const [officerFilter, setOfficerFilter] = useState<string>("all");
 
   const { data: reportsData, isLoading: isLoadingReports } = useAdminListReports({
