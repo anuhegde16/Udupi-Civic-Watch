@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { useLogin } from "@workspace/api-client-react";
 
 const schema = z.object({
@@ -43,9 +43,10 @@ export default function LoginPage() {
   return (
     <div className="max-w-md mx-auto p-6">
       <h1 className="text-2xl font-black text-foreground tracking-tight leading-none mb-2">Simple Login</h1>
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-        Official Email Address
-      </p>
+      <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-0.5 space-y-1">
+        <p>Officer IDs: byndoor@udupicivicspot.com, Udupi@udupicivicspot.com, kundapur@udupicivicspot.com</p>
+        <p>Admin ID: admin@udupicivicwatch.com</p>
+      </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
           <FormField
