@@ -18,6 +18,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 async function start() {
   await ensureAdminExists();
+  await migrateOfficerCredentials();
   await seedSampleData();
 
   app.listen(port, (err) => {
@@ -27,6 +28,70 @@ async function start() {
     }
     logger.info({ port }, "Server listening");
   });
+}
+
+async function migrateOfficerCredentials() {
+  try {
+    const { db, officersTable, usersTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const { hashPassword } = await import("./lib/auth");
+
+    const TARGET = [
+      { name: "Ramesh Shetty", email: "byndoor@udupicivicspot.com" },
+      { name: "Sujata Rao",    email: "Udupi@udupicivicspot.com"   },
+      { name: "Vinay Hegde",   email: "kundapur@udupicivicspot.com" },
+    ];
+
+    const hash = await hashPassword("Password@123");
+
+    for (const target of TARGET) {
+      // Find officer by name
+      const [officer] = await db
+        .select()
+        .from(officersTable)
+        .where(eq(officersTable.name, target.name))
+        .limit(1);
+
+      if (!officer) continue;
+
+      if (officer.email !== target.email) {
+        const oldEmail = officer.email;
+
+        // Update officersTable row
+        await db
+          .update(officersTable)
+          .set({ email: target.email, passwordHash: hash })
+          .where(eq(officersTable.id, officer.id));
+
+        // Update or replace the usersTable row
+        const [existingUser] = await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.email, oldEmail))
+          .limit(1);
+
+        if (existingUser) {
+          await db
+            .update(usersTable)
+            .set({ email: target.email, passwordHash: hash })
+            .where(eq(usersTable.id, existingUser.id));
+        } else {
+          // User row missing — insert it
+          await db.insert(usersTable).values({
+            email: target.email,
+            passwordHash: hash,
+            name: target.name,
+            role: "officer",
+            officerId: String(officer.id),
+          });
+        }
+
+        logger.info(`Migrated officer credentials: ${oldEmail} → ${target.email}`);
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "Officer credential migration failed");
+  }
 }
 
 async function seedSampleData() {
