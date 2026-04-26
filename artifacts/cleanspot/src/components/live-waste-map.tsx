@@ -9,6 +9,7 @@ interface WasteSpot {
   description: string | null;
   address: string | null;
   createdAt: string;
+  imageUrl: string | null;
 }
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
@@ -106,13 +107,19 @@ export function LiveWasteMap() {
       });
 
       const timeAgo = getTimeAgo(spot.createdAt);
-      const popup = L.popup({ className: "waste-popup", maxWidth: 220 }).setContent(`
-        <div style="font-family: 'Bricolage Grotesque', sans-serif; padding: 4px;">
+      const imgHtml = spot.imageUrl
+        ? `<div style="margin:-4px -4px 10px -4px; border-radius:8px 8px 0 0; overflow:hidden; height:130px;">
+             <img src="${spot.imageUrl}" alt="Waste photo" style="width:100%; height:100%; object-fit:cover; display:block;" />
+           </div>`
+        : "";
+      const popup = L.popup({ className: "waste-popup", maxWidth: 240 }).setContent(`
+        <div style="font-family: 'Bricolage Grotesque', sans-serif; padding: 4px; margin-top:${spot.imageUrl ? "0" : "0"};">
+          ${imgHtml}
           <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:${color}; margin-bottom:4px;">${label}</div>
-          ${spot.description ? `<div style="font-size:13px; font-weight:600; color:#1a1a1a; margin-bottom:4px;">${spot.description}</div>` : ""}
+          ${spot.description ? `<div style="font-size:13px; font-weight:600; color:#1a1a1a; margin-bottom:4px; line-height:1.4;">${spot.description.length > 80 ? spot.description.slice(0, 80) + "…" : spot.description}</div>` : ""}
           ${spot.address ? `<div style="font-size:12px; color:#666; margin-bottom:4px;">${spot.address}</div>` : ""}
           <div style="font-size:11px; color:#999;">Reported ${timeAgo}</div>
-          <a href="/track/${spot.id}" style="display:block; margin-top:8px; font-size:12px; font-weight:600; color:#0f766e; text-decoration:none;">View Report →</a>
+          <a href="/track/${spot.id}" style="display:inline-block; margin-top:8px; font-size:12px; font-weight:700; color:#0f766e; text-decoration:none; background:#f0fdf4; padding:4px 10px; border-radius:6px;">View Report →</a>
         </div>
       `);
 

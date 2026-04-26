@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, CalendarIcon, Anchor, Map, Trash2, AlertTriangle } from "lucide-react";
+import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, CalendarIcon, Anchor, Map, Trash2, AlertTriangle, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
@@ -17,6 +17,8 @@ type Report = {
   address?: string | null;
   status: string;
   createdAt: string;
+  imageUrl?: string | null;
+  cleanupImageUrl?: string | null;
   assignedOfficer?: { name: string } | null;
   assignedOfficerId?: number | null;
 };
@@ -281,7 +283,43 @@ export default function AdminReports() {
             )}
           </DialogHeader>
 
-          <div className="h-[380px] w-full relative">
+          {/* Report photo */}
+          {mapReport?.imageUrl && (
+            <div className="px-8 pb-4">
+              <div className="rounded-2xl overflow-hidden border border-border/50 relative">
+                <div className="absolute top-3 left-3 z-10">
+                  <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-[10px] px-2 py-1">
+                    Submitted Photo
+                  </Badge>
+                </div>
+                <img
+                  src={mapReport.imageUrl}
+                  alt="Waste report photo"
+                  className="w-full h-48 object-cover"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Cleanup photo for resolved reports */}
+          {mapReport?.cleanupImageUrl && (
+            <div className="px-8 pb-4">
+              <div className="rounded-2xl overflow-hidden border border-border/50 relative">
+                <div className="absolute top-3 left-3 z-10">
+                  <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-[10px] px-2 py-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> After Cleanup
+                  </Badge>
+                </div>
+                <img
+                  src={mapReport.cleanupImageUrl}
+                  alt="Cleanup photo"
+                  className="w-full h-48 object-cover"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="h-[300px] w-full relative">
             {mapReport && (
               <iframe
                 key={mapReport.id}

@@ -52,6 +52,7 @@ router.get("/reports/public/map", async (req, res): Promise<void> => {
       description: reportsTable.description,
       address: reportsTable.address,
       createdAt: reportsTable.createdAt,
+      imageUrl: reportsTable.imageUrl,
     })
     .from(reportsTable)
     .where(sql`${reportsTable.status} IN ('reported', 'cleaning')`)
