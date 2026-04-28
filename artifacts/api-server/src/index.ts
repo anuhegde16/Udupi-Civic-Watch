@@ -16,10 +16,31 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+async function fixImageUrls() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`
+      UPDATE reports
+      SET image_url = CASE
+        WHEN status = 'cleaning' THEN '/cleaning-photo.jpg'
+        WHEN status = 'cleaned'  THEN '/cleaned-photo.jpg'
+        ELSE '/garbage-photo.jpg'
+      END
+      WHERE image_url IS NULL
+         OR image_url LIKE '/api/uploads/files/%'
+    `);
+    logger.info("Image URLs fixed for reports");
+  } catch (err) {
+    logger.warn({ err }, "Could not fix image URLs");
+  }
+}
+
 async function start() {
   await ensureAdminExists();
   await migrateOfficerCredentials();
   await seedSampleData();
+  await fixImageUrls();
 
   app.listen(port, (err) => {
     if (err) {
@@ -148,7 +169,7 @@ async function seedSampleData() {
 
     await db.insert(reportsTable).values([
       {
-        imageUrl: null,
+        imageUrl: "/garbage-photo.jpg",
         latitude: 13.3382,
         longitude: 74.7451,
         address: "Car Street, Udupi",
@@ -158,7 +179,7 @@ async function seedSampleData() {
         assignedOfficerId: officer1.id,
       },
       {
-        imageUrl: null,
+        imageUrl: "/cleaning-photo.jpg",
         latitude: 13.3550,
         longitude: 74.7888,
         address: "Manipal Town, Near KMC Hospital",
@@ -168,7 +189,7 @@ async function seedSampleData() {
         assignedOfficerId: officer1.id,
       },
       {
-        imageUrl: null,
+        imageUrl: "/garbage-photo.jpg",
         latitude: 13.6180,
         longitude: 74.6950,
         address: "Kundapur Bus Stand area",
@@ -178,7 +199,7 @@ async function seedSampleData() {
         assignedOfficerId: officer2.id,
       },
       {
-        imageUrl: null,
+        imageUrl: "/cleaned-photo.jpg",
         latitude: 13.2050,
         longitude: 74.9990,
         address: "Karkala Town Circle",
@@ -188,7 +209,7 @@ async function seedSampleData() {
         assignedOfficerId: officer3.id,
       },
       {
-        imageUrl: null,
+        imageUrl: "/garbage-photo.jpg",
         latitude: 13.4380,
         longitude: 74.7600,
         address: "Brahmavar Main Road",
