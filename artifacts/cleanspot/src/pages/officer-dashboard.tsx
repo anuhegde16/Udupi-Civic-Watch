@@ -50,7 +50,7 @@ export default function OfficerDashboard() {
         
         <div className="mt-6 p-4 bg-primary/5 rounded-2xl border border-primary/10 flex items-start gap-3">
           <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-          <p className="text-sm text-foreground/80 font-medium">Your work matters. Over 5 tonnes of plastic waste is generated weekly along Udupi's coast. Every cleanup protects local livelihoods and marine life.</p>
+          <p className="text-sm text-foreground/80 font-medium">Your work matters. Over 40,000 tonnes of waste is generated annually in Udupi District. Every cleanup protects local livelihoods and marine life.</p>
         </div>
       </div>
 
