@@ -85,8 +85,8 @@ export default function Home() {
               <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary-foreground flex items-center justify-center mb-6">
                 <Fish className="w-6 h-6" />
               </div>
-              <h3 className="text-4xl font-black text-foreground mb-2">20<span className="text-secondary-foreground text-2xl"> years</span></h3>
-              <p className="text-muted-foreground font-medium leading-relaxed">for a single plastic bag to break down in the ocean.</p>
+              <h3 className="text-4xl font-black text-foreground mb-2">20–1,000<span className="text-secondary-foreground text-2xl"> years</span></h3>
+              <p className="text-muted-foreground font-medium leading-relaxed">to decompose, depending on the environmental conditions.</p>
             </div>
             
             <div className="bg-card p-8 rounded-3xl border border-border/50 shadow-sm relative overflow-hidden group">
