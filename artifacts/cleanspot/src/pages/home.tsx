@@ -77,7 +77,7 @@ export default function Home() {
                 <AlertCircle className="w-6 h-6" />
               </div>
               <h3 className="text-4xl font-black text-foreground mb-2">5<span className="text-primary text-2xl"> tonnes</span></h3>
-              <p className="text-muted-foreground font-medium leading-relaxed">of plastic waste generated annually in Udupi District.</p>
+              <p className="text-muted-foreground font-medium leading-relaxed">of plastic waste generated weekly along Udupi's coast.</p>
             </div>
             
             <div className="bg-card p-8 rounded-3xl border border-border/50 shadow-sm relative overflow-hidden group">
