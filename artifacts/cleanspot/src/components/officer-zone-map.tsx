@@ -110,19 +110,41 @@ export function OfficerZoneMap({
       });
 
       const addr = r.address || `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`;
-      const imgHtml = r.imageUrl
-        ? `<div style="margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;">
-             <img src="${r.imageUrl}" alt="Waste photo" style="width:100%;height:100%;object-fit:cover;display:block;" />
-           </div>`
-        : "";
-      const popup = L.popup({ maxWidth: 220, className: "waste-popup" }).setContent(`
-        <div style="font-family:sans-serif;padding:4px;">
-          ${imgHtml}
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${color};margin-bottom:3px;">${label}</div>
-          <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:6px;line-height:1.4;">${addr.length > 60 ? addr.slice(0, 60) + "…" : addr}</div>
-          <a href="/officer/report/${r.id}" style="display:inline-block;font-size:11px;font-weight:700;color:#0f766e;text-decoration:none;background:#f0fdf4;padding:3px 9px;border-radius:6px;">View Report →</a>
-        </div>
-      `);
+
+      const popupEl = document.createElement("div");
+      popupEl.style.cssText = "font-family:sans-serif;padding:4px;";
+
+      if (r.imageUrl) {
+        const safeUrl = /^(https?:\/\/|\/)/.test(r.imageUrl) ? r.imageUrl : "";
+        if (safeUrl) {
+          const imgWrap = document.createElement("div");
+          imgWrap.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+          const img = document.createElement("img");
+          img.src = safeUrl;
+          img.alt = "Waste photo";
+          img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+          imgWrap.appendChild(img);
+          popupEl.appendChild(imgWrap);
+        }
+      }
+
+      const statusEl = document.createElement("div");
+      statusEl.style.cssText = `font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${color};margin-bottom:3px;`;
+      statusEl.textContent = label;
+      popupEl.appendChild(statusEl);
+
+      const addrEl = document.createElement("div");
+      addrEl.style.cssText = "font-size:12px;font-weight:600;color:#1a1a1a;margin-bottom:6px;line-height:1.4;";
+      addrEl.textContent = addr.length > 60 ? addr.slice(0, 60) + "…" : addr;
+      popupEl.appendChild(addrEl);
+
+      const link = document.createElement("a");
+      link.href = `/officer/report/${Number(r.id)}`;
+      link.style.cssText = "display:inline-block;font-size:11px;font-weight:700;color:#0f766e;text-decoration:none;background:#f0fdf4;padding:3px 9px;border-radius:6px;";
+      link.textContent = "View Report →";
+      popupEl.appendChild(link);
+
+      const popup = L.popup({ maxWidth: 220, className: "waste-popup" }).setContent(popupEl);
 
       const marker = L.marker([r.latitude, r.longitude], { icon })
         .bindPopup(popup)
@@ -150,7 +172,7 @@ export function OfficerZoneMap({
         <span className="text-xs text-muted-foreground font-medium">{reports.length} report{reports.length !== 1 ? "s" : ""}</span>
       </div>
 
-      <div ref={mapRef} style={{ height: "260px", width: "100%" }} className="z-0" />
+      <div ref={mapRef} className="z-0 h-[200px] md:h-[280px] w-full" />
 
       <div className="absolute top-[44px] right-2.5 z-[1000] flex flex-col gap-1">
         <button className={btn} onClick={zoomIn} title="Zoom in">+</button>
