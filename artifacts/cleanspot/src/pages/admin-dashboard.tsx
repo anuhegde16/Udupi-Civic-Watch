@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   useGetReportsSummary,
   useListOfficers,
@@ -85,6 +85,8 @@ export default function AdminDashboard() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [calOpen, setCalOpen] = useState(false);
+  // Tracks mid-range selection synchronously — state updates are async so a ref is needed
+  const pickingEndRef = useRef(false);
 
   const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary();
   const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers();
@@ -255,8 +257,9 @@ export default function AdminDashboard() {
             <Popover
               open={calOpen}
               onOpenChange={(open) => {
-                // Block auto-close while only the start date has been picked
-                if (!open && dateRange?.from && !dateRange?.to) return;
+                // pickingEndRef is set synchronously in onSelect, so it's
+                // accurate here even before React re-renders with new state.
+                if (!open && pickingEndRef.current) return;
                 setCalOpen(open);
               }}
             >
@@ -332,7 +335,14 @@ export default function AdminDashboard() {
                   selected={dateRange}
                   onSelect={(range) => {
                     setDateRange(range);
-                    if (range?.from && range?.to) setCalOpen(false);
+                    if (range?.from && !range?.to) {
+                      // Start picked, waiting for end — block popover close
+                      pickingEndRef.current = true;
+                    } else {
+                      // Complete range (or cleared) — allow normal close
+                      pickingEndRef.current = false;
+                      if (range?.from && range?.to) setCalOpen(false);
+                    }
                   }}
                   disabled={{ after: new Date() }}
                   numberOfMonths={2}
