@@ -29,10 +29,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform shadow-md shadow-primary/20">
               <Waves className="w-5 h-5" />
             </div>
-            <div className="flex flex-col leading-none">
+            <div className="flex flex-col leading-none gap-px">
               <span className="text-base font-black text-primary tracking-tight">Udupi Civic Watch</span>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
                 Udupi District Administration
+              </span>
+              <span className="text-[9px] text-muted-foreground/45 font-medium tracking-wide hidden sm:block">
+                by Trip Nirvigna
               </span>
             </div>
           </Link>
@@ -58,9 +61,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <p className="text-sm text-foreground/60 capitalize font-medium mt-1">{user?.role}</p>
                     </div>
                   </div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 mb-6">
-                    Udupi District Administration
-                  </p>
+                  <div className="px-2 mb-6">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Udupi District Administration
+                    </p>
+                    <p className="text-[9px] text-muted-foreground/45 font-medium tracking-wide mt-0.5">
+                      by Trip Nirvigna
+                    </p>
+                  </div>
 
                   <nav className="flex flex-col gap-1 flex-1">
                     {isAdmin && (
@@ -98,6 +106,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div>
                       <p className="font-black text-foreground text-base leading-none">Udupi Civic Watch</p>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Citizen Menu</p>
+                      <p className="text-[9px] text-muted-foreground/45 font-medium tracking-wide mt-0.5">by Trip Nirvigna</p>
                     </div>
                   </div>
 
