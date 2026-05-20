@@ -141,9 +141,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <footer className="border-t border-border/50 bg-card/50 py-4 px-4 text-center">
+      <footer className="border-t border-border/50 bg-card/50 py-4 px-4 text-center space-y-1">
         <p className="text-xs text-muted-foreground font-medium">
           Udupi Civic Watch &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Government of Karnataka &nbsp;·&nbsp; Swachh Bharat Mission
+        </p>
+        <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
+          Powered by Trip Nirvigna
         </p>
       </footer>
     </div>
