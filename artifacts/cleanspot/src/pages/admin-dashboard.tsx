@@ -252,7 +252,14 @@ export default function AdminDashboard() {
             </div>
 
             {/* Date range picker */}
-            <Popover open={calOpen} onOpenChange={setCalOpen}>
+            <Popover
+              open={calOpen}
+              onOpenChange={(open) => {
+                // Block auto-close while only the start date has been picked
+                if (!open && dateRange?.from && !dateRange?.to) return;
+                setCalOpen(open);
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   className={`flex items-center gap-2 border rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
