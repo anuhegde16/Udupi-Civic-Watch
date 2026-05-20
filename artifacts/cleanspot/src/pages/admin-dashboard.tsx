@@ -85,15 +85,6 @@ export default function AdminDashboard() {
 
   const isLoading = isLoadingSummary || isLoadingOfficers || isLoadingAnalytics || isLoadingReports;
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 animate-in fade-in duration-500">
-        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-        <p className="font-bold text-lg text-foreground">Loading command center...</p>
-      </div>
-    );
-  }
-
   const officers = (officersData?.officers || []) as (MapOfficer & {
     id: number;
     name: string;
@@ -102,7 +93,7 @@ export default function AdminDashboard() {
     pendingCount: number;
   })[];
 
-  const allReports = ((allReportsData?.reports || []) as ReportItem[]);
+  const allReports = (allReportsData?.reports || []) as ReportItem[];
 
   const filteredReports = useMemo(
     () =>
@@ -157,6 +148,15 @@ export default function AdminDashboard() {
     });
     return buckets.map((b) => ({ day: b.day, count: counts[b.day] }));
   }, [selectedOfficerId, filteredReports, analytics]);
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 animate-in fade-in duration-500">
+        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <p className="font-bold text-lg text-foreground">Loading command center...</p>
+      </div>
+    );
+  }
 
   const pieData = [
     { name: "New", value: stats.reported, color: STATUS_COLORS.reported },
