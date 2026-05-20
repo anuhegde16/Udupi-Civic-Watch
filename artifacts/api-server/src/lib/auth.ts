@@ -74,7 +74,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
 
 export async function ensureAdminExists(): Promise<void> {
   const TARGET_EMAIL = "admin@udupicivicwatch.com";
-  const TARGET_PASSWORD = "Password@123";
+  const TARGET_PASSWORD = "admin@udupicivicwatch.com";
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
 
@@ -92,12 +92,13 @@ export async function ensureAdminExists(): Promise<void> {
 
   // If the admin exists but has old credentials, update them
   const admin = existing[0];
-  if (admin.email !== TARGET_EMAIL) {
+  const isCorrectPassword = await comparePassword(TARGET_PASSWORD, admin.passwordHash);
+  if (admin.email !== TARGET_EMAIL || !isCorrectPassword) {
     const hash = await hashPassword(TARGET_PASSWORD);
     await db
       .update(usersTable)
       .set({ email: TARGET_EMAIL, passwordHash: hash })
       .where(eq(usersTable.id, admin.id));
-    logger.info(`Updated admin credentials from ${admin.email} → ${TARGET_EMAIL}`);
+    logger.info(`Updated admin credentials: ${TARGET_EMAIL}`);
   }
 }

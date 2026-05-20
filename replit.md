@@ -20,10 +20,11 @@ CleanSpot is a mobile-first civic waste reporting platform. Citizens can report 
 
 ## Default Credentials (dev seed data)
 
-- **Admin**: admin@cleanspot.gov / admin123
-- **Officer (Udupi Taluk)**: ramesh@cleanspot.gov / officer123
-- **Officer (Kundapur Taluk)**: sujata@cleanspot.gov / officer123
-- **Officer (Karkala Taluk)**: vinay@cleanspot.gov / officer123
+- **Admin**: admin@udupicivicwatch.com / admin@udupicivicwatch.com
+- **Officer (Ramesh Shetty)**: byndoor@udupicivicspot.com / byndoor@udupicivicspot.com
+- **Officer (Sujata Rao)**: Udupi@udupicivicspot.com / Udupi@udupicivicspot.com
+- **Officer (Vinay Hegde)**: kundapur@udupicivicspot.com / kundapur@udupicivicspot.com
+- **Password = email** (set this way for easy demo access)
 
 ## Interactive Maps
 - **Report page**: Leaflet.js interactive map — click to drop pin, drag to adjust, "Use My Location" / "Place on Map" toggle

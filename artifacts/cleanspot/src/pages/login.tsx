@@ -32,9 +32,13 @@ export default function LoginPage({ portalType }: LoginProps) {
 
   const isAdmin = portalType === "admin";
 
+  const defaultEmail = isAdmin
+    ? "admin@udupicivicwatch.com"
+    : "byndoor@udupicivicspot.com";
+
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: defaultEmail, password: "" },
   });
 
   function onSubmit(values: z.infer<typeof schema>) {

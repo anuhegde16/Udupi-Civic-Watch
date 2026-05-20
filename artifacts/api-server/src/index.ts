@@ -63,10 +63,8 @@ async function migrateOfficerCredentials() {
       { name: "Vinay Hegde",   email: "kundapur@udupicivicspot.com" },
     ];
 
-    const hash = await hashPassword("Password@123");
-
     for (const target of TARGET) {
-      // Find officer by name
+      const targetHash = await hashPassword(target.email);
       const [officer] = await db
         .select()
         .from(officersTable)
@@ -75,16 +73,15 @@ async function migrateOfficerCredentials() {
 
       if (!officer) continue;
 
-      if (officer.email !== target.email) {
-        const oldEmail = officer.email;
+      const oldEmail = officer.email;
+      const needsUpdate = officer.email !== target.email || officer.passwordHash !== targetHash;
 
-        // Update officersTable row
+      if (needsUpdate) {
         await db
           .update(officersTable)
-          .set({ email: target.email, passwordHash: hash })
+          .set({ email: target.email, passwordHash: targetHash })
           .where(eq(officersTable.id, officer.id));
 
-        // Update or replace the usersTable row
         const [existingUser] = await db
           .select()
           .from(usersTable)
@@ -94,20 +91,19 @@ async function migrateOfficerCredentials() {
         if (existingUser) {
           await db
             .update(usersTable)
-            .set({ email: target.email, passwordHash: hash })
+            .set({ email: target.email, passwordHash: targetHash })
             .where(eq(usersTable.id, existingUser.id));
         } else {
-          // User row missing — insert it
           await db.insert(usersTable).values({
             email: target.email,
-            passwordHash: hash,
+            passwordHash: targetHash,
             name: target.name,
             role: "officer",
             officerId: String(officer.id),
           });
         }
 
-        logger.info(`Migrated officer credentials: ${oldEmail} → ${target.email}`);
+        logger.info(`Updated officer credentials: ${target.name} / ${target.email}`);
       }
     }
   } catch (err) {
@@ -124,14 +120,17 @@ async function seedSampleData() {
     const existingOfficers = await db.select().from(officersTable).limit(1);
     if (existingOfficers.length > 0) return;
 
-    const hash = await hashPassword("Password@123");
     const { usersTable } = await import("@workspace/db");
 
-    // Udupi district officers — Udupi Taluk and Kundapur Taluk
+    // Password = email address for easy demo access
+    const o1hash = await hashPassword("byndoor@udupicivicspot.com");
+    const o2hash = await hashPassword("Udupi@udupicivicspot.com");
+    const o3hash = await hashPassword("kundapur@udupicivicspot.com");
+
     const [officer1] = await db.insert(officersTable).values({
       name: "Ramesh Shetty",
       email: "byndoor@udupicivicspot.com",
-      passwordHash: hash,
+      passwordHash: o1hash,
       phone: "+91-94480-11001",
       areaName: "Udupi Taluk",
       centerLat: 13.3409,
@@ -142,7 +141,7 @@ async function seedSampleData() {
     const [officer2] = await db.insert(officersTable).values({
       name: "Sujata Rao",
       email: "Udupi@udupicivicspot.com",
-      passwordHash: hash,
+      passwordHash: o2hash,
       phone: "+91-94480-11002",
       areaName: "Kundapur Taluk",
       centerLat: 13.6253,
@@ -153,7 +152,7 @@ async function seedSampleData() {
     const [officer3] = await db.insert(officersTable).values({
       name: "Vinay Hegde",
       email: "kundapur@udupicivicspot.com",
-      passwordHash: hash,
+      passwordHash: o3hash,
       phone: "+91-94480-11003",
       areaName: "Karkala Taluk",
       centerLat: 13.2071,
@@ -162,9 +161,9 @@ async function seedSampleData() {
     }).returning();
 
     await db.insert(usersTable).values([
-      { email: "byndoor@udupicivicspot.com", passwordHash: hash, name: "Ramesh Shetty", role: "officer", officerId: String(officer1.id) },
-      { email: "Udupi@udupicivicspot.com", passwordHash: hash, name: "Sujata Rao", role: "officer", officerId: String(officer2.id) },
-      { email: "kundapur@udupicivicspot.com", passwordHash: hash, name: "Vinay Hegde", role: "officer", officerId: String(officer3.id) },
+      { email: "byndoor@udupicivicspot.com", passwordHash: o1hash, name: "Ramesh Shetty", role: "officer", officerId: String(officer1.id) },
+      { email: "Udupi@udupicivicspot.com", passwordHash: o2hash, name: "Sujata Rao", role: "officer", officerId: String(officer2.id) },
+      { email: "kundapur@udupicivicspot.com", passwordHash: o3hash, name: "Vinay Hegde", role: "officer", officerId: String(officer3.id) },
     ]);
 
     await db.insert(reportsTable).values([
