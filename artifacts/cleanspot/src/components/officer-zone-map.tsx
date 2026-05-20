@@ -42,7 +42,7 @@ export function OfficerZoneMap({
         maxZoom: 19,
       }).addTo(map);
 
-      circleRef.current = L.circle([centerLat, centerLng], {
+      const circle = L.circle([centerLat, centerLng], {
         radius: radiusKm * 1000,
         color: "#0f766e",
         fillColor: "#0f766e",
@@ -50,6 +50,10 @@ export function OfficerZoneMap({
         weight: 2,
         dashArray: "6 4",
       }).addTo(map);
+      circleRef.current = circle;
+
+      // Fit map to circle bounds so the full zone is always visible
+      map.fitBounds(circle.getBounds(), { padding: [20, 20] });
 
       leafletMapRef.current = map;
       placeMarkers(L, map, reports, highlightId ?? null);
@@ -155,8 +159,14 @@ export function OfficerZoneMap({
 
   const zoomIn = () => leafletMapRef.current?.zoomIn();
   const zoomOut = () => leafletMapRef.current?.zoomOut();
-  const reCenter = () =>
-    leafletMapRef.current?.setView([centerLat, centerLng], 12, { animate: true });
+  const reCenter = () => {
+    if (leafletMapRef.current && circleRef.current) {
+      leafletMapRef.current.fitBounds(circleRef.current.getBounds(), {
+        padding: [20, 20],
+        animate: true,
+      });
+    }
+  };
 
   const btn =
     "w-9 h-9 flex items-center justify-center bg-white/95 backdrop-blur-sm text-gray-700 shadow rounded-xl border border-gray-200/80 hover:bg-primary/10 hover:text-primary active:scale-95 transition-all cursor-pointer select-none text-base font-bold";
