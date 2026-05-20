@@ -446,9 +446,9 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {officers.length === 0 ? (
-            <div className="col-span-full text-center text-muted-foreground font-medium py-10 bg-card rounded-2xl border border-border/50">
+            <div className="col-span-full text-center text-muted-foreground font-medium py-8 bg-card rounded-xl border border-border/50">
               No officers active in the system.
             </div>
           ) : (
@@ -467,46 +467,44 @@ export default function AdminDashboard() {
                   onClick={() =>
                     setSelectedOfficerId(isActive ? null : officer.id)
                   }
-                  className={`text-left w-full bg-card rounded-2xl border shadow-sm p-4 sm:p-5 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:scale-95 ${
-                    isActive
-                      ? "border-2 shadow-md"
-                      : "border-border/50"
+                  className={`text-left w-full bg-card rounded-xl border shadow-sm p-3 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 active:scale-95 ${
+                    isActive ? "border-2 shadow-md" : "border-border/50"
                   }`}
                   style={isActive ? { borderColor: zoneColor } : {}}
                 >
-                  <div className="flex items-start gap-3 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
                     <div
-                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0"
                       style={{ background: zoneColor }}
                     >
                       {officer.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-black text-foreground truncate leading-tight">
+                      <p className="text-xs font-black text-foreground truncate leading-tight">
                         {officer.name}
                       </p>
-                      <p className="text-xs text-muted-foreground font-medium truncate">
+                      <p className="text-[10px] text-muted-foreground font-medium truncate">
                         {officer.areaName || "Unassigned"}
                       </p>
                     </div>
-                    <div
-                      className="text-lg font-black shrink-0"
+                    <span
+                      className="text-xs font-black shrink-0"
                       style={{ color: zoneColor }}
                     >
                       {rate}%
-                    </div>
+                    </span>
                   </div>
 
-                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden mb-3">
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden mb-2">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${rate}%`, background: zoneColor }}
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-bold">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold">
                     <span
-                      className={`px-2 py-0.5 rounded-lg ${
+                      className={`px-1.5 py-0.5 rounded ${
                         officer.pendingCount > 5
                           ? "bg-red-50 text-red-600"
                           : officer.pendingCount > 0
@@ -516,11 +514,11 @@ export default function AdminDashboard() {
                     >
                       {officer.pendingCount} open
                     </span>
-                    <span className="px-2 py-0.5 rounded-lg bg-green-50 text-green-700">
+                    <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700">
                       {resolved} done
                     </span>
                     <span className="ml-auto text-muted-foreground font-medium">
-                      {officer.reportCount} total
+                      {officer.reportCount}
                     </span>
                   </div>
                 </button>
