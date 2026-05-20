@@ -530,34 +530,34 @@ export default function AdminOfficers() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {officers.map((officer, i) => {
             const color = ZONE_COLORS[i % ZONE_COLORS.length];
             return (
               <div
                 key={officer.id}
-                className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 md:p-8 flex flex-col hover:border-primary/30 transition-all hover:shadow-lg group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 cursor-pointer"
+                className="bg-card rounded-2xl shadow-sm border border-border/50 p-4 flex flex-col hover:border-primary/30 transition-all hover:shadow-md group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 cursor-pointer"
                 style={{ animationDelay: `${i * 50}ms` }}
                 onClick={() => openZoneEditor(officer.id)}
               >
                 <div
-                  className="absolute top-0 right-0 w-24 h-24 rounded-bl-[80px] transition-transform duration-500 group-hover:scale-125"
+                  className="absolute top-0 right-0 w-16 h-16 rounded-bl-[60px] transition-transform duration-500 group-hover:scale-125"
                   style={{ background: `${color}10` }}
                 />
 
-                <div className="flex items-start justify-between mb-6 relative z-10">
-                  <div className="flex items-center gap-4">
+                <div className="flex items-start justify-between mb-3 relative z-10">
+                  <div className="flex items-center gap-2.5">
                     <div
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black shrink-0 font-display shadow-inner text-white"
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-base font-black shrink-0 text-white"
                       style={{ background: color }}
                     >
                       {officer.name.charAt(0)}
                     </div>
                     <div>
-                      <h3 className="font-black text-foreground text-xl leading-tight mb-1 group-hover:text-primary transition-colors">
+                      <h3 className="font-black text-foreground text-sm leading-tight mb-0.5 group-hover:text-primary transition-colors">
                         {officer.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground font-medium">
+                      <p className="text-[10px] text-muted-foreground font-medium">
                         Joined {format(new Date(officer.createdAt), "MMM yyyy")}
                       </p>
                     </div>
@@ -568,10 +568,10 @@ export default function AdminOfficers() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-2 -mr-2 h-10 w-10 rounded-full"
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-1 h-7 w-7 rounded-full"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
@@ -601,50 +601,49 @@ export default function AdminOfficers() {
                   </AlertDialog>
                 </div>
 
-                <div className="space-y-3 mb-6 flex-1 relative z-10">
-                  <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
-                    <Mail className="w-5 h-5 text-muted-foreground shrink-0" />
+                <div className="space-y-1.5 mb-3 flex-1 relative z-10">
+                  <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
+                    <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="truncate">{officer.email}</span>
                   </div>
                   {officer.phone && (
-                    <div className="flex items-center gap-3 text-sm text-foreground/80 font-medium">
-                      <Phone className="w-5 h-5 text-muted-foreground shrink-0" />
+                    <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
+                      <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                       <span>{officer.phone}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-3 text-sm text-foreground font-bold bg-muted/30 p-3 rounded-xl">
-                    <MapPin className="w-5 h-5 text-primary shrink-0" />
-                    <span>{officer.areaName || "Unassigned"}</span>
+                  <div className="flex items-center gap-2 text-xs text-foreground font-bold bg-muted/30 px-2 py-1.5 rounded-lg">
+                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="truncate">{officer.areaName || "Unassigned"}</span>
                   </div>
                   {officer.centerLat != null && officer.radiusKm != null ? (
-                    <div className="text-xs font-mono text-muted-foreground bg-muted/20 rounded-lg p-2 leading-relaxed">
-                      {officer.centerLat.toFixed(4)}, {officer.centerLng?.toFixed(4)} &bull;{" "}
-                      {officer.radiusKm} km radius
+                    <div className="text-[10px] font-mono text-muted-foreground bg-muted/20 rounded-md px-2 py-1">
+                      {officer.centerLat.toFixed(4)}, {officer.centerLng?.toFixed(4)} · {officer.radiusKm} km
                     </div>
                   ) : (
-                    <div className="text-xs text-amber-600 font-medium bg-amber-50 rounded-lg p-2 border border-amber-100 dark:bg-amber-900/20 dark:border-amber-800/30 dark:text-amber-400">
-                      No zone set — click Edit Zone to define coverage area.
+                    <div className="text-[10px] text-amber-600 font-medium bg-amber-50 rounded-md px-2 py-1 border border-amber-100">
+                      No zone set — click Edit Zone.
                     </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 relative z-10 mb-4">
-                  <div className="bg-muted/50 rounded-2xl p-4 text-center border border-border/50">
-                    <div className="text-3xl font-black text-foreground mb-1 font-display">
+                <div className="grid grid-cols-2 gap-2 relative z-10 mb-3">
+                  <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
+                    <div className="text-lg font-black text-foreground leading-none mb-0.5">
                       {officer.pendingCount}
                     </div>
-                    <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Pending
                     </div>
                   </div>
                   <div
-                    className="rounded-2xl p-4 text-center border"
+                    className="rounded-xl p-2.5 text-center border"
                     style={{ background: `${color}10`, borderColor: `${color}30` }}
                   >
-                    <div className="text-3xl font-black mb-1 font-display" style={{ color }}>
+                    <div className="text-lg font-black leading-none mb-0.5" style={{ color }}>
                       {officer.reportCount - officer.pendingCount}
                     </div>
-                    <div className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
+                    <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
                       Resolved
                     </div>
                   </div>
@@ -652,10 +651,10 @@ export default function AdminOfficers() {
 
                 <Button
                   variant="outline"
-                  className="w-full rounded-2xl h-11 font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5 relative z-10"
+                  className="w-full rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5 relative z-10"
                   onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
                 >
-                  <Map className="w-4 h-4 mr-2" style={{ color }} />
+                  <Map className="w-3.5 h-3.5 mr-1.5" style={{ color }} />
                   Edit Zone
                 </Button>
               </div>
