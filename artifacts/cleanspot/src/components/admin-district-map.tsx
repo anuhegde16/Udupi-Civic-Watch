@@ -83,6 +83,47 @@ export function AdminDistrictMap({
     };
   }, []);
 
+  // Fly to selected zone (or zoom out to all zones) whenever selection changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    async function focusZone() {
+      const L = (await import("leaflet")).default;
+
+      if (selectedOfficerId !== null) {
+        const officer = officers.find((o) => o.id === selectedOfficerId);
+        if (officer?.centerLat && officer?.centerLng && officer?.radiusKm) {
+          const circle = L.circle(
+            [officer.centerLat, officer.centerLng],
+            { radius: officer.radiusKm * 1000 }
+          );
+          map.flyToBounds(circle.getBounds(), { padding: [40, 40], duration: 0.7 });
+        }
+      } else {
+        // Fit all zones that have geo data
+        const boundsGroup: [number, number][] = [];
+        officers.forEach((o) => {
+          if (o.centerLat && o.centerLng && o.radiusKm) {
+            const c = L.circle([o.centerLat, o.centerLng], { radius: o.radiusKm * 1000 });
+            const b = c.getBounds();
+            boundsGroup.push(
+              [b.getNorth(), b.getEast()],
+              [b.getSouth(), b.getWest()]
+            );
+          }
+        });
+        if (boundsGroup.length > 0) {
+          map.flyToBounds(L.latLngBounds(boundsGroup), { padding: [30, 30], duration: 0.7 });
+        }
+      }
+    }
+
+    // Defer slightly so drawLayers' rAF doesn't race with flyTo
+    const t = setTimeout(focusZone, 80);
+    return () => clearTimeout(t);
+  }, [selectedOfficerId, officers]);
+
   useEffect(() => {
     if (!mapRef.current) return;
     let scheduled = false;
