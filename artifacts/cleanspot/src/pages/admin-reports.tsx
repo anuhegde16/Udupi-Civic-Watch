@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, CalendarIcon, Anchor, Map, Trash2, AlertTriangle, Camera } from "lucide-react";
+import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, Anchor, Map, Trash2, AlertTriangle, Camera, Globe2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
@@ -19,7 +19,7 @@ type Report = {
   createdAt: string;
   imageUrl?: string | null;
   cleanupImageUrl?: string | null;
-  assignedOfficer?: { name: string } | null;
+  assignedOfficer?: { name: string; areaName?: string | null } | null;
   assignedOfficerId?: number | null;
 };
 
@@ -61,6 +61,7 @@ export default function AdminReports() {
   const initialStatus = (new URLSearchParams(window.location.search).get("status") as AdminListReportsStatus | null) ?? "all";
   const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">(initialStatus as AdminListReportsStatus | "all");
   const [officerFilter, setOfficerFilter] = useState<string>("all");
+  const [zoneFilter, setZoneFilter] = useState<string>("all");
 
   const { data: reportsData, isLoading: isLoadingReports } = useAdminListReports({
     status: statusFilter === "all" ? undefined : statusFilter as AdminListReportsStatus,
@@ -115,8 +116,14 @@ export default function AdminReports() {
   const osmNavUrl = (lat: number, lng: number) =>
     `https://www.openstreetmap.org/directions?from=&to=${lat}%2C${lng}#map=15/${lat}/${lng}`;
 
-  const reports = (reportsData?.reports || []) as Report[];
+  const allReports = (reportsData?.reports || []) as Report[];
   const officers = officersData?.officers || [];
+
+  const zones = Array.from(new Set(officers.map((o) => o.areaName).filter(Boolean))) as string[];
+
+  const reports = zoneFilter === "all"
+    ? allReports
+    : allReports.filter((r) => r.assignedOfficer?.areaName === zoneFilter);
 
   return (
     <div className="pb-12 animate-in fade-in duration-500">
@@ -145,8 +152,23 @@ export default function AdminReports() {
             </Select>
           </div>
           <div className="flex-1">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Zone / Region</label>
+            <Select value={zoneFilter} onValueChange={(v) => { setZoneFilter(v); setOfficerFilter("all"); }}>
+              <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
+                <Globe2 className="w-3.5 h-3.5 text-muted-foreground mr-1 shrink-0" />
+                <SelectValue placeholder="All Zones" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border/50 shadow-lg">
+                <SelectItem value="all">All Zones</SelectItem>
+                {zones.map((zone) => (
+                  <SelectItem key={zone} value={zone}>{zone}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Officer</label>
-            <Select value={officerFilter} onValueChange={setOfficerFilter}>
+            <Select value={officerFilter} onValueChange={(v) => { setOfficerFilter(v); setZoneFilter("all"); }}>
               <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
                 <SelectValue placeholder="All Officers" />
               </SelectTrigger>
@@ -159,7 +181,7 @@ export default function AdminReports() {
             </Select>
           </div>
           <div className="sm:self-end bg-primary/5 px-5 py-2.5 rounded-2xl border border-primary/10 flex items-center gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-primary">{reportsData?.total || 0}</span>
+            <span className="text-2xl sm:text-3xl font-black text-primary">{reports.length}</span>
             <span className="text-primary/70 font-bold uppercase text-xs tracking-wider">Found</span>
           </div>
         </div>
