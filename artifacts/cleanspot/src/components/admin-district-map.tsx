@@ -91,30 +91,35 @@ export function AdminDistrictMap({
     async function focusZone() {
       const L = (await import("leaflet")).default;
 
+      // Compute bounding box from center + radius without adding to map
+      function circleBounds(lat: number, lng: number, radiusKm: number) {
+        const dLat = radiusKm / 111.32;
+        const dLng = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180));
+        return L.latLngBounds(
+          [lat - dLat, lng - dLng],
+          [lat + dLat, lng + dLng]
+        );
+      }
+
       if (selectedOfficerId !== null) {
         const officer = officers.find((o) => o.id === selectedOfficerId);
         if (officer?.centerLat && officer?.centerLng && officer?.radiusKm) {
-          const circle = L.circle(
-            [officer.centerLat, officer.centerLng],
-            { radius: officer.radiusKm * 1000 }
+          map.flyToBounds(
+            circleBounds(officer.centerLat, officer.centerLng, officer.radiusKm),
+            { padding: [40, 40], duration: 0.7 }
           );
-          map.flyToBounds(circle.getBounds(), { padding: [40, 40], duration: 0.7 });
         }
       } else {
         // Fit all zones that have geo data
-        const boundsGroup: [number, number][] = [];
+        let combined: ReturnType<typeof L.latLngBounds> | null = null;
         officers.forEach((o) => {
           if (o.centerLat && o.centerLng && o.radiusKm) {
-            const c = L.circle([o.centerLat, o.centerLng], { radius: o.radiusKm * 1000 });
-            const b = c.getBounds();
-            boundsGroup.push(
-              [b.getNorth(), b.getEast()],
-              [b.getSouth(), b.getWest()]
-            );
+            const b = circleBounds(o.centerLat, o.centerLng, o.radiusKm);
+            combined = combined ? combined.extend(b) : b;
           }
         });
-        if (boundsGroup.length > 0) {
-          map.flyToBounds(L.latLngBounds(boundsGroup), { padding: [30, 30], duration: 0.7 });
+        if (combined) {
+          map.flyToBounds(combined, { padding: [30, 30], duration: 0.7 });
         }
       }
     }
