@@ -12,7 +12,7 @@ import {
   ListReportsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth, getSessionUser } from "../lib/auth";
-import { findOfficerForLocation } from "../lib/geo";
+import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
 
 const router: IRouter = Router();
 
@@ -142,6 +142,12 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   if ((recentCount[0]?.count ?? 0) >= RATE_LIMIT_MAX) {
     res.status(429).json({ error: "Rate limit exceeded", message: "You have submitted too many reports recently. Please try again later." });
+    return;
+  }
+
+  // Geo-fence: reject if outside the defined service area
+  if (!isWithinServiceArea(latitude, longitude)) {
+    res.status(422).json({ error: "Outside service area", message: "This location is outside the Saligrama service area. Reports can only be submitted within the designated zone." });
     return;
   }
 

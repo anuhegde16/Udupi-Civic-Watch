@@ -1,12 +1,36 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, Hand } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, Hand, AlertTriangle } from "lucide-react";
 import { useCreateReport, useUploadImage } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
+import geofencesData from "@/data/geofences.json";
+
+// Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
+function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function isWithinServiceArea(lat: number, lng: number): boolean {
+  for (const feature of geofencesData.features) {
+    if (feature.geometry.type === "Polygon") {
+      const ring = feature.geometry.coordinates[0] as [number, number][];
+      if (pointInPolygon(lat, lng, ring)) return true;
+    }
+  }
+  return false;
+}
 
 export default function Report() {
   const [, setLocation] = useLocation();
@@ -32,6 +56,20 @@ export default function Report() {
 
   const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
 
+  // Extract the first geofence ring for the map overlay
+  const geofenceRing = useMemo<[number, number][] | undefined>(() => {
+    const first = geofencesData.features[0];
+    if (first?.geometry.type === "Polygon") {
+      return first.geometry.coordinates[0] as [number, number][];
+    }
+    return undefined;
+  }, []);
+
+  const outsideFence = useMemo(() => {
+    if (!location) return false;
+    return !isWithinServiceArea(location.lat, location.lng);
+  }, [location?.lat, location?.lng]);
+
   useEffect(() => {
     getLocation();
   }, []);
@@ -48,7 +86,6 @@ export default function Report() {
 
     let resolved = false;
 
-    // Hard fallback: if the browser never calls back (e.g. iframe sandbox), bail after 5s
     const fallbackTimer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -116,6 +153,10 @@ export default function Report() {
     e.preventDefault();
     if (!location) {
       toast({ title: "Location required", description: "Please set a location on the map before submitting.", variant: "destructive" });
+      return;
+    }
+    if (outsideFence) {
+      toast({ title: "Outside service area", description: "Please move the pin inside the Saligrama service boundary.", variant: "destructive" });
       return;
     }
     createReport.mutate(
@@ -229,7 +270,6 @@ export default function Report() {
               type="button"
               onClick={() => {
                 setLocationMode("manual");
-                // Drop a marker at current location or Udupi center so it's immediately draggable
                 if (!location) setGeoLocation(UDUPI_CENTER);
               }}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${locationMode === "manual" ? "bg-card shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
@@ -240,32 +280,49 @@ export default function Report() {
           </div>
 
           {/* Map container */}
-          <div className="rounded-2xl overflow-hidden border border-border shadow-inner bg-muted" style={{ height: "280px" }}>
+          <div className="rounded-2xl overflow-hidden border border-border shadow-inner bg-muted" style={{ height: "300px" }}>
             {isLocating ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
                 <span className="font-bold">Finding your location...</span>
               </div>
             ) : (
-              <MapPicker value={location} onChange={setGeoLocation} height="280px" />
+              <MapPicker
+                value={location}
+                onChange={setGeoLocation}
+                height="300px"
+                geofenceRing={geofenceRing}
+                outsideFence={outsideFence}
+              />
             )}
           </div>
 
-          {locationMode === "manual" && location && (
+          {/* Out-of-bounds warning */}
+          {outsideFence && location && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700">Outside service area</p>
+                <p className="text-xs text-red-600 mt-0.5">This location is outside the Saligrama service boundary. Move the pin inside the highlighted zone to submit.</p>
+              </div>
+            </div>
+          )}
+
+          {locationMode === "manual" && location && !outsideFence && (
             <p className="text-sm text-center text-muted-foreground font-medium flex items-center justify-center gap-2 animate-in fade-in duration-300">
               <MapPin className="w-4 h-4 text-primary shrink-0" />
               Drag the pin to the exact waste location. You can also tap anywhere to move it.
             </p>
           )}
 
-          {location && (
+          {location && !outsideFence && (
             <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
                 <MapPin className="w-4 h-4" />
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-mono font-bold text-foreground">{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
-                <span className="text-xs text-muted-foreground font-medium">Udupi District, Karnataka — pin is draggable</span>
+                <span className="text-xs text-muted-foreground font-medium">Saligrama, Udupi District — pin is draggable</span>
               </div>
               {locationMode === "auto" && (
                 <Button type="button" variant="ghost" size="sm" onClick={getLocation} className="ml-auto h-8 text-primary hover:bg-primary/10 font-bold rounded-lg text-xs">
@@ -296,10 +353,12 @@ export default function Report() {
             type="submit"
             size="lg"
             className="w-full h-16 text-xl font-black rounded-2xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 transition-all hover:-translate-y-1 disabled:opacity-70 disabled:shadow-none disabled:transform-none disabled:cursor-not-allowed"
-            disabled={!location || isLocating || isUploading || createReport.isPending}
+            disabled={!location || isLocating || isUploading || createReport.isPending || outsideFence}
           >
             {createReport.isPending ? (
               <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+            ) : outsideFence ? (
+              <span className="flex items-center"><AlertTriangle className="ml-2 w-5 h-5 mr-2" /> Outside Service Area</span>
             ) : (
               <span className="flex items-center">Submit Report <ArrowRight className="ml-2 w-6 h-6" /></span>
             )}

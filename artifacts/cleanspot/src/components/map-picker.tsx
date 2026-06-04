@@ -27,12 +27,15 @@ interface MapPickerProps {
   value: { lat: number; lng: number } | null;
   onChange: (loc: { lat: number; lng: number }) => void;
   height?: string;
+  geofenceRing?: [number, number][]; // GeoJSON [lon, lat] pairs
+  outsideFence?: boolean;
 }
 
-export function MapPicker({ value, onChange, height = "260px" }: MapPickerProps) {
+export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const fenceLayerRef = useRef<L.Polygon | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -46,6 +49,22 @@ export function MapPicker({ value, onChange, height = "260px" }: MapPickerProps)
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
+
+    if (geofenceRing) {
+      const latlngs = geofenceRing.map(([lon, lat]) => [lat, lon] as [number, number]);
+      const poly = L.polygon(latlngs, {
+        color: "#0e6b7c",
+        weight: 2,
+        dashArray: "6 4",
+        fillColor: "#0e6b7c",
+        fillOpacity: 0.06,
+      }).addTo(map);
+      fenceLayerRef.current = poly;
+
+      if (!value) {
+        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+      }
+    }
 
     if (value) {
       const m = L.marker([value.lat, value.lng], { draggable: true, icon: buildIcon() }).addTo(map);
@@ -77,8 +96,19 @@ export function MapPicker({ value, onChange, height = "260px" }: MapPickerProps)
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
+      fenceLayerRef.current = null;
     };
   }, []);
+
+  // Update fence colour when outside state changes
+  useEffect(() => {
+    if (!fenceLayerRef.current) return;
+    fenceLayerRef.current.setStyle({
+      color: outsideFence ? "#dc2626" : "#0e6b7c",
+      fillColor: outsideFence ? "#dc2626" : "#0e6b7c",
+      fillOpacity: outsideFence ? 0.08 : 0.06,
+    });
+  }, [outsideFence]);
 
   useEffect(() => {
     if (!mapRef.current || !value) return;
