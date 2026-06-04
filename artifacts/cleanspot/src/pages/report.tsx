@@ -91,8 +91,7 @@ export default function Report() {
         resolved = true;
         setIsLocating(false);
         setLocationMode("manual");
-        setGeoLocation((cur) => cur ?? UDUPI_CENTER);
-        toast({ title: "Location unavailable", description: "Could not get your GPS location. Drag the pin on the map to the correct spot.", variant: "destructive" });
+        toast({ title: "Location unavailable", description: "Could not get your GPS location. Tap on the map to mark the waste location inside the highlighted zone.", variant: "destructive" });
       }
     }, 5000);
 
@@ -111,10 +110,9 @@ export default function Report() {
         clearTimeout(fallbackTimer);
         setIsLocating(false);
         setLocationMode("manual");
-        setGeoLocation((cur) => cur ?? UDUPI_CENTER);
         const msg = err.code === 1
-          ? "Location permission denied. Please allow location access or drag the pin to mark the spot."
-          : "Could not get your location. Drag the pin on the map to the correct spot.";
+          ? "Location permission denied. Tap on the map to mark the waste location inside the highlighted zone."
+          : "Could not get your location. Tap on the map to mark the waste location inside the highlighted zone.";
         toast({ title: "Location unavailable", description: msg, variant: "destructive" });
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -270,7 +268,6 @@ export default function Report() {
               type="button"
               onClick={() => {
                 setLocationMode("manual");
-                if (!location) setGeoLocation(UDUPI_CENTER);
               }}
               className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${locationMode === "manual" ? "bg-card shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >

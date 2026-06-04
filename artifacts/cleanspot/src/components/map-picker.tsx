@@ -100,7 +100,7 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
     };
   }, []);
 
-  // Update fence colour when outside state changes
+  // Update fence colour and zoom when outside state changes
   useEffect(() => {
     if (!fenceLayerRef.current) return;
     fenceLayerRef.current.setStyle({
@@ -108,6 +108,10 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       fillColor: outsideFence ? "#dc2626" : "#0e6b7c",
       fillOpacity: outsideFence ? 0.08 : 0.06,
     });
+    // When pin lands outside, zoom out to show the service zone so user knows where to go
+    if (outsideFence && mapRef.current) {
+      mapRef.current.fitBounds(fenceLayerRef.current.getBounds(), { padding: [24, 24], animate: true });
+    }
   }, [outsideFence]);
 
   useEffect(() => {
