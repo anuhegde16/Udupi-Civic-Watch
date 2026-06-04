@@ -54,8 +54,6 @@ export default function Report() {
   const createReport = useCreateReport();
   const uploadImage = useUploadImage();
 
-  const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
-
   // Extract the first geofence ring for the map overlay
   const geofenceRing = useMemo<[number, number][] | undefined>(() => {
     const first = geofencesData.features[0];
@@ -79,8 +77,7 @@ export default function Report() {
     if (!navigator.geolocation) {
       setIsLocating(false);
       setLocationMode("manual");
-      setGeoLocation((cur) => cur ?? UDUPI_CENTER);
-      toast({ title: "GPS not available", description: "Drag the pin on the map to mark the exact location.", variant: "destructive" });
+      toast({ title: "GPS not available", description: "Tap on the map to mark the waste location inside the highlighted zone.", variant: "destructive" });
       return;
     }
 
