@@ -2,6 +2,31 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
 
+function pointInPolygon(lon: number, lat: number, ring: [number, number][]): boolean {
+  let inside = false;
+  const n = ring.length;
+  let j = n - 1;
+  for (let i = 0; i < n; i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+    j = i;
+  }
+  return inside;
+}
+
+function countForZone(spots: WasteSpot[], zoneName: string | null): number {
+  if (!zoneName) return spots.length;
+  const feat = geofencesData.features.find(
+    (f) => (f.properties as any)?.name === zoneName && f.geometry.type === "Polygon"
+  );
+  if (!feat) return 0;
+  const ring = feat.geometry.coordinates[0] as [number, number][];
+  return spots.filter((s) => pointInPolygon(s.longitude, s.latitude, ring)).length;
+}
+
 interface WasteSpot {
   id: number;
   latitude: number;
@@ -48,13 +73,22 @@ export function LiveWasteMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const spotsRef = useRef<WasteSpot[]>([]);
+  const activeZoneRef = useRef<string | null>(null);
   const [count, setCount] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [activeZone, setActiveZone] = useState<string | null>(null);
 
+  // Recompute count from cached spots whenever the active zone changes
+  useEffect(() => {
+    activeZoneRef.current = activeZone;
+    setCount(countForZone(spotsRef.current, activeZone));
+  }, [activeZone]);
+
   const loadSpots = async () => {
     const data = await fetchSpots();
-    setCount(data.length);
+    spotsRef.current = data;
+    setCount(countForZone(data, activeZoneRef.current));
     setLastRefresh(new Date());
     return data;
   };
