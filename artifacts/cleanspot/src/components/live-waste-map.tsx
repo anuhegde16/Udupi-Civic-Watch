@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, AlertTriangle, RefreshCw } from "lucide-react";
+import geofencesData from "@/data/geofences.json";
 
 interface WasteSpot {
   id: number;
@@ -56,6 +57,28 @@ export function LiveWasteMap() {
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
       }).addTo(map);
+
+      // Draw service zone boundaries from geofences.json
+      for (const feature of geofencesData.features) {
+        if (feature.geometry.type === "Polygon") {
+          const latlngs = feature.geometry.coordinates[0].map(
+            ([lon, lat]) => [lat, lon] as [number, number]
+          );
+          const poly = L.polygon(latlngs, {
+            color: "#0e6b7c",
+            weight: 2,
+            dashArray: "7 5",
+            fillColor: "#0e6b7c",
+            fillOpacity: 0.07,
+          }).addTo(map);
+          const name = (feature.properties as any)?.name ?? "Service Zone";
+          poly.bindTooltip(name, {
+            permanent: false,
+            direction: "center",
+            className: "zone-label",
+          });
+        }
+      }
 
       leafletMapRef.current = map;
 
@@ -218,6 +241,12 @@ export function LiveWasteMap() {
         <div className="flex items-center gap-1.5">
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 shadow-sm shadow-green-400/60"></span>
           <span className="text-xs text-muted-foreground font-medium">Completed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width="16" height="10" viewBox="0 0 16 10">
+            <rect x="0" y="3" width="16" height="4" rx="2" fill="#0e6b7c" fillOpacity="0.15" stroke="#0e6b7c" strokeWidth="1.5" strokeDasharray="4 3" />
+          </svg>
+          <span className="text-xs text-muted-foreground font-medium">Service zone</span>
         </div>
         <div className="ml-auto text-xs text-muted-foreground">
           Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
