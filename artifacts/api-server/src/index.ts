@@ -36,52 +36,54 @@ async function fixImageUrls() {
   }
 }
 
-// Saligrama bounding box — any report outside this is relocated to a spread
-// of realistic points inside the town boundary on startup (idempotent).
-const SALIGRAMA_LOCATIONS = [
-  { lat: 13.5028, lng: 74.7118, address: "Saligrama Town, NH-66" },
-  { lat: 13.4975, lng: 74.7082, address: "Swarna River Road, Near Bridge" },
-  { lat: 13.5063, lng: 74.7195, address: "Saligrama Market Area" },
-  { lat: 13.4922, lng: 74.7153, address: "Saligrama Bus Stand Road" },
-  { lat: 13.5101, lng: 74.7047, address: "Near Saligrama Gram Panchayat" },
-  { lat: 13.4870, lng: 74.7210, address: "Keremane Road, Saligrama" },
-  { lat: 13.5038, lng: 74.7240, address: "Uppinakudru Junction Area" },
-  { lat: 13.4945, lng: 74.7003, address: "Padavu Road, Saligrama" },
-  { lat: 13.5085, lng: 74.7138, address: "Saligrama School Road" },
-  { lat: 13.4888, lng: 74.7074, address: "Heroor Cross, Saligrama" },
-  { lat: 13.5012, lng: 74.7172, address: "Saligrama Temple Street" },
-];
+// One-time migration: move the original demo seed reports (IDs 13–23) that
+// were seeded outside Saligrama into the correct service area. Targets only
+// those specific IDs so no real citizen report is ever touched. Idempotent —
+// rows already inside the bounding box are left unchanged.
+const DEMO_REPORT_SALIGRAMA_LOCATIONS: Record<number, { lat: number; lng: number; address: string }> = {
+  13: { lat: 13.5028, lng: 74.7118, address: "Saligrama Town, NH-66" },
+  14: { lat: 13.4975, lng: 74.7082, address: "Swarna River Road, Near Bridge" },
+  15: { lat: 13.5063, lng: 74.7195, address: "Saligrama Market Area" },
+  16: { lat: 13.4922, lng: 74.7153, address: "Saligrama Bus Stand Road" },
+  17: { lat: 13.5101, lng: 74.7047, address: "Near Saligrama Gram Panchayat" },
+  18: { lat: 13.4870, lng: 74.7210, address: "Keremane Road, Saligrama" },
+  19: { lat: 13.5038, lng: 74.7240, address: "Uppinakudru Junction Area" },
+  20: { lat: 13.4945, lng: 74.7003, address: "Padavu Road, Saligrama" },
+  21: { lat: 13.5085, lng: 74.7138, address: "Saligrama School Road" },
+  22: { lat: 13.4888, lng: 74.7074, address: "Heroor Cross, Saligrama" },
+  23: { lat: 13.5012, lng: 74.7172, address: "Saligrama Temple Street" },
+};
 
-async function relocateReportsToSaligrama() {
+async function relocateDemoReportsToSaligrama() {
   try {
     const { db, reportsTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
+    const { eq, inArray } = await import("drizzle-orm");
 
-    const all = await db
+    const targetIds = Object.keys(DEMO_REPORT_SALIGRAMA_LOCATIONS).map(Number);
+    const rows = await db
       .select({ id: reportsTable.id, lat: reportsTable.latitude, lng: reportsTable.longitude })
       .from(reportsTable)
-      .orderBy(reportsTable.id);
+      .where(inArray(reportsTable.id, targetIds));
 
-    let idx = 0;
     let moved = 0;
-    for (const r of all) {
-      const inside =
+    for (const r of rows) {
+      const loc = DEMO_REPORT_SALIGRAMA_LOCATIONS[r.id];
+      if (!loc) continue;
+      const alreadyInside =
         r.lat >= 13.46988 && r.lat <= 13.52115 &&
         r.lng >= 74.68630 && r.lng <= 74.73806;
-      if (!inside) {
-        const loc = SALIGRAMA_LOCATIONS[idx % SALIGRAMA_LOCATIONS.length]!;
+      if (!alreadyInside) {
         await db
           .update(reportsTable)
           .set({ latitude: loc.lat, longitude: loc.lng, address: loc.address })
           .where(eq(reportsTable.id, r.id));
-        idx++;
         moved++;
       }
     }
 
-    if (moved > 0) logger.info({ moved }, "Relocated reports inside Saligrama boundary");
+    if (moved > 0) logger.info({ moved }, "Relocated demo reports inside Saligrama boundary");
   } catch (err) {
-    logger.warn({ err }, "Could not relocate reports to Saligrama");
+    logger.warn({ err }, "Could not relocate demo reports to Saligrama");
   }
 }
 
@@ -90,7 +92,7 @@ async function start() {
   await migrateOfficerCredentials();
   await seedSampleData();
   await fixImageUrls();
-  await relocateReportsToSaligrama();
+  await relocateDemoReportsToSaligrama();
 
   app.listen(port, (err) => {
     if (err) {
