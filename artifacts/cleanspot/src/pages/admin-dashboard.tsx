@@ -83,7 +83,12 @@ type ReportItem = {
 
 export default function AdminDashboard() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(now.getDate() - 29);
+    return { from, to: now };
+  });
   const [calOpen, setCalOpen] = useState(false);
   // Tracks mid-range selection synchronously — state updates are async so a ref is needed
   const pickingEndRef = useRef(false);
@@ -391,6 +396,9 @@ export default function AdminDashboard() {
                 { label: "Yesterday", from: 1, to: 1 },
                 { label: "Last 7 days", from: 6, to: 0 },
                 { label: "Last 30 days", from: 29, to: 0 },
+                { label: "Last 60 days", from: 59, to: 0 },
+                { label: "Last 90 days", from: 89, to: 0 },
+                { label: "Last year", from: 364, to: 0 },
                 { label: "This month", from: -1, to: 0 },
               ].map(({ label, from, to }) => (
                 <button
