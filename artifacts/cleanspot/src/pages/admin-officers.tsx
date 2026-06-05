@@ -153,8 +153,12 @@ export default function AdminOfficers() {
   }
 
   const onSubmit = (data: CreateOfficerValues) => {
+    const cleanData = {
+      ...data,
+      areaName: data.areaName || undefined,
+    };
     createOfficer.mutate(
-      { data },
+      { data: cleanData },
       {
         onSuccess: () => {
           toast({ title: "Officer created successfully" });

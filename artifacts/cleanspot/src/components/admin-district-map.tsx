@@ -199,17 +199,11 @@ export function AdminDistrictMap({
           }
         });
 
-        geoZones.forEach((zone) => {
+        geoZones.forEach((zone, zoneIdx) => {
           const assignedOfficer = officers.find(
             (o) => o.areaName === zone.name
           );
-          const officerIdx = assignedOfficer
-            ? officers.indexOf(assignedOfficer)
-            : -1;
-          const color =
-            officerIdx >= 0
-              ? ZONE_PALETTE[officerIdx % ZONE_PALETTE.length]
-              : "#6b7280";
+          const color = ZONE_PALETTE[zoneIdx % ZONE_PALETTE.length];
           const isSelected =
             assignedOfficer
               ? selectedOfficerId === assignedOfficer.id
@@ -359,9 +353,7 @@ export function AdminDistrictMap({
         </button>
         {geoZones.map((zone, idx) => {
           const assignedOfficer = officers.find((o) => o.areaName === zone.name);
-          const color = assignedOfficer
-            ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
-            : undefined;
+          const color = ZONE_PALETTE[idx % ZONE_PALETTE.length];
           return (
             <button
               key={zone.name}
