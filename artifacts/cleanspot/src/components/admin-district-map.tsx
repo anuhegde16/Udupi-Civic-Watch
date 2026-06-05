@@ -21,6 +21,7 @@ interface GeoZone {
   name: string;
   bounds: [[number, number], [number, number]];
   latlngs: [number, number][];
+  centroid: [number, number];
 }
 
 const DISTRICT_BOUNDS: [[number, number], [number, number]] = [
@@ -34,6 +35,8 @@ const geoZones: GeoZone[] = geofencesData.features
     const coords = f.geometry.coordinates[0] as [number, number][];
     const lats = coords.map(([, lat]) => lat);
     const lons = coords.map(([lon]) => lon);
+    const centroidLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+    const centroidLon = lons.reduce((s, v) => s + v, 0) / lons.length;
     return {
       name: (f.properties as any)?.name ?? "Zone",
       bounds: [
@@ -41,6 +44,7 @@ const geoZones: GeoZone[] = geofencesData.features
         [Math.max(...lats), Math.max(...lons)],
       ],
       latlngs: coords.map(([lon, lat]) => [lat, lon] as [number, number]),
+      centroid: [centroidLat, centroidLon],
     };
   });
 
@@ -96,8 +100,14 @@ export function AdminDistrictMap({
       const map = L.map(containerRef.current, {
         zoomControl: false,
       });
-      map.fitBounds(initialBounds, { padding: [24, 24] });
       mapRef.current = map;
+
+      map.fitBounds(initialBounds, { padding: [24, 24] });
+      setTimeout(() => map.invalidateSize(), 0);
+      setTimeout(() => {
+        map.invalidateSize();
+        map.fitBounds(initialBounds, { padding: [24, 24] });
+      }, 300);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
@@ -105,21 +115,6 @@ export function AdminDistrictMap({
       }).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
-
-      for (const zone of geoZones) {
-        const poly = L.polygon(zone.latlngs, {
-          color: "#0e6b7c",
-          weight: 2,
-          dashArray: "7 5",
-          fillColor: "#0e6b7c",
-          fillOpacity: 0.07,
-        }).addTo(map);
-        poly.bindTooltip(zone.name, {
-          permanent: false,
-          direction: "center",
-          className: "zone-label",
-        });
-      }
     }
 
     init();
@@ -136,7 +131,7 @@ export function AdminDistrictMap({
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    async function focusGeoZone() {
+    function focusGeoZone() {
       if (activeZone === null) {
         map.flyToBounds(DISTRICT_BOUNDS, { padding: [20, 20], duration: 0.7 });
       } else {
@@ -156,25 +151,29 @@ export function AdminDistrictMap({
     const map = mapRef.current;
 
     async function focusOfficerZone() {
-      const L = (await import("leaflet")).default;
+      if (selectedOfficerId === null) return;
+      const officer = officers.find((o) => o.id === selectedOfficerId);
+      if (!officer) return;
 
-      function circleBounds(lat: number, lng: number, radiusKm: number) {
-        const dLat = radiusKm / 111.32;
-        const dLng = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180));
-        return L.latLngBounds(
-          [lat - dLat, lng - dLng],
-          [lat + dLat, lng + dLng]
-        );
+      const zone = geoZones.find((z) => z.name === officer.areaName);
+      if (zone) {
+        map.flyToBounds(zone.bounds, { padding: [40, 40], duration: 0.7 });
+        return;
       }
 
-      if (selectedOfficerId !== null) {
-        const officer = officers.find((o) => o.id === selectedOfficerId);
-        if (officer?.centerLat && officer?.centerLng && officer?.radiusKm) {
-          map.flyToBounds(
-            circleBounds(officer.centerLat, officer.centerLng, officer.radiusKm),
-            { padding: [40, 40], duration: 0.7 }
-          );
-        }
+      if (officer.centerLat && officer.centerLng && officer.radiusKm) {
+        const L = (await import("leaflet")).default;
+        const dLat = officer.radiusKm / 111.32;
+        const dLng =
+          officer.radiusKm /
+          (111.32 * Math.cos((officer.centerLat * Math.PI) / 180));
+        map.flyToBounds(
+          L.latLngBounds(
+            [officer.centerLat - dLat, officer.centerLng - dLng],
+            [officer.centerLat + dLat, officer.centerLng + dLng]
+          ),
+          { padding: [40, 40], duration: 0.7 }
+        );
       }
     }
 
@@ -195,52 +194,81 @@ export function AdminDistrictMap({
         const map = mapRef.current;
 
         map.eachLayer((layer: any) => {
-          if (!(layer instanceof L.TileLayer) && !(layer instanceof L.Polygon)) {
+          if (!(layer instanceof L.TileLayer)) {
             map.removeLayer(layer);
           }
         });
 
-        officers.forEach((officer, idx) => {
-          if (!officer.centerLat || !officer.centerLng || !officer.radiusKm) return;
-          const color = ZONE_PALETTE[idx % ZONE_PALETTE.length];
-          const isSelected = selectedOfficerId === officer.id;
+        geoZones.forEach((zone) => {
+          const assignedOfficer = officers.find(
+            (o) => o.areaName === zone.name
+          );
+          const officerIdx = assignedOfficer
+            ? officers.indexOf(assignedOfficer)
+            : -1;
+          const color =
+            officerIdx >= 0
+              ? ZONE_PALETTE[officerIdx % ZONE_PALETTE.length]
+              : "#6b7280";
+          const isSelected =
+            assignedOfficer
+              ? selectedOfficerId === assignedOfficer.id
+              : false;
 
-          const circle = L.circle([officer.centerLat, officer.centerLng], {
-            radius: officer.radiusKm * 1000,
+          const poly = L.polygon(zone.latlngs, {
             color,
+            weight: isSelected ? 2.5 : 1.8,
+            dashArray: isSelected ? undefined : "7 5",
             fillColor: color,
-            fillOpacity: isSelected ? 0.18 : 0.07,
-            weight: isSelected ? 2.5 : 1.5,
-            dashArray: isSelected ? undefined : "6 4",
+            fillOpacity: isSelected ? 0.18 : 0.08,
           }).addTo(map);
 
-          const wrapper = document.createElement("div");
-          wrapper.style.cssText = `
-            background:${color};color:#fff;
-            padding:2px 8px;border-radius:20px;
-            font-size:11px;font-weight:700;
-            white-space:nowrap;
-            box-shadow:0 1px 4px rgba(0,0,0,0.25);
-            cursor:pointer;
-            opacity:${isSelected ? "1" : "0.85"};
-          `;
-          wrapper.textContent = officer.areaName || officer.name;
-
-          const icon = L.divIcon({ html: wrapper, className: "", iconAnchor: [0, 8] });
-          L.marker([officer.centerLat, officer.centerLng], { icon, interactive: false }).addTo(map);
-
-          circle.on("click", () => {
-            onZoneSelect(selectedOfficerId === officer.id ? null : officer.id);
-          });
-          circle.on("mouseover", () => circle.setStyle({ fillOpacity: 0.22 }));
-          circle.on("mouseout", () =>
-            circle.setStyle({ fillOpacity: isSelected ? 0.18 : 0.07 })
+          poly.bindTooltip(
+            assignedOfficer
+              ? `${zone.name} — ${assignedOfficer.name}`
+              : zone.name,
+            { permanent: false, direction: "center", className: "zone-label" }
           );
+
+          if (assignedOfficer) {
+            const wrapper = document.createElement("div");
+            wrapper.style.cssText = `
+              background:${color};color:#fff;
+              padding:2px 8px;border-radius:20px;
+              font-size:11px;font-weight:700;
+              white-space:nowrap;
+              box-shadow:0 1px 4px rgba(0,0,0,0.25);
+              cursor:pointer;
+              opacity:${isSelected ? "1" : "0.85"};
+            `;
+            wrapper.textContent = assignedOfficer.name;
+
+            const icon = L.divIcon({
+              html: wrapper,
+              className: "",
+              iconAnchor: [0, 8],
+            });
+            L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
+
+            poly.on("click", () => {
+              onZoneSelect(
+                selectedOfficerId === assignedOfficer.id
+                  ? null
+                  : assignedOfficer.id
+              );
+            });
+            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.22 }));
+            poly.on("mouseout", () =>
+              poly.setStyle({ fillOpacity: isSelected ? 0.18 : 0.08 })
+            );
+          }
         });
 
         reports.forEach((report) => {
           const color = STATUS_COLORS[report.status] || "#6b7280";
-          const dimmed = selectedOfficerId !== null && report.assignedOfficerId !== selectedOfficerId;
+          const dimmed =
+            selectedOfficerId !== null &&
+            report.assignedOfficerId !== selectedOfficerId;
 
           const marker = L.circleMarker([report.latitude, report.longitude], {
             radius: 6,
@@ -273,7 +301,8 @@ export function AdminDistrictMap({
           addrEl.style.cssText =
             "font-size:12px;font-weight:600;color:#111827;margin-bottom:6px;line-height:1.4;max-width:220px;white-space:normal;";
           addrEl.textContent =
-            report.address || `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`;
+            report.address ||
+            `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`;
           popup.appendChild(addrEl);
 
           const link = document.createElement("a");
@@ -296,8 +325,7 @@ export function AdminDistrictMap({
 
   const chipBase =
     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";
-  const chipActive =
-    "bg-primary text-primary-foreground border-primary shadow-sm";
+  const chipActive = "bg-primary text-primary-foreground border-primary shadow-sm";
   const chipInactive =
     "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground hover:bg-primary/5";
 
@@ -314,24 +342,52 @@ export function AdminDistrictMap({
           onClick={() => setActiveZone(null)}
           className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
         >
-          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+          <svg
+            className="w-3 h-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
           </svg>
           All areas
         </button>
-        {geoZones.map((zone) => (
-          <button
-            key={zone.name}
-            onClick={() => setActiveZone(zone.name)}
-            className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
-          >
-            <MapPin className="w-3 h-3 shrink-0" />
-            {zone.name}
-          </button>
-        ))}
+        {geoZones.map((zone, idx) => {
+          const assignedOfficer = officers.find((o) => o.areaName === zone.name);
+          const color = assignedOfficer
+            ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
+            : undefined;
+          return (
+            <button
+              key={zone.name}
+              onClick={() => setActiveZone(zone.name)}
+              className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
+              style={
+                activeZone === zone.name && color
+                  ? { background: color, borderColor: color }
+                  : color
+                  ? { borderColor: color, color }
+                  : {}
+              }
+            >
+              <MapPin className="w-3 h-3 shrink-0" />
+              {zone.name}
+              {assignedOfficer && (
+                <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
-      <div ref={containerRef} className="z-0 h-[220px] md:h-[340px] w-full rounded-xl overflow-hidden" />
+      <div
+        ref={containerRef}
+        className="z-0 h-[220px] md:h-[340px] w-full rounded-xl overflow-hidden"
+      />
     </div>
   );
 }

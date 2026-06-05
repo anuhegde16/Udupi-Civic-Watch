@@ -3,6 +3,32 @@ import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
 import { requireAuth, requireAdmin, hashPassword } from "../lib/auth";
+import geofencesData from "../data/geofences.json";
+
+function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: number; radiusKm: number } | null {
+  const feature = geofencesData.features.find(
+    (f) => f.geometry.type === "Polygon" && (f.properties as any)?.name === zoneName
+  );
+  if (!feature || feature.geometry.type !== "Polygon") return null;
+
+  const coords = feature.geometry.coordinates[0] as [number, number][];
+  const lats = coords.map(([, lat]) => lat);
+  const lons = coords.map(([lon]) => lon);
+
+  const centerLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+  const centerLng = lons.reduce((s, v) => s + v, 0) / lons.length;
+
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons);
+  const maxLon = Math.max(...lons);
+
+  const dLat = ((maxLat - minLat) / 2) * 111.32;
+  const dLon = ((maxLon - minLon) / 2) * 111.32 * Math.cos((centerLat * Math.PI) / 180);
+  const radiusKm = Math.sqrt(dLat * dLat + dLon * dLon);
+
+  return { centerLat, centerLng, radiusKm };
+}
 
 const router: IRouter = Router();
 
@@ -41,7 +67,16 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, phone, areaName, centerLat, centerLng, radiusKm } = parsed.data;
+  let { name, email, password, phone, areaName, centerLat, centerLng, radiusKm } = parsed.data;
+
+  if (areaName) {
+    const zoneGeo = computeZoneGeo(areaName);
+    if (zoneGeo) {
+      centerLat = zoneGeo.centerLat;
+      centerLng = zoneGeo.centerLng;
+      radiusKm = zoneGeo.radiusKm;
+    }
+  }
 
   const existing = await db
     .select()

@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Form,
   FormControl,
   FormField,
@@ -62,9 +69,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { OfficerZonesMap } from "@/components/officer-zones-map";
 import { OfficerAreaEditMap } from "@/components/officer-area-edit-map";
+import geofencesData from "@/data/geofences.json";
 
 const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
 const ZONE_COLORS = ["#0d9488", "#f59e0b", "#f43f5e", "#8b5cf6", "#3b82f6", "#10b981"];
+
+const geoZoneNames: string[] = geofencesData.features
+  .filter((f) => f.geometry.type === "Polygon")
+  .map((f) => (f.properties as any)?.name ?? "Zone");
 
 const createOfficerSchema = z.object({
   name: z.string().min(2, "Name is required"),
@@ -72,9 +84,6 @@ const createOfficerSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
   phone: z.string().optional(),
   areaName: z.string().optional(),
-  centerLat: z.coerce.number().optional().or(z.literal("")),
-  centerLng: z.coerce.number().optional().or(z.literal("")),
-  radiusKm: z.coerce.number().optional().or(z.literal("")),
 });
 
 type CreateOfficerValues = z.infer<typeof createOfficerSchema>;
@@ -122,9 +131,6 @@ export default function AdminOfficers() {
       password: "",
       phone: "",
       areaName: "",
-      centerLat: undefined,
-      centerLng: undefined,
-      radiusKm: undefined,
     },
   });
 
@@ -147,15 +153,8 @@ export default function AdminOfficers() {
   }
 
   const onSubmit = (data: CreateOfficerValues) => {
-    const cleanData = {
-      ...data,
-      centerLat: data.centerLat === "" ? undefined : data.centerLat,
-      centerLng: data.centerLng === "" ? undefined : data.centerLng,
-      radiusKm: data.radiusKm === "" ? undefined : data.radiusKm,
-    };
-
     createOfficer.mutate(
-      { data: cleanData },
+      { data },
       {
         onSuccess: () => {
           toast({ title: "Officer created successfully" });
@@ -371,10 +370,10 @@ export default function AdminOfficers() {
                     <div className="md:col-span-2 pt-4 pb-2">
                       <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
                         <h3 className="font-black text-primary flex items-center gap-2 mb-1">
-                          <MapPin className="w-5 h-5" /> Coastal Sector Assignment
+                          <MapPin className="w-5 h-5" /> Service Zone Assignment
                         </h3>
                         <p className="text-sm text-foreground/70 font-medium">
-                          Assign a specific beach or coastal zone for this officer to manage.
+                          Assign this officer to a geofenced service zone. The system will auto-route reports in that zone to them.
                         </p>
                       </div>
                     </div>
@@ -385,79 +384,32 @@ export default function AdminOfficers() {
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
                           <FormLabel className="font-bold text-foreground">
-                            Sector Name{" "}
+                            Service Zone{" "}
                             <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
                           </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Malpe Beach South"
-                              {...field}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="centerLat"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="font-bold text-foreground">Center Lat</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="13.3409"
-                              type="number"
-                              step="any"
-                              {...field}
-                              value={field.value ?? ""}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="centerLng"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="font-bold text-foreground">Center Lng</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="74.7421"
-                              type="number"
-                              step="any"
-                              {...field}
-                              value={field.value ?? ""}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="radiusKm"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="font-bold text-foreground">Radius (km)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="5"
-                              type="number"
-                              step="any"
-                              {...field}
-                              value={field.value ?? ""}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-mono"
-                            />
-                          </FormControl>
+                          <Select
+                            onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                            value={field.value || "__none__"}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                <SelectValue placeholder="Select a zone…" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="__none__">
+                                <span className="text-muted-foreground">No zone assigned</span>
+                              </SelectItem>
+                              {geoZoneNames.map((zoneName) => (
+                                <SelectItem key={zoneName} value={zoneName}>
+                                  <span className="flex items-center gap-2">
+                                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                                    {zoneName}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
