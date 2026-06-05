@@ -46,27 +46,27 @@ export async function findOfficerForLocation(
 ): Promise<Officer | null> {
   const officers = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
 
-  let bestOfficer: Officer | null = null;
-  let bestDist = Infinity;
-
-  for (const officer of officers) {
-    if (
-      officer.centerLat != null &&
-      officer.centerLng != null &&
-      officer.radiusKm != null
-    ) {
-      const dist = haversineKm(lat, lng, officer.centerLat, officer.centerLng);
-      if (dist <= officer.radiusKm && dist < bestDist) {
-        bestDist = dist;
-        bestOfficer = officer;
+  // Build a lookup: zone name → first exterior ring (GeoJSON [lon,lat] pairs)
+  const zoneRings = new Map<string, [number, number][]>();
+  for (const feature of geofencesData.features) {
+    if (feature.geometry.type === "Polygon") {
+      const name = (feature.properties as { name?: string })?.name;
+      if (name) {
+        zoneRings.set(name, feature.geometry.coordinates[0] as [number, number][]);
       }
     }
   }
 
-  // If no officer found by area, assign to the first officer
-  if (!bestOfficer && officers.length > 0) {
-    bestOfficer = officers[0];
+  // Find an officer whose named zone polygon contains the report point
+  for (const officer of officers) {
+    if (officer.areaName) {
+      const ring = zoneRings.get(officer.areaName);
+      if (ring && pointInPolygon(lat, lng, ring)) {
+        return officer;
+      }
+    }
   }
 
-  return bestOfficer;
+  // Fallback: assign to the first available officer
+  return officers.length > 0 ? officers[0] : null;
 }
