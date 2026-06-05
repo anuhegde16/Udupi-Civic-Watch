@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { MapPin, Globe } from "lucide-react";
+import geofencesData from "@/data/geofences.json";
 
 const ZONE_PALETTE = [
   "#3b82f6",
@@ -14,6 +16,28 @@ const STATUS_COLORS: Record<string, string> = {
   cleaning: "#f59e0b",
   cleaned: "#22c55e",
 };
+
+interface GeoZone {
+  name: string;
+  bounds: [[number, number], [number, number]];
+  latlngs: [number, number][];
+}
+
+const geoZones: GeoZone[] = geofencesData.features
+  .filter((f) => f.geometry.type === "Polygon")
+  .map((f) => {
+    const coords = f.geometry.coordinates[0] as [number, number][];
+    const lats = coords.map(([, lat]) => lat);
+    const lons = coords.map(([lon]) => lon);
+    return {
+      name: (f.properties as any)?.name ?? "Zone",
+      bounds: [
+        [Math.min(...lats), Math.min(...lons)],
+        [Math.max(...lats), Math.max(...lons)],
+      ],
+      latlngs: coords.map(([lon, lat]) => [lat, lon] as [number, number]),
+    };
+  });
 
 export type MapReport = {
   id: number;
@@ -48,6 +72,9 @@ export function AdminDistrictMap({
 }: AdminDistrictMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const [activeZone, setActiveZone] = useState<string | null>(
+    geoZones[0]?.name ?? null
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -58,11 +85,13 @@ export function AdminDistrictMap({
       await import("leaflet/dist/leaflet.css");
       if (cancelled || !containerRef.current) return;
 
+      const initialBounds: [[number, number], [number, number]] =
+        geoZones[0]?.bounds ?? [[13.46988, 74.6863], [13.52115, 74.73806]];
+
       const map = L.map(containerRef.current, {
-        center: [13.3409, 74.7421],
-        zoom: 10,
         zoomControl: false,
       });
+      map.fitBounds(initialBounds, { padding: [24, 24] });
       mapRef.current = map;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -71,6 +100,21 @@ export function AdminDistrictMap({
       }).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      for (const zone of geoZones) {
+        const poly = L.polygon(zone.latlngs, {
+          color: "#0e6b7c",
+          weight: 2,
+          dashArray: "7 5",
+          fillColor: "#0e6b7c",
+          fillOpacity: 0.07,
+        }).addTo(map);
+        poly.bindTooltip(zone.name, {
+          permanent: false,
+          direction: "center",
+          className: "zone-label",
+        });
+      }
     }
 
     init();
@@ -83,15 +127,40 @@ export function AdminDistrictMap({
     };
   }, []);
 
-  // Fly to selected zone (or zoom out to all zones) whenever selection changes
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    async function focusZone() {
+    async function focusGeoZone() {
+      if (activeZone === null) {
+        const L = (await import("leaflet")).default;
+        let combined: ReturnType<typeof L.latLngBounds> | null = null;
+        for (const zone of geoZones) {
+          const b = L.latLngBounds(zone.bounds[0], zone.bounds[1]);
+          combined = combined ? combined.extend(b) : b;
+        }
+        if (combined) {
+          map.flyToBounds(combined, { padding: [30, 30], duration: 0.7 });
+        }
+      } else {
+        const zone = geoZones.find((z) => z.name === activeZone);
+        if (zone) {
+          map.flyToBounds(zone.bounds, { padding: [32, 32], duration: 0.7 });
+        }
+      }
+    }
+
+    const t = setTimeout(focusGeoZone, 60);
+    return () => clearTimeout(t);
+  }, [activeZone]);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    async function focusOfficerZone() {
       const L = (await import("leaflet")).default;
 
-      // Compute bounding box from center + radius without adding to map
       function circleBounds(lat: number, lng: number, radiusKm: number) {
         const dLat = radiusKm / 111.32;
         const dLng = radiusKm / (111.32 * Math.cos((lat * Math.PI) / 180));
@@ -109,23 +178,10 @@ export function AdminDistrictMap({
             { padding: [40, 40], duration: 0.7 }
           );
         }
-      } else {
-        // Fit all zones that have geo data
-        let combined: ReturnType<typeof L.latLngBounds> | null = null;
-        officers.forEach((o) => {
-          if (o.centerLat && o.centerLng && o.radiusKm) {
-            const b = circleBounds(o.centerLat, o.centerLng, o.radiusKm);
-            combined = combined ? combined.extend(b) : b;
-          }
-        });
-        if (combined) {
-          map.flyToBounds(combined, { padding: [30, 30], duration: 0.7 });
-        }
       }
     }
 
-    // Defer slightly so drawLayers' rAF doesn't race with flyTo
-    const t = setTimeout(focusZone, 80);
+    const t = setTimeout(focusOfficerZone, 80);
     return () => clearTimeout(t);
   }, [selectedOfficerId, officers]);
 
@@ -142,7 +198,9 @@ export function AdminDistrictMap({
         const map = mapRef.current;
 
         map.eachLayer((layer: any) => {
-          if (!(layer instanceof L.TileLayer)) map.removeLayer(layer);
+          if (!(layer instanceof L.TileLayer) && !(layer instanceof L.Polygon)) {
+            map.removeLayer(layer);
+          }
         });
 
         officers.forEach((officer, idx) => {
@@ -239,7 +297,44 @@ export function AdminDistrictMap({
     drawLayers();
   }, [reports, officers, selectedOfficerId, onZoneSelect]);
 
+  const chipBase =
+    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";
+  const chipActive =
+    "bg-primary text-primary-foreground border-primary shadow-sm";
+  const chipInactive =
+    "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground hover:bg-primary/5";
+
   return (
-    <div ref={containerRef} className="z-0 h-[220px] md:h-[340px] w-full" />
+    <div>
+      <div className="flex items-center gap-2 flex-wrap mb-3 px-1">
+        <div className="flex items-center gap-1.5 mr-1">
+          <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            Service area
+          </span>
+        </div>
+        <button
+          onClick={() => setActiveZone(null)}
+          className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
+        >
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          All areas
+        </button>
+        {geoZones.map((zone) => (
+          <button
+            key={zone.name}
+            onClick={() => setActiveZone(zone.name)}
+            className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
+          >
+            <MapPin className="w-3 h-3 shrink-0" />
+            {zone.name}
+          </button>
+        ))}
+      </div>
+      <div ref={containerRef} className="z-0 h-[220px] md:h-[340px] w-full rounded-xl overflow-hidden" />
+    </div>
   );
 }
