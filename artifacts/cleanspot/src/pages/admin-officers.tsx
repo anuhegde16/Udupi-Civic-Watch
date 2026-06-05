@@ -14,7 +14,6 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -95,7 +94,6 @@ interface OfficerZoneDraft {
   areaName: string;
   lat: number;
   lng: number;
-  radiusKm: number;
   colorIdx: number;
 }
 
@@ -113,15 +111,13 @@ export default function AdminOfficers() {
   // Local string state for coordinate inputs — updated on blur, not every keystroke
   const [latStr, setLatStr] = useState("");
   const [lngStr, setLngStr] = useState("");
-  const [radiusStr, setRadiusStr] = useState("");
 
   // Keep string inputs in sync when editingZone changes externally (map drag)
   useEffect(() => {
     if (!editingZone) return;
     setLatStr(editingZone.lat.toFixed(6));
     setLngStr(editingZone.lng.toFixed(6));
-    setRadiusStr(String(editingZone.radiusKm));
-  }, [editingZone?.lat, editingZone?.lng, editingZone?.radiusKm]);
+  }, [editingZone?.lat, editingZone?.lng]);
 
   const form = useForm<CreateOfficerValues>({
     resolver: zodResolver(createOfficerSchema),
@@ -147,7 +143,6 @@ export default function AdminOfficers() {
       areaName: officer.areaName ?? "",
       lat: officer.centerLat ?? UDUPI_CENTER.lat,
       lng: officer.centerLng ?? UDUPI_CENTER.lng,
-      radiusKm: officer.radiusKm ?? 8,
       colorIdx: idx,
     });
   }
@@ -206,7 +201,6 @@ export default function AdminOfficers() {
           areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
           centerLat: snapshot.lat,
           centerLng: snapshot.lng,
-          radiusKm: snapshot.radiusKm,
         },
       },
       {
@@ -224,7 +218,6 @@ export default function AdminOfficers() {
                       areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
                       centerLat: snapshot.lat,
                       centerLng: snapshot.lng,
-                      radiusKm: snapshot.radiusKm,
                     }
                   : o
               ),
@@ -572,9 +565,9 @@ export default function AdminOfficers() {
                     <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                     <span className="truncate">{officer.areaName || "Unassigned"}</span>
                   </div>
-                  {officer.centerLat != null && officer.radiusKm != null ? (
+                  {officer.centerLat != null ? (
                     <div className="text-[10px] font-mono text-muted-foreground bg-muted/20 rounded-md px-2 py-1">
-                      {officer.centerLat.toFixed(4)}, {officer.centerLng?.toFixed(4)} · {officer.radiusKm} km
+                      {officer.centerLat.toFixed(4)}, {officer.centerLng?.toFixed(4)}
                     </div>
                   ) : (
                     <div className="text-[10px] text-amber-600 font-medium bg-amber-50 rounded-md px-2 py-1 border border-amber-100">
@@ -674,7 +667,7 @@ export default function AdminOfficers() {
                     <OfficerAreaEditMap
                       lat={editingZone.lat}
                       lng={editingZone.lng}
-                      radiusKm={editingZone.radiusKm}
+                      areaName={editingZone.areaName}
                       color={zoneColor}
                       onCenterChange={(lat, lng) =>
                         setEditingZone((z) =>
@@ -687,40 +680,12 @@ export default function AdminOfficers() {
                             : z
                         )
                       }
-                      onRadiusChange={(r) =>
-                        setEditingZone((z) => (z ? { ...z, radiusKm: r } : z))
-                      }
                       height="280px"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="font-bold text-sm text-foreground">Radius</label>
-                    <span
-                      className="text-sm font-black px-3 py-1 rounded-full"
-                      style={{ background: `${zoneColor}18`, color: zoneColor }}
-                    >
-                      {editingZone.radiusKm} km
-                    </span>
-                  </div>
-                  <Slider
-                    min={1}
-                    max={50}
-                    step={0.5}
-                    value={[editingZone.radiusKm]}
-                    onValueChange={([val]) =>
-                      setEditingZone((z) => (z ? { ...z, radiusKm: val } : z))
-                    }
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground font-medium mt-2">
-                    <span>1 km</span>
-                    <span>50 km</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="font-bold text-xs text-muted-foreground block mb-1.5 uppercase tracking-wide">
                       Latitude
@@ -756,28 +721,6 @@ export default function AdminOfficers() {
                           setEditingZone((z) => (z ? { ...z, lng: v } : z));
                         } else {
                           setLngStr(editingZone.lng.toFixed(6));
-                        }
-                      }}
-                      className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-bold text-xs text-muted-foreground block mb-1.5 uppercase tracking-wide">
-                      Radius km
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      min={1}
-                      max={50}
-                      value={radiusStr}
-                      onChange={(e) => setRadiusStr(e.target.value)}
-                      onBlur={() => {
-                        const v = parseFloat(radiusStr);
-                        if (!isNaN(v) && v >= 1 && v <= 50) {
-                          setEditingZone((z) => (z ? { ...z, radiusKm: v } : z));
-                        } else {
-                          setRadiusStr(String(editingZone.radiusKm));
                         }
                       }}
                       className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
