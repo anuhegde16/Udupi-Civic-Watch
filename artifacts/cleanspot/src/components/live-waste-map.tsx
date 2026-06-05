@@ -77,7 +77,7 @@ export function LiveWasteMap() {
   const activeZoneRef = useRef<string | null>(null);
   const [count, setCount] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [activeZone, setActiveZone] = useState<string | null>(null);
+  const [activeZone, setActiveZone] = useState<string | null>(zones[0]?.name ?? null);
 
   // Recompute count from cached spots whenever the active zone changes
   useEffect(() => {
@@ -101,12 +101,17 @@ export function LiveWasteMap() {
       if (!mapRef.current || leafletMapRef.current) return;
 
       const map = L.map(mapRef.current, {
-        center: DISTRICT_CENTER,
-        zoom: DISTRICT_ZOOM,
         zoomControl: false,
         attributionControl: false,
         scrollWheelZoom: false,
       });
+
+      // Start fitted to the first service zone (Saligrama); fall back to district
+      if (zones[0]) {
+        map.fitBounds(zones[0].bounds, { padding: [24, 24] });
+      } else {
+        map.setView(DISTRICT_CENTER, DISTRICT_ZOOM);
+      }
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 18,
