@@ -23,6 +23,11 @@ interface GeoZone {
   latlngs: [number, number][];
 }
 
+const DISTRICT_BOUNDS: [[number, number], [number, number]] = [
+  [13.1, 74.55],
+  [13.95, 74.95],
+];
+
 const geoZones: GeoZone[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon")
   .map((f) => {
@@ -133,15 +138,7 @@ export function AdminDistrictMap({
 
     async function focusGeoZone() {
       if (activeZone === null) {
-        const L = (await import("leaflet")).default;
-        let combined: ReturnType<typeof L.latLngBounds> | null = null;
-        for (const zone of geoZones) {
-          const b = L.latLngBounds(zone.bounds[0], zone.bounds[1]);
-          combined = combined ? combined.extend(b) : b;
-        }
-        if (combined) {
-          map.flyToBounds(combined, { padding: [30, 30], duration: 0.7 });
-        }
+        map.flyToBounds(DISTRICT_BOUNDS, { padding: [20, 20], duration: 0.7 });
       } else {
         const zone = geoZones.find((z) => z.name === activeZone);
         if (zone) {
