@@ -59,6 +59,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import geofencesData from "@/data/geofences.json";
 import { Link } from "wouter";
 import { format, startOfDay, endOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -78,6 +86,11 @@ import {
 } from "recharts";
 import { AdminDistrictMap } from "@/components/admin-district-map";
 import type { MapReport, MapOfficer } from "@/components/admin-district-map";
+
+const panchayatAreaNames: string[] = geofencesData.features
+  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
+  .map((f) => (f.properties as any)?.name ?? "")
+  .filter(Boolean);
 
 const STATUS_COLORS = {
   reported: "#ef4444",
@@ -847,8 +860,24 @@ export default function AdminDashboard() {
                   )} />
                   <FormField control={createPaForm.control} name="panchayatName" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-bold">Panchayat Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Saligrama Town Panchayat" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                      <FormLabel className="font-bold">Panchayat Area</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger className="bg-muted/50 rounded-xl h-11 border-border/50">
+                            <SelectValue placeholder="Select a panchayat…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {panchayatAreaNames.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              <span className="flex items-center gap-2">
+                                <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                {name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )} />
