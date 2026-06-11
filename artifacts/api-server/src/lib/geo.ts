@@ -48,27 +48,38 @@ export async function findOfficerForLocation(
 ): Promise<Officer | null> {
   const officers = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
 
-  // Build a lookup: zone name → first exterior ring (GeoJSON [lon,lat] pairs)
+  // Build lookups: zone name → exterior ring, and zone name → type (ward | district)
   const zoneRings = new Map<string, [number, number][]>();
+  const zoneTypes = new Map<string, string>();
   for (const feature of geofencesData.features) {
     if (feature.geometry.type === "Polygon") {
-      const name = (feature.properties as { name?: string })?.name;
-      if (name) {
-        zoneRings.set(name, feature.geometry.coordinates[0] as [number, number][]);
+      const props = feature.properties as { name?: string; type?: string };
+      if (props.name) {
+        zoneRings.set(props.name, feature.geometry.coordinates[0] as [number, number][]);
+        zoneTypes.set(props.name, props.type ?? "district");
       }
     }
   }
 
-  // Find an officer whose named zone polygon contains the report point
+  // Two-pass resolution: ward-assigned officers take priority over district-assigned ones.
+  // This prevents a "Saligrama" (district) officer from shadowing a ward officer because
+  // the district polygon fully contains all ward polygons.
+  const wardOfficers: Officer[] = [];
+  const districtOfficers: Officer[] = [];
   for (const officer of officers) {
-    if (officer.areaName) {
-      const ring = zoneRings.get(officer.areaName);
-      if (ring && pointInPolygon(lat, lng, ring)) {
-        return officer;
-      }
+    if (!officer.areaName) continue;
+    const ring = zoneRings.get(officer.areaName);
+    if (!ring || !pointInPolygon(lat, lng, ring)) continue;
+    if (zoneTypes.get(officer.areaName) === "ward") {
+      wardOfficers.push(officer);
+    } else {
+      districtOfficers.push(officer);
     }
   }
 
-  // Fallback: assign to the first available officer
+  if (wardOfficers.length > 0) return wardOfficers[0];
+  if (districtOfficers.length > 0) return districtOfficers[0];
+
+  // Final fallback: assign to the first available officer
   return officers.length > 0 ? officers[0] : null;
 }
