@@ -241,23 +241,29 @@ export function AdminDistrictMap({
           const isSelected = assignedOfficer
             ? selectedOfficerId === assignedOfficer.id
             : false;
+          const isInActivePanchayat =
+            !activePanchayat ||
+            (assignedOfficer?.panchayatName === activePanchayat);
 
           const poly = L.polygon(zone.latlngs, {
-            color: wardColor,
-            weight: isSelected ? 2.5 : 1,
-            dashArray: isSelected ? undefined : "4 3",
-            fillColor: wardColor,
-            fillOpacity: isSelected ? 0.18 : 0.06,
+            color: isInActivePanchayat ? wardColor : "#d1d5db",
+            weight: isSelected ? 2.5 : (isInActivePanchayat ? 1 : 0.5),
+            dashArray: isSelected ? undefined : (isInActivePanchayat ? "4 3" : "3 8"),
+            fillColor: isInActivePanchayat ? wardColor : "#e5e7eb",
+            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.18 : 0.06),
+            interactive: isInActivePanchayat,
           }).addTo(map);
 
           // Ward number label in amber when unassigned, officer name when assigned
-          const wardNum = zone.name.replace("Ward ", "");
-          const labelHtml = assignedOfficer
-            ? `<div style="background:${wardColor};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;opacity:${isSelected ? "1" : "0.85"};">${assignedOfficer.name}</div>`
-            : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:0.75;pointer-events:none;">${wardNum}</div>`;
-
-          const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
-          L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
+          // Only render label when ward is in the active panchayat scope
+          if (isInActivePanchayat) {
+            const wardNum = zone.name.replace("Ward ", "");
+            const labelHtml = assignedOfficer
+              ? `<div style="background:${wardColor};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;opacity:${isSelected ? "1" : "0.85"};">${assignedOfficer.name}</div>`
+              : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:0.75;pointer-events:none;">${wardNum}</div>`;
+            const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
+            L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
+          }
 
           poly.bindTooltip(
             assignedOfficer ? `${zone.name} — ${assignedOfficer.name}` : zone.name,
@@ -332,7 +338,7 @@ export function AdminDistrictMap({
     }
 
     drawLayers();
-  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady]);
+  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady, activePanchayat]);
 
   const chipBase =
     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";

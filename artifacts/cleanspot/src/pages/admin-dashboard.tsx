@@ -350,7 +350,16 @@ export default function AdminDashboard() {
     ? officers.find((o) => o.id === selectedOfficerId)
     : null;
 
-  const mapReports: MapReport[] = allReports.map((r) => ({
+  const mapReports: MapReport[] = (
+    selectedPanchayat && !selectedOfficerId
+      ? allReports.filter(
+          (r) =>
+            r.assignedOfficerId !== null &&
+            r.assignedOfficerId !== undefined &&
+            scopedOfficerIds.has(r.assignedOfficerId)
+        )
+      : allReports
+  ).map((r) => ({
     id: r.id,
     latitude: r.latitude,
     longitude: r.longitude,
