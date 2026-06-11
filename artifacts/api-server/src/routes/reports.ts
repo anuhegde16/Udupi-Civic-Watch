@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable } from "@workspace/db";
-import { eq, sql, and, gte } from "drizzle-orm";
+import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
 import { sendAssignmentEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
@@ -69,11 +69,26 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const offset = query.success ? (query.data.offset ?? 0) : 0;
 
   const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
+  const isPanchayatAdmin = user.role === "panchayat_admin";
 
   let conditions: any[] = [];
 
   if (isFieldOfficer && user.officerId) {
     conditions.push(eq(reportsTable.assignedOfficerId, user.officerId));
+  } else if (isPanchayatAdmin) {
+    if (!user.panchayatName) {
+      res.json({ reports: [], total: 0 });
+      return;
+    }
+    const panchayatOfficers = await db
+      .select({ id: officersTable.id })
+      .from(officersTable)
+      .where(and(isNull(officersTable.deletedAt), eq(officersTable.panchayatName, user.panchayatName)));
+    if (panchayatOfficers.length === 0) {
+      res.json({ reports: [], total: 0 });
+      return;
+    }
+    conditions.push(inArray(reportsTable.assignedOfficerId, panchayatOfficers.map((o) => o.id)));
   }
 
   if (status) {
@@ -229,6 +244,22 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (user.role === "panchayat_admin") {
+    if (!user.panchayatName || !row.report.assignedOfficerId) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+    const [assignedOfficer] = await db
+      .select({ panchayatName: officersTable.panchayatName })
+      .from(officersTable)
+      .where(eq(officersTable.id, row.report.assignedOfficerId))
+      .limit(1);
+    if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
+      res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+      return;
+    }
+  }
+
   const { report, officer } = row;
   res.json({
     ...report,
@@ -246,15 +277,32 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
-  if (isFieldOfficer && user.officerId) {
+  if (isFieldOfficer || user.role === "panchayat_admin") {
     const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
     if (!existing) {
       res.status(404).json({ error: "Report not found" });
       return;
     }
-    if (existing.assignedOfficerId !== user.officerId) {
-      res.status(403).json({ error: "Access denied: report is not assigned to you" });
-      return;
+    if (isFieldOfficer) {
+      if (existing.assignedOfficerId !== user.officerId) {
+        res.status(403).json({ error: "Access denied: report is not assigned to you" });
+        return;
+      }
+    } else {
+      // panchayat_admin
+      if (!user.panchayatName || !existing.assignedOfficerId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const [assignedOfficer] = await db
+        .select({ panchayatName: officersTable.panchayatName })
+        .from(officersTable)
+        .where(eq(officersTable.id, existing.assignedOfficerId))
+        .limit(1);
+      if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
+        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+        return;
+      }
     }
   }
 
