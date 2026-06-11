@@ -367,7 +367,7 @@ export function AdminDistrictMap({
               </span>
             </div>
             <button
-              onClick={() => onPanchayatChange(null)}
+              onClick={() => { onPanchayatChange(null); setActiveZone(null); }}
               className={`${chipBase} ${activePanchayat === null ? chipActive : chipInactive}`}
             >
               All Panchayats
@@ -385,12 +385,12 @@ export function AdminDistrictMap({
           </div>
         )}
 
-        {/* Ward chips row (scoped to panchayat) */}
+        {/* Service area / Ward chips row — drills down from panchayat → wards */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 mr-1">
             <Globe className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              {activePanchayat ? `${activePanchayat} wards` : "Service area"}
+              {activePanchayat ? "Wards" : "Service area"}
             </span>
           </div>
           <button
@@ -412,30 +412,45 @@ export function AdminDistrictMap({
             </svg>
             All areas
           </button>
-          {visibleWards.map((zone) => {
-            const assignedOfficer = officers.find((o) => o.areaName === zone.name);
-            const color = assignedOfficer
-              ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
-              : "#f59e0b";
-            return (
-              <button
-                key={zone.name}
-                onClick={() => setActiveZone(zone.name)}
-                className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
-                style={
-                  activeZone === zone.name
-                    ? { background: color, borderColor: color }
-                    : { borderColor: color, color }
-                }
-              >
-                <MapPin className="w-3 h-3 shrink-0" />
-                {zone.name}
-                {assignedOfficer && (
-                  <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
-                )}
-              </button>
-            );
-          })}
+
+          {activePanchayat === null
+            ? /* No panchayat selected: show panchayat chips as drill-in targets */
+              panchayatOptions.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => onPanchayatChange(p)}
+                  className={`${chipBase} ${chipInactive}`}
+                >
+                  <Building2 className="w-3 h-3 shrink-0" />
+                  {p}
+                </button>
+              ))
+            : /* Panchayat selected: show ward chips scoped to that panchayat */
+              visibleWards.map((zone) => {
+                const assignedOfficer = officers.find((o) => o.areaName === zone.name);
+                const color = assignedOfficer
+                  ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
+                  : "#f59e0b";
+                return (
+                  <button
+                    key={zone.name}
+                    onClick={() => setActiveZone(zone.name)}
+                    className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
+                    style={
+                      activeZone === zone.name
+                        ? { background: color, borderColor: color }
+                        : { borderColor: color, color }
+                    }
+                  >
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    {zone.name}
+                    {assignedOfficer && (
+                      <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
+                    )}
+                  </button>
+                );
+              })
+          }
         </div>
       </div>
       <div
