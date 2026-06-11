@@ -32,7 +32,9 @@ function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boo
 
 export function isWithinServiceArea(lat: number, lng: number): boolean {
   for (const feature of geofencesData.features) {
-    if (feature.geometry.type === "Polygon") {
+    const featureType = (feature.properties as { type?: string })?.type;
+    // Only use district-level boundaries for service area gating (not ward sub-polygons)
+    if (feature.geometry.type === "Polygon" && featureType !== "ward") {
       const ring = feature.geometry.coordinates[0] as [number, number][];
       if (pointInPolygon(lat, lng, ring)) return true;
     }

@@ -74,7 +74,7 @@ const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
 const ZONE_COLORS = ["#0d9488", "#f59e0b", "#f43f5e", "#8b5cf6", "#3b82f6", "#10b981"];
 
 const geoZoneNames: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon")
+  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
   .map((f) => (f.properties as any)?.name ?? "Zone");
 
 const createOfficerSchema = z.object({

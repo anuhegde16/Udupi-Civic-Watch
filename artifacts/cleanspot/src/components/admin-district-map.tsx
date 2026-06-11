@@ -29,7 +29,11 @@ const DISTRICT_BOUNDS: [[number, number], [number, number]] = [
   [13.95, 74.95],
 ];
 
-const geoZones: GeoZone[] = geofencesData.features
+interface GeoFeatureMeta extends GeoZone {
+  featureType: "district" | "ward";
+}
+
+const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon")
   .map((f) => {
     const coords = f.geometry.coordinates[0] as [number, number][];
@@ -39,6 +43,7 @@ const geoZones: GeoZone[] = geofencesData.features
     const centroidLon = lons.reduce((s, v) => s + v, 0) / lons.length;
     return {
       name: (f.properties as any)?.name ?? "Zone",
+      featureType: ((f.properties as any)?.type === "ward" ? "ward" : "district") as "district" | "ward",
       bounds: [
         [Math.min(...lats), Math.min(...lons)],
         [Math.max(...lats), Math.max(...lons)],
@@ -47,6 +52,8 @@ const geoZones: GeoZone[] = geofencesData.features
       centroid: [centroidLat, centroidLon],
     };
   });
+
+const geoZones: GeoZone[] = allGeoFeatures;
 
 export type MapReport = {
   id: number;
@@ -199,61 +206,63 @@ export function AdminDistrictMap({
           }
         });
 
-        geoZones.forEach((zone, zoneIdx) => {
-          const assignedOfficer = officers.find(
-            (o) => o.areaName === zone.name
-          );
-          const color = ZONE_PALETTE[zoneIdx % ZONE_PALETTE.length];
-          const isSelected =
-            assignedOfficer
-              ? selectedOfficerId === assignedOfficer.id
-              : false;
+        // Draw district boundary (teal) first, then ward polygons (amber), then officer markers
+        const WARD_AMBER = "#f59e0b";
+
+        allGeoFeatures.forEach((zone, zoneIdx) => {
+          if (zone.featureType === "district") {
+            // Outer boundary — teal, prominent
+            L.polygon(zone.latlngs, {
+              color: "#0d9488",
+              weight: 2.5,
+              dashArray: "8 4",
+              fillColor: "#0d9488",
+              fillOpacity: 0.04,
+              interactive: false,
+            }).addTo(map);
+            return;
+          }
+
+          // Ward polygon
+          const assignedOfficer = officers.find((o) => o.areaName === zone.name);
+          const wardColor = assignedOfficer
+            ? ZONE_PALETTE[
+                officers.indexOf(assignedOfficer) % ZONE_PALETTE.length
+              ]
+            : WARD_AMBER;
+          const isSelected = assignedOfficer
+            ? selectedOfficerId === assignedOfficer.id
+            : false;
 
           const poly = L.polygon(zone.latlngs, {
-            color,
-            weight: isSelected ? 2.5 : 1.8,
-            dashArray: isSelected ? undefined : "7 5",
-            fillColor: color,
-            fillOpacity: isSelected ? 0.18 : 0.08,
+            color: wardColor,
+            weight: isSelected ? 2.5 : 1.2,
+            dashArray: isSelected ? undefined : "5 4",
+            fillColor: wardColor,
+            fillOpacity: isSelected ? 0.18 : 0.07,
           }).addTo(map);
 
+          // Ward number label in amber when unassigned, officer name when assigned
+          const wardNum = zone.name.replace("Ward ", "");
+          const labelHtml = assignedOfficer
+            ? `<div style="background:${wardColor};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;opacity:${isSelected ? "1" : "0.85"};">${assignedOfficer.name}</div>`
+            : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:0.75;pointer-events:none;">${wardNum}</div>`;
+
+          const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
+          L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
+
           poly.bindTooltip(
-            assignedOfficer
-              ? `${zone.name} — ${assignedOfficer.name}`
-              : zone.name,
+            assignedOfficer ? `${zone.name} — ${assignedOfficer.name}` : zone.name,
             { permanent: false, direction: "center", className: "zone-label" }
           );
 
           if (assignedOfficer) {
-            const wrapper = document.createElement("div");
-            wrapper.style.cssText = `
-              background:${color};color:#fff;
-              padding:2px 8px;border-radius:20px;
-              font-size:11px;font-weight:700;
-              white-space:nowrap;
-              box-shadow:0 1px 4px rgba(0,0,0,0.25);
-              cursor:pointer;
-              opacity:${isSelected ? "1" : "0.85"};
-            `;
-            wrapper.textContent = assignedOfficer.name;
-
-            const icon = L.divIcon({
-              html: wrapper,
-              className: "",
-              iconAnchor: [0, 8],
-            });
-            L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
-
             poly.on("click", () => {
-              onZoneSelect(
-                selectedOfficerId === assignedOfficer.id
-                  ? null
-                  : assignedOfficer.id
-              );
+              onZoneSelect(selectedOfficerId === assignedOfficer.id ? null : assignedOfficer.id);
             });
             poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.22 }));
             poly.on("mouseout", () =>
-              poly.setStyle({ fillOpacity: isSelected ? 0.18 : 0.08 })
+              poly.setStyle({ fillOpacity: isSelected ? 0.18 : 0.07 })
             );
           }
         });
@@ -351,30 +360,32 @@ export function AdminDistrictMap({
           </svg>
           All areas
         </button>
-        {geoZones.map((zone, idx) => {
-          const assignedOfficer = officers.find((o) => o.areaName === zone.name);
-          const color = ZONE_PALETTE[idx % ZONE_PALETTE.length];
-          return (
-            <button
-              key={zone.name}
-              onClick={() => setActiveZone(zone.name)}
-              className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
-              style={
-                activeZone === zone.name && color
-                  ? { background: color, borderColor: color }
-                  : color
-                  ? { borderColor: color, color }
-                  : {}
-              }
-            >
-              <MapPin className="w-3 h-3 shrink-0" />
-              {zone.name}
-              {assignedOfficer && (
-                <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
-              )}
-            </button>
-          );
-        })}
+        {allGeoFeatures
+          .filter((zone) => zone.featureType === "ward")
+          .map((zone, idx) => {
+            const assignedOfficer = officers.find((o) => o.areaName === zone.name);
+            const color = assignedOfficer
+              ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
+              : "#f59e0b";
+            return (
+              <button
+                key={zone.name}
+                onClick={() => setActiveZone(zone.name)}
+                className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
+                style={
+                  activeZone === zone.name
+                    ? { background: color, borderColor: color }
+                    : { borderColor: color, color }
+                }
+              >
+                <MapPin className="w-3 h-3 shrink-0" />
+                {zone.name}
+                {assignedOfficer && (
+                  <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
+                )}
+              </button>
+            );
+          })}
       </div>
       <div
         ref={containerRef}

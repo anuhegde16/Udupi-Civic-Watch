@@ -21,6 +21,8 @@ function buildMarkerIcon(color: string) {
   });
 }
 
+const WARD_AMBER = "#f59e0b";
+
 function getZoneRing(areaName: string): L.LatLng[] | null {
   for (const feature of geofencesData.features) {
     if (feature.geometry.type === "Polygon") {
@@ -33,6 +35,61 @@ function getZoneRing(areaName: string): L.LatLng[] | null {
     }
   }
   return null;
+}
+
+function addWardContext(map: L.Map, activeAreaName?: string | null): L.Layer[] {
+  const layers: L.Layer[] = [];
+  for (const feature of geofencesData.features) {
+    if (feature.geometry.type !== "Polygon") continue;
+    const props = feature.properties as any;
+    if (props?.type === "ward") {
+      const ring = (feature.geometry.coordinates[0] as [number, number][]).map(
+        ([lon, lat]) => L.latLng(lat, lon)
+      );
+      const isActive = props?.name === activeAreaName;
+      layers.push(
+        L.polygon(ring, {
+          color: WARD_AMBER,
+          fillColor: WARD_AMBER,
+          fillOpacity: isActive ? 0.12 : 0.04,
+          weight: isActive ? 2 : 0.8,
+          dashArray: isActive ? undefined : "4 3",
+          interactive: false,
+        }).addTo(map)
+      );
+      const lats = ring.map((p) => p.lat);
+      const lngs = ring.map((p) => p.lng);
+      const cLat = lats.reduce((s, v) => s + v, 0) / lats.length;
+      const cLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
+      const wardNum = (props?.name as string)?.replace("Ward ", "") ?? "";
+      layers.push(
+        L.marker([cLat, cLng], {
+          icon: L.divIcon({
+            className: "",
+            html: `<div style="color:${WARD_AMBER};font-size:9px;font-weight:800;opacity:${isActive ? "1" : "0.6"};pointer-events:none;">${wardNum}</div>`,
+            iconAnchor: [6, 6],
+          }),
+          interactive: false,
+        }).addTo(map)
+      );
+    } else if (props?.type === "district") {
+      // Outer Saligrama boundary
+      const ring = (feature.geometry.coordinates[0] as [number, number][]).map(
+        ([lon, lat]) => L.latLng(lat, lon)
+      );
+      layers.push(
+        L.polygon(ring, {
+          color: "#0d9488",
+          fillColor: "#0d9488",
+          fillOpacity: 0.02,
+          weight: 2,
+          dashArray: "8 4",
+          interactive: false,
+        }).addTo(map)
+      );
+    }
+  }
+  return layers;
 }
 
 interface OfficerAreaEditMapProps {
@@ -71,6 +128,9 @@ export function OfficerAreaEditMap({
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
+
+    // Draw all ward + district context polygons
+    addWardContext(map, areaName);
 
     if (zoneRing) {
       const poly = L.polygon(zoneRing, {
