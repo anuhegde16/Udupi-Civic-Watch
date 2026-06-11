@@ -211,19 +211,19 @@ export function AdminDistrictMap({
 
         allGeoFeatures.forEach((zone, zoneIdx) => {
           if (zone.featureType === "district") {
-            // Outer boundary — teal, prominent
+            // Outer Saligrama boundary — thick solid teal, no fill, clearly frames the wards
             L.polygon(zone.latlngs, {
               color: "#0d9488",
-              weight: 2.5,
-              dashArray: "8 4",
+              weight: 3.5,
+              dashArray: undefined,
               fillColor: "#0d9488",
-              fillOpacity: 0.04,
+              fillOpacity: 0,
               interactive: false,
             }).addTo(map);
             return;
           }
 
-          // Ward polygon
+          // Ward polygon — amber interior lines, clearly inside the teal frame
           const assignedOfficer = officers.find((o) => o.areaName === zone.name);
           const wardColor = assignedOfficer
             ? ZONE_PALETTE[
@@ -236,10 +236,10 @@ export function AdminDistrictMap({
 
           const poly = L.polygon(zone.latlngs, {
             color: wardColor,
-            weight: isSelected ? 2.5 : 1.2,
-            dashArray: isSelected ? undefined : "5 4",
+            weight: isSelected ? 2.5 : 1,
+            dashArray: isSelected ? undefined : "4 3",
             fillColor: wardColor,
-            fillOpacity: isSelected ? 0.18 : 0.07,
+            fillOpacity: isSelected ? 0.18 : 0.06,
           }).addTo(map);
 
           // Ward number label in amber when unassigned, officer name when assigned

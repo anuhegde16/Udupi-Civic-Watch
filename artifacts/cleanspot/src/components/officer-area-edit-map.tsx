@@ -73,7 +73,7 @@ function addWardContext(map: L.Map, activeAreaName?: string | null): L.Layer[] {
         }).addTo(map)
       );
     } else if (props?.type === "district") {
-      // Outer Saligrama boundary
+      // Outer Saligrama boundary — thick solid teal frame, no fill
       const ring = (feature.geometry.coordinates[0] as [number, number][]).map(
         ([lon, lat]) => L.latLng(lat, lon)
       );
@@ -81,9 +81,9 @@ function addWardContext(map: L.Map, activeAreaName?: string | null): L.Layer[] {
         L.polygon(ring, {
           color: "#0d9488",
           fillColor: "#0d9488",
-          fillOpacity: 0.02,
-          weight: 2,
-          dashArray: "8 4",
+          fillOpacity: 0,
+          weight: 3.5,
+          dashArray: undefined,
           interactive: false,
         }).addTo(map)
       );
@@ -133,14 +133,9 @@ export function OfficerAreaEditMap({
     addWardContext(map, areaName);
 
     if (zoneRing) {
-      const poly = L.polygon(zoneRing, {
-        color,
-        fillColor: color,
-        fillOpacity: 0.12,
-        weight: 2,
-        interactive: false,
-      }).addTo(map);
-      map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+      // Only use for fitBounds — addWardContext already renders the ward in amber
+      const tempPoly = L.polygon(zoneRing);
+      map.fitBounds(tempPoly.getBounds(), { padding: [30, 30] });
     }
 
     const marker = L.marker(initialCenter, {
