@@ -388,7 +388,7 @@ export function AdminDistrictMap({
             </span>
           </div>
           <button
-            onClick={() => setActiveZone(null)}
+            onClick={() => { setActiveZone(null); onZoneSelect(null); }}
             className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
           >
             <svg
@@ -428,7 +428,10 @@ export function AdminDistrictMap({
                 return (
                   <button
                     key={zone.name}
-                    onClick={() => setActiveZone(zone.name)}
+                    onClick={() => {
+                      setActiveZone(zone.name);
+                      onZoneSelect(assignedOfficer ? assignedOfficer.id : null);
+                    }}
                     className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
                     style={
                       activeZone === zone.name
