@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, Anchor, Map, Trash2, AlertTriangle, Camera, Globe2 } from "lucide-react";
+import { Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, Anchor, Map, Trash2, AlertTriangle, Camera, Globe2, Building2, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
@@ -60,6 +60,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function AdminReports() {
   const initialStatus = (new URLSearchParams(window.location.search).get("status") as AdminListReportsStatus | null) ?? "all";
   const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">(initialStatus as AdminListReportsStatus | "all");
+  const [panchayatFilter, setPanchayatFilter] = useState<string>("all");
   const [officerFilter, setOfficerFilter] = useState<string>("all");
   const [zoneFilter, setZoneFilter] = useState<string>("all");
 
@@ -117,13 +118,45 @@ export default function AdminReports() {
     `https://www.openstreetmap.org/directions?from=&to=${lat}%2C${lng}#map=15/${lat}/${lng}`;
 
   const allReports = (reportsData?.reports || []) as Report[];
-  const officers = officersData?.officers || [];
+  const officersRaw = officersData?.officers || [];
+  const officers = officersRaw as Array<{
+    id: number;
+    name: string;
+    areaName?: string | null;
+    panchayatName?: string | null;
+    reportCount: number;
+    pendingCount: number;
+  }>;
 
-  const zones = Array.from(new Set(officers.map((o) => o.areaName).filter(Boolean))) as string[];
+  const panchayatOptions = Array.from(
+    new Set(officers.map((o) => o.panchayatName).filter(Boolean))
+  ) as string[];
 
-  const reports = zoneFilter === "all"
-    ? allReports
-    : allReports.filter((r) => r.assignedOfficer?.areaName === zoneFilter);
+  const scopedOfficers = panchayatFilter === "all"
+    ? officers
+    : officers.filter((o) => o.panchayatName === panchayatFilter);
+
+  const zones = Array.from(
+    new Set(scopedOfficers.map((o) => o.areaName).filter(Boolean))
+  ) as string[];
+
+  const sortedWards = [...scopedOfficers].sort((a, b) => {
+    const rA = a.reportCount > 0 ? (a.reportCount - a.pendingCount) / a.reportCount : 0;
+    const rB = b.reportCount > 0 ? (b.reportCount - b.pendingCount) / b.reportCount : 0;
+    return rB - rA;
+  });
+
+  const WARD_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#84cc16"];
+
+  const reports = (() => {
+    let r = allReports;
+    if (zoneFilter !== "all") r = r.filter((x) => x.assignedOfficer?.areaName === zoneFilter);
+    else if (officerFilter === "all" && panchayatFilter !== "all") {
+      const ids = new Set(scopedOfficers.map((o) => o.id));
+      r = r.filter((x) => x.assignedOfficerId !== null && x.assignedOfficerId !== undefined && ids.has(x.assignedOfficerId));
+    }
+    return r;
+  })();
 
   return (
     <div className="pb-12 animate-in fade-in duration-500">
@@ -136,8 +169,27 @@ export default function AdminReports() {
 
       {/* Filters */}
       <div className="bg-card rounded-2xl sm:rounded-3xl shadow-sm border border-border/50 p-4 sm:p-6 mb-5 sm:mb-8 flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-6">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 flex-wrap">
+          {panchayatOptions.length > 0 && (
+            <div className="flex-1 min-w-[150px]">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block flex items-center gap-1">
+                <Building2 className="w-3 h-3" /> Panchayat
+              </label>
+              <Select value={panchayatFilter} onValueChange={(v) => { setPanchayatFilter(v); setZoneFilter("all"); setOfficerFilter("all"); }}>
+                <SelectTrigger className={`h-11 rounded-xl focus:ring-primary font-medium ${panchayatFilter !== "all" ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/50 border-border/50 text-foreground"}`}>
+                  <Building2 className="w-3.5 h-3.5 mr-1 shrink-0 opacity-70" />
+                  <SelectValue placeholder="All Panchayats" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/50 shadow-lg">
+                  <SelectItem value="all">All Panchayats</SelectItem>
+                  {panchayatOptions.map((p) => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="flex-1 min-w-[150px]">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Status</label>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AdminListReportsStatus | "all")}>
               <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
@@ -151,22 +203,22 @@ export default function AdminReports() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex-1">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Zone / Region</label>
+          <div className="flex-1 min-w-[150px]">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">{panchayatFilter !== "all" ? "Ward" : "Zone / Region"}</label>
             <Select value={zoneFilter} onValueChange={(v) => { setZoneFilter(v); setOfficerFilter("all"); }}>
               <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
                 <Globe2 className="w-3.5 h-3.5 text-muted-foreground mr-1 shrink-0" />
-                <SelectValue placeholder="All Zones" />
+                <SelectValue placeholder={panchayatFilter !== "all" ? "All Wards" : "All Zones"} />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/50 shadow-lg">
-                <SelectItem value="all">All Zones</SelectItem>
+                <SelectItem value="all">{panchayatFilter !== "all" ? "All Wards" : "All Zones"}</SelectItem>
                 {zones.map((zone) => (
                   <SelectItem key={zone} value={zone}>{zone}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-[150px]">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Officer</label>
             <Select value={officerFilter} onValueChange={(v) => { setOfficerFilter(v); setZoneFilter("all"); }}>
               <SelectTrigger className="bg-muted/50 border-border/50 h-11 rounded-xl focus:ring-primary font-medium text-foreground">
@@ -174,7 +226,7 @@ export default function AdminReports() {
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border/50 shadow-lg">
                 <SelectItem value="all">All Officers</SelectItem>
-                {officers.map((off) => (
+                {scopedOfficers.map((off) => (
                   <SelectItem key={off.id} value={off.id.toString()}>{off.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -186,6 +238,57 @@ export default function AdminReports() {
           </div>
         </div>
       </div>
+
+      {/* Ward Performance Summary (visible when panchayat is selected) */}
+      {panchayatFilter !== "all" && sortedWards.length > 0 && (
+        <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-4 sm:p-6 mb-5 sm:mb-8">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-5 h-5 text-primary" />
+            <h2 className="text-base sm:text-xl font-black text-foreground">Ward Performance — {panchayatFilter}</h2>
+          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground font-medium mb-5">
+            Ranked by completion rate · all-time totals
+          </p>
+          <div className="space-y-4">
+            {sortedWards.map((officer, idx) => {
+              const resolved = officer.reportCount - officer.pendingCount;
+              const rate = officer.reportCount > 0 ? Math.round((resolved / officer.reportCount) * 100) : 0;
+              const color = WARD_COLORS[idx % WARD_COLORS.length];
+              return (
+                <div key={officer.id} className="flex items-center gap-3">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 text-white"
+                    style={{ background: color }}
+                  >
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-bold text-foreground truncate">
+                        {officer.areaName || officer.name}
+                      </span>
+                      <span className="text-sm font-black ml-2 shrink-0" style={{ color }}>
+                        {rate}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${rate}%`, background: color }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[10px] font-semibold text-muted-foreground">
+                      <span className="text-red-500">● {officer.pendingCount} open</span>
+                      <span className="text-green-600">● {resolved} done</span>
+                      <span>/ {officer.reportCount} total</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Report list */}
       {isLoadingReports ? (

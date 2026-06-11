@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MapPin, Globe } from "lucide-react";
+import { MapPin, Globe, Building2 } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
 
 const ZONE_PALETTE = [
@@ -70,6 +70,7 @@ export type MapOfficer = {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
+  panchayatName?: string | null;
 };
 
 interface AdminDistrictMapProps {
@@ -77,6 +78,9 @@ interface AdminDistrictMapProps {
   officers: MapOfficer[];
   selectedOfficerId: number | null;
   onZoneSelect: (id: number | null) => void;
+  activePanchayat: string | null;
+  panchayatOptions: string[];
+  onPanchayatChange: (name: string | null) => void;
 }
 
 export function AdminDistrictMap({
@@ -84,6 +88,9 @@ export function AdminDistrictMap({
   officers,
   selectedOfficerId,
   onZoneSelect,
+  activePanchayat,
+  panchayatOptions,
+  onPanchayatChange,
 }: AdminDistrictMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -134,6 +141,10 @@ export function AdminDistrictMap({
       }
     };
   }, []);
+
+  useEffect(() => {
+    setActiveZone(null);
+  }, [activePanchayat]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -329,37 +340,73 @@ export function AdminDistrictMap({
   const chipInactive =
     "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground hover:bg-primary/5";
 
+  const visibleWards = allGeoFeatures
+    .filter((zone) => zone.featureType === "ward")
+    .filter((zone) => {
+      if (!activePanchayat) return true;
+      const officer = officers.find((o) => o.areaName === zone.name);
+      return officer?.panchayatName === activePanchayat;
+    });
+
   return (
     <div>
-      <div className="flex items-center gap-2 flex-wrap mb-3 px-1">
-        <div className="flex items-center gap-1.5 mr-1">
-          <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Service area
-          </span>
-        </div>
-        <button
-          onClick={() => setActiveZone(null)}
-          className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
-        >
-          <svg
-            className="w-3 h-3"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="flex flex-col gap-2 mb-3 px-1">
+        {/* Panchayat selector row */}
+        {panchayatOptions.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 mr-1">
+              <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Panchayat
+              </span>
+            </div>
+            <button
+              onClick={() => onPanchayatChange(null)}
+              className={`${chipBase} ${activePanchayat === null ? chipActive : chipInactive}`}
+            >
+              All Panchayats
+            </button>
+            {panchayatOptions.map((p) => (
+              <button
+                key={p}
+                onClick={() => onPanchayatChange(activePanchayat === p ? null : p)}
+                className={`${chipBase} ${activePanchayat === p ? chipActive : chipInactive}`}
+              >
+                <Building2 className="w-3 h-3 shrink-0" />
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Ward chips row (scoped to panchayat) */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 mr-1">
+            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              {activePanchayat ? `${activePanchayat} wards` : "Service area"}
+            </span>
+          </div>
+          <button
+            onClick={() => setActiveZone(null)}
+            className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
           >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-          </svg>
-          All areas
-        </button>
-        {allGeoFeatures
-          .filter((zone) => zone.featureType === "ward")
-          .map((zone, idx) => {
+            <svg
+              className="w-3 h-3"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+            All areas
+          </button>
+          {visibleWards.map((zone) => {
             const assignedOfficer = officers.find((o) => o.areaName === zone.name);
             const color = assignedOfficer
               ? ZONE_PALETTE[officers.indexOf(assignedOfficer) % ZONE_PALETTE.length]
@@ -383,6 +430,7 @@ export function AdminDistrictMap({
               </button>
             );
           })}
+        </div>
       </div>
       <div
         ref={containerRef}

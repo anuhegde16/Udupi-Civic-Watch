@@ -157,6 +157,7 @@ type ReportItem = {
 
 export default function AdminDashboard() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
+  const [selectedPanchayat, setSelectedPanchayat] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
     const from = new Date(now);
@@ -218,9 +219,42 @@ export default function AdminDashboard() {
 
   const allReports = (allReportsData?.reports || []) as ReportItem[];
 
+  const panchayatOptions = useMemo(() => {
+    const fromOfficers = Array.from(
+      new Set(officers.map((o) => o.panchayatName).filter(Boolean))
+    ) as string[];
+    return Array.from(new Set([...panchayatAreaNames, ...fromOfficers]));
+  }, [officers]);
+
+  const scopedOfficers = useMemo(() => {
+    if (!selectedPanchayat) return officers;
+    return officers.filter((o) => o.panchayatName === selectedPanchayat);
+  }, [officers, selectedPanchayat]);
+
+  const scopedOfficerIds = useMemo(
+    () => new Set(scopedOfficers.map((o) => o.id)),
+    [scopedOfficers]
+  );
+
+  const displayOfficers = useMemo(() => {
+    if (!selectedPanchayat) return officers;
+    return [...scopedOfficers].sort((a, b) => {
+      const rateA = a.reportCount > 0 ? (a.reportCount - a.pendingCount) / a.reportCount : 0;
+      const rateB = b.reportCount > 0 ? (b.reportCount - b.pendingCount) / b.reportCount : 0;
+      return rateB - rateA;
+    });
+  }, [officers, scopedOfficers, selectedPanchayat]);
+
   const filteredReports = useMemo(() => {
     let reports = selectedOfficerId
       ? allReports.filter((r) => r.assignedOfficerId === selectedOfficerId)
+      : selectedPanchayat
+      ? allReports.filter(
+          (r) =>
+            r.assignedOfficerId !== null &&
+            r.assignedOfficerId !== undefined &&
+            scopedOfficerIds.has(r.assignedOfficerId)
+        )
       : allReports;
 
     if (dateRange?.from) {
@@ -233,12 +267,12 @@ export default function AdminDashboard() {
     }
 
     return reports;
-  }, [allReports, selectedOfficerId, dateRange]);
+  }, [allReports, selectedOfficerId, selectedPanchayat, scopedOfficerIds, dateRange]);
 
   const isDateFiltered = !!dateRange?.from;
 
   const stats = useMemo(() => {
-    if (!selectedOfficerId && !isDateFiltered) {
+    if (!selectedOfficerId && !selectedPanchayat && !isDateFiltered) {
       return {
         total: summary?.total || 0,
         reported: summary?.reported || 0,
@@ -262,7 +296,7 @@ export default function AdminDashboard() {
   }, [filteredReports]);
 
   const trendData = useMemo(() => {
-    if (!selectedOfficerId && !isDateFiltered) return analytics?.dailyTrend || [];
+    if (!selectedOfficerId && !selectedPanchayat && !isDateFiltered) return analytics?.dailyTrend || [];
 
     // Build date buckets — use the selected range, or last 14 days as fallback
     const rangeFrom = dateRange?.from
@@ -338,6 +372,8 @@ export default function AdminDashboard() {
             <p className="text-muted-foreground font-medium text-sm sm:text-lg">
               {selectedOfficer
                 ? `Viewing: ${selectedOfficer.areaName || selectedOfficer.name}`
+                : selectedPanchayat
+                ? `${selectedPanchayat} Panchayat — ward-level overview`
                 : "District-wide overview — Udupi, Karnataka."}
             </p>
           </div>
@@ -438,7 +474,29 @@ export default function AdminDashboard() {
 
       {/* ── Filters row ── */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {/* Zone filter */}
+        {/* Panchayat filter */}
+        <div className="relative">
+          <div className={`flex items-center gap-2 border rounded-xl px-3 py-2 cursor-pointer transition-colors ${selectedPanchayat ? "bg-primary/10 border-primary/30" : "bg-muted/60 border-border/60"}`}>
+            <Building2 className={`w-3.5 h-3.5 shrink-0 ${selectedPanchayat ? "text-primary" : "text-muted-foreground"}`} />
+            <select
+              className={`bg-transparent text-sm font-semibold outline-none cursor-pointer pr-5 appearance-none ${selectedPanchayat ? "text-primary" : "text-foreground"}`}
+              value={selectedPanchayat ?? "all"}
+              onChange={(e) => {
+                const val = e.target.value === "all" ? null : e.target.value;
+                setSelectedPanchayat(val);
+                setSelectedOfficerId(null);
+              }}
+            >
+              <option value="all">All Panchayats</option>
+              {panchayatOptions.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0 pointer-events-none absolute right-3" />
+          </div>
+        </div>
+
+        {/* Ward filter (scoped to selected panchayat) */}
         <div className="relative">
           <div className="flex items-center gap-2 bg-muted/60 border border-border/60 rounded-xl px-3 py-2 cursor-pointer">
             <Filter className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
@@ -449,8 +507,8 @@ export default function AdminDashboard() {
                 setSelectedOfficerId(e.target.value === "all" ? null : Number(e.target.value))
               }
             >
-              <option value="all">All Zones</option>
-              {officers.map((o) => (
+              <option value="all">{selectedPanchayat ? "All Wards" : "All Zones"}</option>
+              {scopedOfficers.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.areaName || o.name}
                 </option>
@@ -580,6 +638,12 @@ export default function AdminDashboard() {
           officers={officers}
           selectedOfficerId={selectedOfficerId}
           onZoneSelect={setSelectedOfficerId}
+          activePanchayat={selectedPanchayat}
+          panchayatOptions={panchayatOptions}
+          onPanchayatChange={(p) => {
+            setSelectedPanchayat(p);
+            setSelectedOfficerId(null);
+          }}
         />
         {selectedOfficerId && (
           <div className="px-4 sm:px-6 py-2 bg-primary/5 border-t border-primary/10 flex items-center justify-between">
@@ -683,7 +747,7 @@ export default function AdminDashboard() {
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
               <Users className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            Officer Zones
+            {selectedPanchayat ? `${selectedPanchayat} — Ward Performance` : "Officer Zones"}
           </h2>
           <Link
             href="/admin/officers"
@@ -694,13 +758,13 @@ export default function AdminDashboard() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-          {officers.length === 0 ? (
+          {displayOfficers.length === 0 ? (
             <div className="col-span-full text-center text-muted-foreground font-medium py-8 bg-card rounded-xl border border-border/50">
-              No officers active in the system.
+              {selectedPanchayat ? `No officers assigned to ${selectedPanchayat} yet.` : "No officers active in the system."}
             </div>
           ) : (
-            officers.map((officer, idx) => {
-              const zoneColor = ZONE_PALETTE[idx % ZONE_PALETTE.length];
+            displayOfficers.map((officer, idx) => {
+              const zoneColor = ZONE_PALETTE[officers.indexOf(officer) % ZONE_PALETTE.length];
               const resolved = officer.reportCount - officer.pendingCount;
               const rate =
                 officer.reportCount > 0
@@ -724,7 +788,7 @@ export default function AdminDashboard() {
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0"
                       style={{ background: zoneColor }}
                     >
-                      {officer.name.charAt(0)}
+                      {selectedPanchayat ? `#${idx + 1}` : officer.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-black text-foreground truncate leading-tight">

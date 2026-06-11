@@ -130,12 +130,27 @@ async function ensurePanchayatAdmin() {
   }
 }
 
+async function seedOfficerPanchayatNames() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`
+      UPDATE officers SET panchayat_name = 'Saligrama'
+      WHERE panchayat_name IS NULL AND deleted_at IS NULL
+    `);
+    logger.info("Officer panchayat names backfilled to Saligrama");
+  } catch (err) {
+    logger.warn({ err }, "Could not backfill officer panchayat names");
+  }
+}
+
 async function start() {
   await ensureAdminExists();
   await migrateRoles();
   await ensurePanchayatAdmin();
   await migrateOfficerCredentials();
   await seedSampleData();
+  await seedOfficerPanchayatNames();
   await fixImageUrls();
   await relocateDemoReportsToSaligrama();
 
