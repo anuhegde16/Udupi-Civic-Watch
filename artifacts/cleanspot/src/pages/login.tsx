@@ -22,7 +22,7 @@ const schema = z.object({
 });
 
 interface LoginProps {
-  portalType?: "staff" | "admin";
+  portalType?: "staff" | "admin" | "master";
 }
 
 export default function LoginPage({ portalType }: LoginProps) {
@@ -31,9 +31,12 @@ export default function LoginPage({ portalType }: LoginProps) {
   const login = useLogin();
 
   const isAdmin = portalType === "admin";
+  const isMaster = portalType === "master";
 
   const defaultEmail = isAdmin
     ? "admin@udupicivicwatch.com"
+    : isMaster
+    ? "saligrama@udupicivicspot.com"
     : "byndoor@udupicivicspot.com";
 
   const form = useForm<z.infer<typeof schema>>({
@@ -47,9 +50,11 @@ export default function LoginPage({ portalType }: LoginProps) {
       {
         onSuccess: (data) => {
           const role = data?.user?.role;
-          if (role === "admin") {
+          if (role === "admin" || role === "control_center") {
             setLocation("/admin/dashboard");
-          } else if (role === "officer") {
+          } else if (role === "panchayat_admin") {
+            setLocation("/master/dashboard");
+          } else if (role === "officer" || role === "field_officer") {
             setLocation("/officer/dashboard");
           } else {
             setLocation("/");
@@ -66,11 +71,17 @@ export default function LoginPage({ portalType }: LoginProps) {
     );
   }
 
+  const headerBg = isAdmin ? "bg-slate-800" : isMaster ? "bg-indigo-700" : "bg-green-700";
+  const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700" : isMaster ? "bg-indigo-700 hover:bg-indigo-600" : "bg-green-700 hover:bg-green-600";
+  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : "Officer Portal";
+  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : "Field Officer Login";
+  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "officer@udupicivicspot.com";
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
-        <div className={`px-8 py-6 text-white ${isAdmin ? "bg-slate-800" : "bg-green-700"}`}>
+        <div className={`px-8 py-6 text-white ${headerBg}`}>
           <div className="flex items-center gap-3 mb-1">
             {isAdmin ? (
               <Shield className="w-6 h-6" />
@@ -78,16 +89,14 @@ export default function LoginPage({ portalType }: LoginProps) {
               <UserCog className="w-6 h-6" />
             )}
             <span className="text-sm font-semibold uppercase tracking-widest opacity-80">
-              {isAdmin ? "Admin Portal" : "Officer Portal"}
+              {portalLabel}
             </span>
           </div>
           <h1 className="text-xl font-bold leading-tight">
             Udupi Civic Watch
           </h1>
           <p className="text-xs opacity-70 mt-0.5">
-            {isAdmin
-              ? "District Administration Login"
-              : "Field Officer Login"}
+            {portalDesc}
           </p>
         </div>
 
@@ -107,11 +116,7 @@ export default function LoginPage({ portalType }: LoginProps) {
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
-                          placeholder={
-                            isAdmin
-                              ? "admin@udupicivicwatch.com"
-                              : "officer@udupicivicspot.com"
-                          }
+                          placeholder={placeholder}
                           className="pl-9"
                           {...field}
                         />
@@ -148,7 +153,7 @@ export default function LoginPage({ portalType }: LoginProps) {
 
               <Button
                 type="submit"
-                className={`w-full mt-2 ${isAdmin ? "bg-slate-800 hover:bg-slate-700" : "bg-green-700 hover:bg-green-600"}`}
+                className={`w-full mt-2 ${btnClass}`}
                 disabled={login.isPending}
               >
                 {login.isPending ? "Signing in…" : "Sign In"}

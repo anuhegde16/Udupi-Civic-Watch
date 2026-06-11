@@ -12,6 +12,7 @@ export interface SessionUser {
   name: string;
   role: string;
   officerId?: number | null;
+  panchayatName?: string | null;
 }
 
 export function signSession(user: SessionUser): string {
@@ -40,6 +41,18 @@ export function getSessionUser(req: Request): SessionUser | null {
   return verifySession(token);
 }
 
+function isControlCenterRole(role: string): boolean {
+  return role === "control_center" || role === "admin";
+}
+
+function isPanchayatAdminRole(role: string): boolean {
+  return role === "panchayat_admin";
+}
+
+function isFieldOfficerRole(role: string): boolean {
+  return role === "field_officer" || role === "officer";
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const user = getSessionUser(req);
   if (!user) {
@@ -56,8 +69,64 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  if (user.role !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
+  if (!isControlCenterRole(user.role)) {
+    res.status(403).json({ error: "Control Center access required" });
+    return;
+  }
+  (req as any).user = user;
+  next();
+}
+
+export function requireControlCenter(req: Request, res: Response, next: NextFunction): void {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (!isControlCenterRole(user.role)) {
+    res.status(403).json({ error: "Control Center access required" });
+    return;
+  }
+  (req as any).user = user;
+  next();
+}
+
+export function requirePanchayatAdmin(req: Request, res: Response, next: NextFunction): void {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (!isPanchayatAdminRole(user.role)) {
+    res.status(403).json({ error: "Panchayat Admin access required" });
+    return;
+  }
+  (req as any).user = user;
+  next();
+}
+
+export function requirePanchayatOrControlCenter(req: Request, res: Response, next: NextFunction): void {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (!isControlCenterRole(user.role) && !isPanchayatAdminRole(user.role)) {
+    res.status(403).json({ error: "Admin or Panchayat Admin access required" });
+    return;
+  }
+  (req as any).user = user;
+  next();
+}
+
+export function requireOfficer(req: Request, res: Response, next: NextFunction): void {
+  const user = getSessionUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  if (!isFieldOfficerRole(user.role)) {
+    res.status(403).json({ error: "Field Officer access required" });
     return;
   }
   (req as any).user = user;
@@ -76,29 +145,39 @@ export async function ensureAdminExists(): Promise<void> {
   const TARGET_EMAIL = "admin@udupicivicwatch.com";
   const TARGET_PASSWORD = "admin@udupicivicwatch.com";
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.role, "admin")).limit(1);
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, TARGET_EMAIL))
+    .limit(1);
 
   if (existing.length === 0) {
     const hash = await hashPassword(TARGET_PASSWORD);
     await db.insert(usersTable).values({
       email: TARGET_EMAIL,
       passwordHash: hash,
-      name: "System Admin",
-      role: "admin",
+      name: "Control Center",
+      role: "control_center",
     });
-    logger.info("Created default admin user: admin@udupicivicwatch.com");
+    logger.info("Created default control center user: admin@udupicivicwatch.com");
     return;
   }
 
-  // If the admin exists but has old credentials, update them
   const admin = existing[0];
   const isCorrectPassword = await comparePassword(TARGET_PASSWORD, admin.passwordHash);
-  if (admin.email !== TARGET_EMAIL || !isCorrectPassword) {
+  const needsRoleUpdate = admin.role === "admin";
+
+  if (admin.email !== TARGET_EMAIL || !isCorrectPassword || needsRoleUpdate) {
     const hash = await hashPassword(TARGET_PASSWORD);
     await db
       .update(usersTable)
-      .set({ email: TARGET_EMAIL, passwordHash: hash })
+      .set({
+        email: TARGET_EMAIL,
+        passwordHash: hash,
+        role: "control_center",
+        name: admin.name || "Control Center",
+      })
       .where(eq(usersTable.id, admin.id));
-    logger.info(`Updated admin credentials: ${TARGET_EMAIL}`);
+    logger.info(`Updated control center credentials: ${TARGET_EMAIL}`);
   }
 }

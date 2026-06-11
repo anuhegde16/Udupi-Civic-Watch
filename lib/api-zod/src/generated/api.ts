@@ -27,8 +27,15 @@ export const LoginResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     name: zod.string(),
-    role: zod.enum(["officer", "admin"]),
+    role: zod.enum([
+      "officer",
+      "admin",
+      "field_officer",
+      "control_center",
+      "panchayat_admin",
+    ]),
     officerId: zod.number().nullish(),
+    panchayatName: zod.string().nullish(),
   }),
   token: zod.string().optional(),
 });
@@ -40,8 +47,15 @@ export const GetMeResponse = zod.object({
   id: zod.number(),
   email: zod.string(),
   name: zod.string(),
-  role: zod.enum(["officer", "admin"]),
+  role: zod.enum([
+    "officer",
+    "admin",
+    "field_officer",
+    "control_center",
+    "panchayat_admin",
+  ]),
   officerId: zod.number().nullish(),
+  panchayatName: zod.string().nullish(),
 });
 
 /**
@@ -209,6 +223,7 @@ export const ListOfficersResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       areaName: zod.string().nullish(),
+      panchayatName: zod.string().nullish(),
       centerLat: zod.number().nullish(),
       centerLng: zod.number().nullish(),
       reportCount: zod.number(),
@@ -228,6 +243,7 @@ export const CreateOfficerBody = zod.object({
   password: zod.string(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
+  panchayatName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
 });
@@ -245,6 +261,7 @@ export const GetOfficerResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
+  panchayatName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
   reportCount: zod.number(),
@@ -273,6 +290,7 @@ export const UpdateOfficerResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
+  panchayatName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
   reportCount: zod.number(),

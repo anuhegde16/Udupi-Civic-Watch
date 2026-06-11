@@ -87,8 +87,53 @@ async function relocateDemoReportsToSaligrama() {
   }
 }
 
+async function migrateRoles() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`UPDATE users SET role = 'control_center' WHERE role = 'admin'`);
+    await db.execute(sql`UPDATE users SET role = 'field_officer' WHERE role = 'officer'`);
+    logger.info("Role migration complete");
+  } catch (err) {
+    logger.warn({ err }, "Role migration failed");
+  }
+}
+
+async function ensurePanchayatAdmin() {
+  try {
+    const { db, usersTable } = await import("@workspace/db");
+    const { eq } = await import("drizzle-orm");
+    const { hashPassword } = await import("./lib/auth");
+
+    const TARGET_EMAIL = "saligrama@udupicivicspot.com";
+    const TARGET_PANCHAYAT = "Saligrama Town Panchayat";
+
+    const existing = await db.select().from(usersTable).where(eq(usersTable.email, TARGET_EMAIL)).limit(1);
+    if (existing.length > 0) {
+      if (!existing[0].panchayatName) {
+        await db.update(usersTable).set({ panchayatName: TARGET_PANCHAYAT, role: "panchayat_admin" }).where(eq(usersTable.email, TARGET_EMAIL));
+      }
+      return;
+    }
+
+    const passwordHash = await hashPassword(TARGET_EMAIL);
+    await db.insert(usersTable).values({
+      email: TARGET_EMAIL,
+      passwordHash,
+      name: "Saligrama Panchayat Admin",
+      role: "panchayat_admin",
+      panchayatName: TARGET_PANCHAYAT,
+    });
+    logger.info(`Seeded panchayat admin: ${TARGET_EMAIL}`);
+  } catch (err) {
+    logger.warn({ err }, "Could not seed panchayat admin");
+  }
+}
+
 async function start() {
   await ensureAdminExists();
+  await migrateRoles();
+  await ensurePanchayatAdmin();
   await migrateOfficerCredentials();
   await seedSampleData();
   await fixImageUrls();
@@ -150,7 +195,7 @@ async function migrateOfficerCredentials() {
             email: target.email,
             passwordHash: targetHash,
             name: target.name,
-            role: "officer",
+            role: "field_officer",
             officerId: String(officer.id),
           });
         }
@@ -210,9 +255,9 @@ async function seedSampleData() {
     }).returning();
 
     await db.insert(usersTable).values([
-      { email: "byndoor@udupicivicspot.com", passwordHash: o1hash, name: "Ramesh Shetty", role: "officer", officerId: String(officer1.id) },
-      { email: "Udupi@udupicivicspot.com", passwordHash: o2hash, name: "Sujata Rao", role: "officer", officerId: String(officer2.id) },
-      { email: "kundapur@udupicivicspot.com", passwordHash: o3hash, name: "Vinay Hegde", role: "officer", officerId: String(officer3.id) },
+      { email: "byndoor@udupicivicspot.com", passwordHash: o1hash, name: "Ramesh Shetty", role: "field_officer", officerId: String(officer1.id) },
+      { email: "Udupi@udupicivicspot.com", passwordHash: o2hash, name: "Sujata Rao", role: "field_officer", officerId: String(officer2.id) },
+      { email: "kundapur@udupicivicspot.com", passwordHash: o3hash, name: "Vinay Hegde", role: "field_officer", officerId: String(officer3.id) },
     ]);
 
     await db.insert(reportsTable).values([

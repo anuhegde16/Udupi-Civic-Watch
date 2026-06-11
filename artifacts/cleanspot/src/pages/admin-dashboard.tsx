@@ -5,7 +5,10 @@ import {
   useAdminListReports,
   customFetch,
 } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Loader2,
   Users,
@@ -22,7 +25,40 @@ import {
   ChevronDown,
   CalendarIcon,
   X,
+  Shield,
+  Plus,
+  Trash2,
+  Building2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { format, startOfDay, endOfDay } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -71,6 +107,31 @@ function useAnalytics() {
   });
 }
 
+type PanchayatAdminItem = {
+  id: number;
+  name: string;
+  email: string;
+  panchayatName?: string | null;
+  officerCount: number;
+  createdAt: string;
+};
+
+function usePanchayatAdmins() {
+  return useQuery<{ admins: PanchayatAdminItem[]; total: number }>({
+    queryKey: ["panchayat-admins"],
+    queryFn: () => customFetch("/api/admin/panchayat-admins"),
+    retry: false,
+  });
+}
+
+const createPanchayatAdminSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  email: z.string().email("Valid email required"),
+  password: z.string().min(6, "Min 6 characters"),
+  panchayatName: z.string().min(2, "Panchayat name is required"),
+});
+type CreatePanchayatAdminValues = z.infer<typeof createPanchayatAdminSchema>;
+
 type ReportItem = {
   id: number;
   latitude: number;
@@ -93,12 +154,46 @@ export default function AdminDashboard() {
   // Tracks mid-range selection synchronously — state updates are async so a ref is needed
   const pickingEndRef = useRef(false);
 
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [paCreateOpen, setPaCreateOpen] = useState(false);
+
   const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary();
   const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers();
   const { data: analytics, isLoading: isLoadingAnalytics } = useAnalytics();
   const { data: allReportsData, isLoading: isLoadingReports } = useAdminListReports({ limit: 500 });
+  const { data: panchayatAdminsData } = usePanchayatAdmins();
+
+  const createPaForm = useForm<CreatePanchayatAdminValues>({
+    resolver: zodResolver(createPanchayatAdminSchema),
+    defaultValues: { name: "", email: "", password: "", panchayatName: "" },
+  });
+
+  const createPaMutation = useMutation({
+    mutationFn: (data: CreatePanchayatAdminValues) =>
+      customFetch("/api/admin/panchayat-admins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["panchayat-admins"] });
+      toast({ title: "Panchayat Admin created" });
+      setPaCreateOpen(false);
+      createPaForm.reset();
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+
+  const deletePaMutation = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/admin/panchayat-admins/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["panchayat-admins"] });
+      toast({ title: "Panchayat Admin removed" });
+    },
+    onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
 
   const isLoading = isLoadingSummary || isLoadingOfficers || isLoadingAnalytics || isLoadingReports;
+
+  const panchayatAdmins = panchayatAdminsData?.admins ?? [];
 
   const officers = (officersData?.officers || []) as (MapOfficer & {
     id: number;
@@ -718,6 +813,125 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* ── Panchayat Admins ── */}
+      <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-5 sm:p-8">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-foreground">Panchayat Admins</h2>
+              <p className="text-xs text-muted-foreground font-medium">{panchayatAdmins.length} admin{panchayatAdmins.length !== 1 ? "s" : ""} registered</p>
+            </div>
+          </div>
+          <Dialog open={paCreateOpen} onOpenChange={setPaCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5">
+                <Plus className="w-4 h-4" /> Add Admin
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md rounded-[2rem] p-8 border-border/50 shadow-2xl">
+              <DialogHeader className="mb-5">
+                <DialogTitle className="text-2xl font-black">New Panchayat Admin</DialogTitle>
+              </DialogHeader>
+              <Form {...createPaForm}>
+                <form onSubmit={createPaForm.handleSubmit((data) => createPaMutation.mutate(data))} className="space-y-4">
+                  <FormField control={createPaForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold">Full Name</FormLabel>
+                      <FormControl><Input placeholder="Admin Name" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={createPaForm.control} name="panchayatName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold">Panchayat Name</FormLabel>
+                      <FormControl><Input placeholder="e.g. Saligrama Town Panchayat" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField control={createPaForm.control} name="email" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">Email</FormLabel>
+                        <FormControl><Input type="email" placeholder="admin@panchayat.gov.in" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={createPaForm.control} name="password" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">Password</FormLabel>
+                        <FormControl><Input type="text" placeholder="min 6 chars" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
+                    <Button type="button" variant="ghost" onClick={() => setPaCreateOpen(false)} className="rounded-xl h-11">Cancel</Button>
+                    <Button type="submit" className="rounded-xl h-11 font-black px-6 bg-indigo-600 hover:bg-indigo-700" disabled={createPaMutation.isPending}>
+                      {createPaMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      Create
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {panchayatAdmins.length === 0 ? (
+          <div className="flex flex-col items-center py-10 text-center text-muted-foreground">
+            <Shield className="w-10 h-10 mb-3 text-muted-foreground/40" />
+            <p className="font-bold text-sm">No panchayat admins yet</p>
+            <p className="text-xs mt-1">Add your first panchayat admin to delegate management</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {panchayatAdmins.map((pa) => (
+              <div key={pa.id} className="flex items-start justify-between gap-3 p-4 bg-muted/30 rounded-2xl border border-border/50 hover:border-indigo-200 transition-colors group">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                      <Shield className="w-3.5 h-3.5 text-indigo-600" />
+                    </div>
+                    <span className="font-bold text-sm text-foreground truncate">{pa.name}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate ml-9">{pa.email}</p>
+                  {pa.panchayatName && (
+                    <p className="text-xs font-semibold text-indigo-600 mt-1 ml-9 truncate flex items-center gap-1">
+                      <Building2 className="w-3 h-3 shrink-0" />{pa.panchayatName}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground ml-9 mt-0.5">{pa.officerCount} officer{pa.officerCount !== 1 ? "s" : ""}</p>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 -mt-0.5 -mr-0.5">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="rounded-[2rem] p-8">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="font-black text-2xl">Remove Admin?</AlertDialogTitle>
+                      <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                        This will permanently delete <strong>{pa.name}</strong> ({pa.panchayatName}). Their field officers will remain.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="mt-6 gap-2">
+                      <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => deletePaMutation.mutate(pa.id)}>
+                        Yes, remove
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Quick actions + coast status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

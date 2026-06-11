@@ -9,6 +9,7 @@ export const officersTable = pgTable("officers", {
   passwordHash: text("password_hash").notNull(),
   phone: text("phone"),
   areaName: text("area_name"),
+  panchayatName: text("panchayat_name"),
   centerLat: real("center_lat"),
   centerLng: real("center_lng"),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

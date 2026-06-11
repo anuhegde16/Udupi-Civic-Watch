@@ -468,9 +468,12 @@ components:
           type: string
         role:
           type: string
-          enum: [officer, admin]
+          enum: [officer, admin, field_officer, control_center, panchayat_admin]
         officerId:
           type: integer
+          nullable: true
+        panchayatName:
+          type: string
           nullable: true
       required: [id, email, name, role]
 
@@ -612,6 +615,9 @@ components:
         areaName:
           type: string
           nullable: true
+        panchayatName:
+          type: string
+          nullable: true
         centerLat:
           type: number
           nullable: true
@@ -671,6 +677,9 @@ components:
         areaName:
           type: string
           nullable: true
+        panchayatName:
+          type: string
+          nullable: true
         centerLat:
           type: number
           nullable: true
@@ -678,6 +687,50 @@ components:
           type: number
           nullable: true
       required: [name, email, password]
+
+    PanchayatAdmin:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        panchayatName:
+          type: string
+          nullable: true
+        officerCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, officerCount, createdAt]
+
+    PanchayatAdminList:
+      type: object
+      properties:
+        admins:
+          type: array
+          items:
+            $ref: "#/components/schemas/PanchayatAdmin"
+        total:
+          type: integer
+      required: [admins, total]
+
+    CreatePanchayatAdminBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        panchayatName:
+          type: string
+      required: [name, email, password, panchayatName]
 
     UpdateOfficerBody:
       type: object

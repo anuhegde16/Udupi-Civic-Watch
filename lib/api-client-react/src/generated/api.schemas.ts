@@ -29,6 +29,9 @@ export type UserInfoRole = (typeof UserInfoRole)[keyof typeof UserInfoRole];
 export const UserInfoRole = {
   officer: "officer",
   admin: "admin",
+  field_officer: "field_officer",
+  control_center: "control_center",
+  panchayat_admin: "panchayat_admin",
 } as const;
 
 export interface UserInfo {
@@ -37,6 +40,7 @@ export interface UserInfo {
   name: string;
   role: UserInfoRole;
   officerId?: number | null;
+  panchayatName?: string | null;
 }
 
 export interface LoginResponse {
@@ -140,6 +144,7 @@ export interface Officer {
   email: string;
   phone?: string | null;
   areaName?: string | null;
+  panchayatName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
   reportCount: number;
@@ -158,8 +163,30 @@ export interface CreateOfficerBody {
   password: string;
   phone?: string | null;
   areaName?: string | null;
+  panchayatName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
+}
+
+export interface PanchayatAdmin {
+  id: number;
+  name: string;
+  email: string;
+  panchayatName?: string | null;
+  officerCount: number;
+  createdAt: string;
+}
+
+export interface PanchayatAdminList {
+  admins: PanchayatAdmin[];
+  total: number;
+}
+
+export interface CreatePanchayatAdminBody {
+  name: string;
+  email: string;
+  password: string;
+  panchayatName: string;
 }
 
 export interface UpdateOfficerBody {

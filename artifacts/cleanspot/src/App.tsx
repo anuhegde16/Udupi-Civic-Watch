@@ -16,6 +16,7 @@ import OfficerReportDetail from "@/pages/officer-report-detail";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminOfficers from "@/pages/admin-officers";
 import AdminReports from "@/pages/admin-reports";
+import MasterDashboard from "@/pages/master-dashboard";
 
 const queryClient = new QueryClient();
 
@@ -30,32 +31,40 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/staff/login">{() => <Login portalType="staff" />}</Route>
         <Route path="/admin/login">{() => <Login portalType="admin" />}</Route>
+        <Route path="/master/login">{() => <Login portalType="master" />}</Route>
         
         {/* Protected Officer Routes */}
         <Route path="/officer/dashboard">
-          <AuthGuard roles={["officer", "admin"]}>
+          <AuthGuard roles={["officer", "field_officer", "admin", "control_center"]}>
             <OfficerDashboard />
           </AuthGuard>
         </Route>
         <Route path="/officer/report/:id">
-          <AuthGuard roles={["officer", "admin"]}>
+          <AuthGuard roles={["officer", "field_officer", "admin", "control_center"]}>
             <OfficerReportDetail />
           </AuthGuard>
         </Route>
 
-        {/* Protected Admin Routes */}
+        {/* Protected Panchayat Admin Routes */}
+        <Route path="/master/dashboard">
+          <AuthGuard roles={["panchayat_admin"]}>
+            <MasterDashboard />
+          </AuthGuard>
+        </Route>
+
+        {/* Protected Admin Routes (Control Center) */}
         <Route path="/admin/dashboard">
-          <AuthGuard roles={["admin"]}>
+          <AuthGuard roles={["admin", "control_center"]}>
             <AdminDashboard />
           </AuthGuard>
         </Route>
         <Route path="/admin/officers">
-          <AuthGuard roles={["admin"]}>
+          <AuthGuard roles={["admin", "control_center"]}>
             <AdminOfficers />
           </AuthGuard>
         </Route>
         <Route path="/admin/reports">
-          <AuthGuard roles={["admin"]}>
+          <AuthGuard roles={["admin", "control_center"]}>
             <AdminReports />
           </AuthGuard>
         </Route>

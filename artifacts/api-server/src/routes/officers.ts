@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
-import { requireAuth, requireAdmin, hashPassword } from "../lib/auth";
+import { requireAuth, requireAdmin, requirePanchayatOrControlCenter, hashPassword } from "../lib/auth";
 import geofencesData from "../data/geofences.json";
 
 function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: number } | null {
@@ -23,11 +23,24 @@ function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: numbe
 
 const router: IRouter = Router();
 
-router.get("/officers", requireAdmin, async (req, res): Promise<void> => {
-  const officers = await db
+router.get("/officers", requirePanchayatOrControlCenter, async (req, res): Promise<void> => {
+  const user = (req as any).user;
+  const isPanchayatAdmin = user.role === "panchayat_admin";
+
+  let query = db
     .select()
     .from(officersTable)
     .where(isNull(officersTable.deletedAt))
+    .orderBy(officersTable.createdAt) as any;
+
+  const officers = await db
+    .select()
+    .from(officersTable)
+    .where(
+      isPanchayatAdmin && user.panchayatName
+        ? and(isNull(officersTable.deletedAt), eq(officersTable.panchayatName, user.panchayatName))
+        : isNull(officersTable.deletedAt)
+    )
     .orderBy(officersTable.createdAt);
 
   const withCounts = await Promise.all(
@@ -51,14 +64,22 @@ router.get("/officers", requireAdmin, async (req, res): Promise<void> => {
   res.json({ officers: withCounts, total: withCounts.length });
 });
 
-router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
+router.post("/officers", requirePanchayatOrControlCenter, async (req, res): Promise<void> => {
   const parsed = CreateOfficerBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", message: parsed.error.message });
     return;
   }
 
-  let { name, email, password, phone, areaName, centerLat, centerLng } = parsed.data;
+  const user = (req as any).user;
+  const isPanchayatAdmin = user.role === "panchayat_admin";
+
+  let { name, email, password, phone, areaName, centerLat, centerLng, panchayatName } = parsed.data as any;
+
+  // Panchayat admin automatically scopes created officers to their panchayat
+  if (isPanchayatAdmin) {
+    panchayatName = user.panchayatName;
+  }
 
   if (areaName) {
     const zoneGeo = computeZoneGeo(areaName);
@@ -80,9 +101,13 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
 
   const passwordHash = await hashPassword(password);
 
-  // Remove any stale user account with this email (left over from a previous hard-delete
-  // before soft-delete was introduced) so the new insert doesn't hit a unique violation.
-  await db.delete(usersTable).where(and(eq(usersTable.email, email), eq(usersTable.role, "officer")));
+  // Remove any stale user account with this email
+  await db.delete(usersTable).where(
+    and(
+      eq(usersTable.email, email),
+      sql`${usersTable.role} IN ('officer', 'field_officer')`
+    )
+  );
 
   const [officer] = await db
     .insert(officersTable)
@@ -92,6 +117,7 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
       passwordHash,
       phone: phone ?? null,
       areaName: areaName ?? null,
+      panchayatName: panchayatName ?? null,
       centerLat: centerLat ?? null,
       centerLng: centerLng ?? null,
     })
@@ -101,8 +127,9 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
     email,
     passwordHash,
     name,
-    role: "officer",
+    role: "field_officer",
     officerId: String(officer.id),
+    panchayatName: panchayatName ?? null,
   });
 
   res.status(201).json({ ...officer, reportCount: 0, pendingCount: 0 });
@@ -149,6 +176,7 @@ router.patch("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
   if (parsed.data.areaName !== undefined) updates.areaName = parsed.data.areaName;
   if (parsed.data.centerLat !== undefined) updates.centerLat = parsed.data.centerLat;
   if (parsed.data.centerLng !== undefined) updates.centerLng = parsed.data.centerLng;
+  if ((parsed.data as any).panchayatName !== undefined) updates.panchayatName = (parsed.data as any).panchayatName;
 
   const [officer] = await db
     .update(officersTable)
@@ -186,15 +214,18 @@ router.delete("/officers/:id", requireAdmin, async (req, res): Promise<void> => 
     return;
   }
 
-  // Soft-delete: tombstone the email so it can be reused, preserve the record
-  // for report accountability. Remove the login account.
   const tombstoneEmail = `__deleted_${id}__${Date.now()}`;
   await db
     .update(officersTable)
     .set({ email: tombstoneEmail, deletedAt: new Date() })
     .where(eq(officersTable.id, id));
 
-  await db.delete(usersTable).where(and(eq(usersTable.email, existing.email), eq(usersTable.role, "officer")));
+  await db.delete(usersTable).where(
+    and(
+      eq(usersTable.email, existing.email),
+      sql`${usersTable.role} IN ('officer', 'field_officer')`
+    )
+  );
 
   res.json({ success: true, message: "Officer removed" });
 });

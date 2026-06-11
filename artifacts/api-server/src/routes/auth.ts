@@ -32,8 +32,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  const isFieldOfficer = user.role === "field_officer" || user.role === "officer";
+
   let officerId: number | null = null;
-  if (user.role === "officer") {
+  if (isFieldOfficer) {
     const [officer] = await db.select().from(officersTable).where(eq(officersTable.email, email)).limit(1);
     if (officer) officerId = officer.id;
   }
@@ -44,6 +46,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     name: user.name,
     role: user.role,
     officerId,
+    panchayatName: user.panchayatName ?? null,
   };
 
   const token = signSession(sessionUser);

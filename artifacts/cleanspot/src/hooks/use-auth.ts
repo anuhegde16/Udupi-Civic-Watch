@@ -18,13 +18,18 @@ export function useAuth() {
     });
   };
 
+  const role = user?.role ?? "";
+
   return {
     user,
     isLoading,
     error,
     isAuthenticated: !!user,
-    isOfficer: user?.role === "officer",
-    isAdmin: user?.role === "admin",
+    isOfficer: role === "officer" || role === "field_officer",
+    isAdmin: role === "admin" || role === "control_center",
+    isControlCenter: role === "admin" || role === "control_center",
+    isPanchayatAdmin: role === "panchayat_admin",
+    isFieldOfficer: role === "officer" || role === "field_officer",
     logout,
   };
 }

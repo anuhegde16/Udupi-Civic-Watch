@@ -6,7 +6,7 @@ import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock } 
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated, isAdmin, isOfficer, logout } = useAuth();
+  const { user, isAuthenticated, isAdmin, isOfficer, isPanchayatAdmin, logout } = useAuth();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
@@ -23,7 +23,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-primary/10 shadow-sm shadow-primary/5">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link
-            href={isOfficer ? "/officer/dashboard" : isAdmin ? "/admin/dashboard" : "/"}
+            href={isOfficer ? "/officer/dashboard" : isAdmin ? "/admin/dashboard" : isPanchayatAdmin ? "/master/dashboard" : "/"}
             className="flex items-center gap-3 group"
           >
             <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform shadow-md shadow-primary/20">
@@ -76,6 +76,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <Link href="/admin/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Dashboard</Link>
                         <Link href="/admin/reports" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">All Reports</Link>
                         <Link href="/admin/officers" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Officers</Link>
+                      </>
+                    )}
+                    {isPanchayatAdmin && (
+                      <>
+                        <Link href="/master/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Panchayat</Link>
                       </>
                     )}
                     {isOfficer && (
@@ -134,9 +139,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Field Officer Login
                     </Link>
+                    <Link href="/master/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Panchayat Admin Login
+                    </Link>
                     <Link href="/admin/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm font-medium">
                       <Lock className="w-3.5 h-3.5" />
-                      Administrator Login
+                      Control Center Login
                     </Link>
                   </div>
                 </div>

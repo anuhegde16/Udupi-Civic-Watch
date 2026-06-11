@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, reportsTable, officersTable } from "@workspace/db";
+import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
-import { requireAdmin } from "../lib/auth";
+import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
 import { sendAssignmentEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 
@@ -105,7 +105,6 @@ router.delete("/admin/reports/:id", requireAdmin, async (req, res): Promise<void
 });
 
 router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<void> => {
-  // Daily counts for last 14 days
   const dailyRows = await db.execute(sql`
     SELECT
       TO_CHAR(DATE_TRUNC('day', created_at), 'Mon DD') AS day,
@@ -116,13 +115,11 @@ router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<v
     ORDER BY DATE_TRUNC('day', created_at)
   `);
 
-  // Status breakdown
   const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable);
   const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "reported"));
   const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaning"));
   const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaned"));
 
-  // Officer performance
   const officerStats = await db.execute(sql`
     SELECT
       o.name,
@@ -151,6 +148,103 @@ router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<v
       resolved: r.resolved,
     })),
   });
+});
+
+// ── Panchayat Admin Management (Control Center only) ──────────────────────────
+
+router.get("/admin/panchayat-admins", requireControlCenter, async (req, res): Promise<void> => {
+  const admins = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      panchayatName: usersTable.panchayatName,
+      createdAt: usersTable.createdAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.role, "panchayat_admin"))
+    .orderBy(usersTable.createdAt);
+
+  // For each panchayat admin, count their field officers
+  const withCounts = await Promise.all(
+    admins.map(async (admin) => {
+      if (!admin.panchayatName) return { ...admin, officerCount: 0 };
+      const [row] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(officersTable)
+        .where(and(eq(officersTable.panchayatName, admin.panchayatName), sql`${officersTable.deletedAt} IS NULL`));
+      return { ...admin, officerCount: row.count };
+    })
+  );
+
+  res.json({ admins: withCounts, total: withCounts.length });
+});
+
+router.post("/admin/panchayat-admins", requireControlCenter, async (req, res): Promise<void> => {
+  const { name, email, password, panchayatName } = req.body;
+
+  if (!name || !email || !password || !panchayatName) {
+    res.status(400).json({ error: "name, email, password, and panchayatName are required" });
+    return;
+  }
+
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
+
+  if (existing.length > 0) {
+    res.status(409).json({ error: "Email already in use" });
+    return;
+  }
+
+  const passwordHash = await hashPassword(password);
+
+  const [created] = await db
+    .insert(usersTable)
+    .values({
+      email,
+      passwordHash,
+      name,
+      role: "panchayat_admin",
+      panchayatName,
+    })
+    .returning();
+
+  res.status(201).json({
+    id: created.id,
+    name: created.name,
+    email: created.email,
+    panchayatName: created.panchayatName,
+    createdAt: created.createdAt,
+    officerCount: 0,
+  });
+});
+
+router.delete("/admin/panchayat-admins/:id", requireControlCenter, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.id, id), eq(usersTable.role, "panchayat_admin")))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Panchayat Admin not found" });
+    return;
+  }
+
+  await db.delete(usersTable).where(eq(usersTable.id, id));
+
+  logger.info({ userId: id }, "Panchayat admin deleted by control center");
+  res.json({ success: true, message: "Panchayat Admin removed" });
 });
 
 export default router;
