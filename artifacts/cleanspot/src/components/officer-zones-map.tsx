@@ -71,7 +71,6 @@ export interface OfficerZone {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
-  radiusKm?: number | null;
 }
 
 interface OfficerZonesMapProps {

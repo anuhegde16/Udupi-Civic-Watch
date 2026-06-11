@@ -5,7 +5,7 @@ import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } fr
 import { requireAuth, requireAdmin, hashPassword } from "../lib/auth";
 import geofencesData from "../data/geofences.json";
 
-function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: number; radiusKm: number } | null {
+function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: number } | null {
   const feature = geofencesData.features.find(
     (f) => f.geometry.type === "Polygon" && (f.properties as any)?.name === zoneName
   );
@@ -18,16 +18,7 @@ function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: numbe
   const centerLat = lats.reduce((s, v) => s + v, 0) / lats.length;
   const centerLng = lons.reduce((s, v) => s + v, 0) / lons.length;
 
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLon = Math.min(...lons);
-  const maxLon = Math.max(...lons);
-
-  const dLat = ((maxLat - minLat) / 2) * 111.32;
-  const dLon = ((maxLon - minLon) / 2) * 111.32 * Math.cos((centerLat * Math.PI) / 180);
-  const radiusKm = Math.sqrt(dLat * dLat + dLon * dLon);
-
-  return { centerLat, centerLng, radiusKm };
+  return { centerLat, centerLng };
 }
 
 const router: IRouter = Router();
@@ -67,14 +58,13 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
     return;
   }
 
-  let { name, email, password, phone, areaName, centerLat, centerLng, radiusKm } = parsed.data;
+  let { name, email, password, phone, areaName, centerLat, centerLng } = parsed.data;
 
   if (areaName) {
     const zoneGeo = computeZoneGeo(areaName);
     if (zoneGeo) {
       centerLat = zoneGeo.centerLat;
       centerLng = zoneGeo.centerLng;
-      radiusKm = zoneGeo.radiusKm;
     }
   }
 
@@ -104,7 +94,6 @@ router.post("/officers", requireAdmin, async (req, res): Promise<void> => {
       areaName: areaName ?? null,
       centerLat: centerLat ?? null,
       centerLng: centerLng ?? null,
-      radiusKm: radiusKm ?? null,
     })
     .returning();
 
@@ -160,7 +149,6 @@ router.patch("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
   if (parsed.data.areaName !== undefined) updates.areaName = parsed.data.areaName;
   if (parsed.data.centerLat !== undefined) updates.centerLat = parsed.data.centerLat;
   if (parsed.data.centerLng !== undefined) updates.centerLng = parsed.data.centerLng;
-  if (parsed.data.radiusKm !== undefined) updates.radiusKm = parsed.data.radiusKm;
 
   const [officer] = await db
     .update(officersTable)

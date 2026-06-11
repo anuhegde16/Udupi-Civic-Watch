@@ -142,7 +142,6 @@ export interface Officer {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
-  radiusKm?: number | null;
   reportCount: number;
   pendingCount: number;
   createdAt: string;
@@ -161,7 +160,6 @@ export interface CreateOfficerBody {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
-  radiusKm?: number | null;
 }
 
 export interface UpdateOfficerBody {
@@ -170,7 +168,6 @@ export interface UpdateOfficerBody {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
-  radiusKm?: number | null;
 }
 
 export interface UploadImageBody {

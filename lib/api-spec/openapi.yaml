@@ -618,9 +618,6 @@ components:
         centerLng:
           type: number
           nullable: true
-        radiusKm:
-          type: number
-          nullable: true
         reportCount:
           type: integer
         pendingCount:
@@ -680,9 +677,6 @@ components:
         centerLng:
           type: number
           nullable: true
-        radiusKm:
-          type: number
-          nullable: true
       required: [name, email, password]
 
     UpdateOfficerBody:
@@ -700,9 +694,6 @@ components:
           type: number
           nullable: true
         centerLng:
-          type: number
-          nullable: true
-        radiusKm:
           type: number
           nullable: true
 

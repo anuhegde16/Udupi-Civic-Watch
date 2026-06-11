@@ -4,18 +4,12 @@ import geofencesData from "@/data/geofences.json";
 
 interface OfficerZoneMapProps {
   reports: Report[];
-  centerLat: number;
-  centerLng: number;
-  radiusKm: number;
   areaName: string;
   highlightId?: number | null;
 }
 
 export function OfficerZoneMap({
   reports,
-  centerLat,
-  centerLng,
-  radiusKm,
   areaName,
   highlightId,
 }: OfficerZoneMapProps) {
@@ -32,8 +26,6 @@ export function OfficerZoneMap({
       if (!mapRef.current || leafletMapRef.current) return;
 
       const map = L.map(mapRef.current, {
-        center: [centerLat, centerLng],
-        zoom: 12,
         zoomControl: false,
         attributionControl: false,
         scrollWheelZoom: false,
@@ -45,6 +37,7 @@ export function OfficerZoneMap({
 
       // Draw ward + district boundaries from geofences; highlight the officer's own ward
       let officerWard: any = null;
+      let districtBounds: any = null;
       for (const feature of geofencesData.features) {
         if (feature.geometry.type !== "Polygon") continue;
         const props = feature.properties as any;
@@ -53,12 +46,13 @@ export function OfficerZoneMap({
         );
         if (props?.type === "district") {
           // District = thick solid teal frame
-          L.polygon(latlngs, {
+          const poly = L.polygon(latlngs, {
             color: "#0d9488",
             weight: 3.5,
             fillColor: "#0d9488",
             fillOpacity: 0,
           }).addTo(map);
+          districtBounds = poly.getBounds();
         } else if (props?.type === "ward") {
           const isMine = props?.name === areaName;
           const poly = L.polygon(latlngs, {
@@ -76,20 +70,12 @@ export function OfficerZoneMap({
         }
       }
 
-      // Fit to the officer's own ward if found, else fall back to the radius circle
+      // Fit to the officer's own ward if found, else fall back to the district
       if (officerWard) {
         boundsRef.current = officerWard.getBounds();
         map.fitBounds(boundsRef.current, { padding: [20, 20] });
-      } else {
-        const circle = L.circle([centerLat, centerLng], {
-          radius: radiusKm * 1000,
-          color: "#0d9488",
-          fillColor: "#0d9488",
-          fillOpacity: 0.06,
-          weight: 2,
-          dashArray: "6 4",
-        }).addTo(map);
-        boundsRef.current = circle.getBounds();
+      } else if (districtBounds) {
+        boundsRef.current = districtBounds;
         map.fitBounds(boundsRef.current, { padding: [20, 20] });
       }
 
@@ -215,7 +201,7 @@ export function OfficerZoneMap({
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-primary inline-block" />
           <span className="text-xs font-bold text-foreground">{areaName}</span>
-          <span className="text-xs text-muted-foreground">· {radiusKm} km radius</span>
+          <span className="text-xs text-muted-foreground">Officer Zone</span>
         </div>
         <span className="text-xs text-muted-foreground font-medium">{reports.length} report{reports.length !== 1 ? "s" : ""}</span>
       </div>

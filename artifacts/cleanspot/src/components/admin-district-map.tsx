@@ -70,7 +70,6 @@ export type MapOfficer = {
   areaName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
-  radiusKm?: number | null;
 };
 
 interface AdminDistrictMapProps {
@@ -170,16 +169,12 @@ export function AdminDistrictMap({
         return;
       }
 
-      if (officer.centerLat && officer.centerLng && officer.radiusKm) {
+      if (officer.centerLat && officer.centerLng) {
         const L = (await import("leaflet")).default;
-        const dLat = officer.radiusKm / 111.32;
-        const dLng =
-          officer.radiusKm /
-          (111.32 * Math.cos((officer.centerLat * Math.PI) / 180));
         map.flyToBounds(
           L.latLngBounds(
-            [officer.centerLat - dLat, officer.centerLng - dLng],
-            [officer.centerLat + dLat, officer.centerLng + dLng]
+            [officer.centerLat - 0.01, officer.centerLng - 0.01],
+            [officer.centerLat + 0.01, officer.centerLng + 0.01]
           ),
           { padding: [40, 40], duration: 0.7 }
         );

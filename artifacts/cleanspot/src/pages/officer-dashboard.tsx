@@ -118,10 +118,7 @@ export default function OfficerDashboard() {
     }
   };
 
-  const hasGeo =
-    officerData?.centerLat != null &&
-    officerData?.centerLng != null &&
-    officerData?.radiusKm != null;
+  const hasGeo = officerData?.areaName != null;
 
   const statCards = [
     {
@@ -164,7 +161,7 @@ export default function OfficerDashboard() {
         </h1>
         <p className="text-muted-foreground font-medium">
           {officerData?.areaName
-            ? `${officerData.areaName} · ${officerData.radiusKm ?? "—"} km coverage`
+            ? officerData.areaName
             : "Your assigned area"}
         </p>
 
@@ -219,9 +216,6 @@ export default function OfficerDashboard() {
       {!isLoading && hasGeo && (
         <OfficerZoneMap
           reports={allReports}
-          centerLat={officerData!.centerLat!}
-          centerLng={officerData!.centerLng!}
-          radiusKm={officerData!.radiusKm!}
           areaName={officerData!.areaName || "My Zone"}
         />
       )}

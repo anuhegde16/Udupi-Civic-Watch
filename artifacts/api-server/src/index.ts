@@ -187,7 +187,6 @@ async function seedSampleData() {
       areaName: "Udupi Taluk",
       centerLat: 13.3409,
       centerLng: 74.7421,
-      radiusKm: 8.0,
     }).returning();
 
     const [officer2] = await db.insert(officersTable).values({
@@ -198,7 +197,6 @@ async function seedSampleData() {
       areaName: "Kundapur Taluk",
       centerLat: 13.6253,
       centerLng: 74.6903,
-      radiusKm: 10.0,
     }).returning();
 
     const [officer3] = await db.insert(officersTable).values({
@@ -209,7 +207,6 @@ async function seedSampleData() {
       areaName: "Karkala Taluk",
       centerLat: 13.2071,
       centerLng: 74.9978,
-      radiusKm: 9.0,
     }).returning();
 
     await db.insert(usersTable).values([

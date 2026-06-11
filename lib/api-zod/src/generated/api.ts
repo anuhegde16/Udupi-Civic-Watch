@@ -211,7 +211,6 @@ export const ListOfficersResponse = zod.object({
       areaName: zod.string().nullish(),
       centerLat: zod.number().nullish(),
       centerLng: zod.number().nullish(),
-      radiusKm: zod.number().nullish(),
       reportCount: zod.number(),
       pendingCount: zod.number(),
       createdAt: zod.coerce.date(),
@@ -231,7 +230,6 @@ export const CreateOfficerBody = zod.object({
   areaName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
-  radiusKm: zod.number().nullish(),
 });
 
 /**
@@ -249,7 +247,6 @@ export const GetOfficerResponse = zod.object({
   areaName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
-  radiusKm: zod.number().nullish(),
   reportCount: zod.number(),
   pendingCount: zod.number(),
   createdAt: zod.coerce.date(),
@@ -268,7 +265,6 @@ export const UpdateOfficerBody = zod.object({
   areaName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
-  radiusKm: zod.number().nullish(),
 });
 
 export const UpdateOfficerResponse = zod.object({
@@ -279,7 +275,6 @@ export const UpdateOfficerResponse = zod.object({
   areaName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
-  radiusKm: zod.number().nullish(),
   reportCount: zod.number(),
   pendingCount: zod.number(),
   createdAt: zod.coerce.date(),
