@@ -98,6 +98,10 @@ export const ListReportsResponse = zod.object({
           email: zod.string(),
           phone: zod.string().nullish(),
           areaName: zod.string().nullish(),
+          wardName: zod
+            .string()
+            .nullish()
+            .describe("Ward assigned to this officer (alias of areaName)"),
         })
         .nullish(),
       createdAt: zod.coerce.date(),
@@ -143,6 +147,10 @@ export const GetReportResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       areaName: zod.string().nullish(),
+      wardName: zod
+        .string()
+        .nullish()
+        .describe("Ward assigned to this officer (alias of areaName)"),
     })
     .nullish(),
   createdAt: zod.coerce.date(),
@@ -179,6 +187,10 @@ export const UpdateReportResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       areaName: zod.string().nullish(),
+      wardName: zod
+        .string()
+        .nullish()
+        .describe("Ward assigned to this officer (alias of areaName)"),
     })
     .nullish(),
   createdAt: zod.coerce.date(),
@@ -223,6 +235,10 @@ export const ListOfficersResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       areaName: zod.string().nullish(),
+      wardName: zod
+        .string()
+        .nullish()
+        .describe("Ward assigned to this officer (alias of areaName)"),
       panchayatName: zod.string().nullish(),
       centerLat: zod.number().nullish(),
       centerLng: zod.number().nullish(),
@@ -261,6 +277,10 @@ export const GetOfficerResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
+  wardName: zod
+    .string()
+    .nullish()
+    .describe("Ward assigned to this officer (alias of areaName)"),
   panchayatName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
@@ -290,6 +310,10 @@ export const UpdateOfficerResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
+  wardName: zod
+    .string()
+    .nullish()
+    .describe("Ward assigned to this officer (alias of areaName)"),
   panchayatName: zod.string().nullish(),
   centerLat: zod.number().nullish(),
   centerLng: zod.number().nullish(),
@@ -341,6 +365,10 @@ export const GetOfficerReportsResponse = zod.object({
           email: zod.string(),
           phone: zod.string().nullish(),
           areaName: zod.string().nullish(),
+          wardName: zod
+            .string()
+            .nullish()
+            .describe("Ward assigned to this officer (alias of areaName)"),
         })
         .nullish(),
       createdAt: zod.coerce.date(),
@@ -383,6 +411,10 @@ export const AdminListReportsResponse = zod.object({
           email: zod.string(),
           phone: zod.string().nullish(),
           areaName: zod.string().nullish(),
+          wardName: zod
+            .string()
+            .nullish()
+            .describe("Ward assigned to this officer (alias of areaName)"),
         })
         .nullish(),
       createdAt: zod.coerce.date(),
@@ -421,6 +453,10 @@ export const ReassignReportResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       areaName: zod.string().nullish(),
+      wardName: zod
+        .string()
+        .nullish()
+        .describe("Ward assigned to this officer (alias of areaName)"),
     })
     .nullish(),
   createdAt: zod.coerce.date(),

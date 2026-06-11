@@ -231,10 +231,30 @@ router.delete("/officers/:id", requireAdmin, async (req, res): Promise<void> => 
 });
 
 router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as any).user;
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
+  const isControlCenter = user.role === "admin" || user.role === "control_center";
+
+  if (isFieldOfficer) {
+    if (!user.officerId || user.officerId !== id) {
+      res.status(403).json({ error: "Access denied: you can only view your own reports" });
+      return;
+    }
+  } else if (user.role === "panchayat_admin") {
+    const [officer] = await db.select().from(officersTable).where(eq(officersTable.id, id)).limit(1);
+    if (!officer || officer.panchayatName !== user.panchayatName) {
+      res.status(403).json({ error: "Access denied: officer is not in your panchayat" });
+      return;
+    }
+  } else if (!isControlCenter) {
+    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -255,7 +275,7 @@ router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void>
 
   const formatted = reports.map(({ report, officer }) => ({
     ...report,
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName } : null,
+    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   }));
 
   res.json({ reports: formatted, total: countRow.count });

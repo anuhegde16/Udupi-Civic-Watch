@@ -68,9 +68,11 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const limit = query.success ? (query.data.limit ?? 50) : 50;
   const offset = query.success ? (query.data.offset ?? 0) : 0;
 
+  const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
+
   let conditions: any[] = [];
 
-  if (user.role === "officer" && user.officerId) {
+  if (isFieldOfficer && user.officerId) {
     conditions.push(eq(reportsTable.assignedOfficerId, user.officerId));
   }
 
@@ -94,7 +96,7 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
 
   const formatted = reports.map(({ report, officer }) => ({
     ...report,
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName } : null,
+    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   }));
 
   res.json({ reports: formatted, total: countRow.count });
@@ -169,7 +171,7 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   let assignedOfficer = null;
   if (officer) {
-    assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName };
+    assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName };
     sendAssignmentEmail(officer, report).catch((err) => logger.warn({ err }, "Unhandled error in assignment email"));
   }
 
@@ -201,6 +203,7 @@ router.get("/reports/:id/track", async (req, res): Promise<void> => {
 });
 
 router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as any).user;
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -220,19 +223,39 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
+  if (isFieldOfficer && user.officerId && row.report.assignedOfficerId !== user.officerId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
   const { report, officer } = row;
   res.json({
     ...report,
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName } : null,
+    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   });
 });
 
 router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as any).user;
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
     res.status(400).json({ error: "Invalid ID" });
     return;
+  }
+
+  const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
+  if (isFieldOfficer && user.officerId) {
+    const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+    if (existing.assignedOfficerId !== user.officerId) {
+      res.status(403).json({ error: "Access denied: report is not assigned to you" });
+      return;
+    }
   }
 
   const parsed = UpdateReportBody.safeParse(req.body);
@@ -262,7 +285,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
 
   res.json({
     ...report,
-    assignedOfficer: officerRow ? { id: officerRow.id, name: officerRow.name, email: officerRow.email, phone: officerRow.phone, areaName: officerRow.areaName } : null,
+    assignedOfficer: officerRow ? { id: officerRow.id, name: officerRow.name, email: officerRow.email, phone: officerRow.phone, areaName: officerRow.areaName, wardName: officerRow.areaName } : null,
   });
 });
 

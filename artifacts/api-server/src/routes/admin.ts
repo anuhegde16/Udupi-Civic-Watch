@@ -35,7 +35,7 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
 
   const formatted = reports.map(({ report, officer }) => ({
     ...report,
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName } : null,
+    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   }));
 
   res.json({ reports: formatted, total: countRow.count });
@@ -78,7 +78,7 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
 
   res.json({
     ...report,
-    assignedOfficer: { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName },
+    assignedOfficer: { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName },
   });
 });
 

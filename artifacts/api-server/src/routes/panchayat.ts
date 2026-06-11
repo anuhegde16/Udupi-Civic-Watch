@@ -90,7 +90,7 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
   const formatted = reports.map(({ report, officer }) => ({
     ...report,
     assignedOfficer: officer
-      ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName }
+      ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName }
       : null,
   }));
 
@@ -122,13 +122,25 @@ router.get("/panchayat/stats", requirePanchayatAdmin, async (req, res): Promise<
   const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(inArray, eq(reportsTable.status, "cleaning")));
   const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(inArray, eq(reportsTable.status, "cleaned")));
 
-  const wardStats = officerRows.map((o) => ({
-    wardName: o.areaName ?? "Unassigned",
-    officerName: o.name,
-    officerId: o.id,
-    pendingCount: 0,
-    reportCount: 0,
-  }));
+  const wardStats = await Promise.all(
+    officerRows.map(async (o) => {
+      const [totalRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(reportsTable)
+        .where(eq(reportsTable.assignedOfficerId, o.id));
+      const [pendingRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(reportsTable)
+        .where(and(eq(reportsTable.assignedOfficerId, o.id), sql`${reportsTable.status} != 'cleaned'`));
+      return {
+        wardName: o.areaName ?? "Unassigned",
+        officerName: o.name,
+        officerId: o.id,
+        reportCount: totalRow.count,
+        pendingCount: pendingRow.count,
+      };
+    })
+  );
 
   res.json({
     total: total.count,

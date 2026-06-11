@@ -63,6 +63,8 @@ export interface OfficerBasic {
   email: string;
   phone?: string | null;
   areaName?: string | null;
+  /** Ward assigned to this officer (alias of areaName) */
+  wardName?: string | null;
 }
 
 export interface Report {
@@ -144,6 +146,8 @@ export interface Officer {
   email: string;
   phone?: string | null;
   areaName?: string | null;
+  /** Ward assigned to this officer (alias of areaName) */
+  wardName?: string | null;
   panchayatName?: string | null;
   centerLat?: number | null;
   centerLng?: number | null;
