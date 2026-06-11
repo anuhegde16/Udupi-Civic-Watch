@@ -346,13 +346,7 @@ export function AdminDistrictMap({
   const chipInactive =
     "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground hover:bg-primary/5";
 
-  const visibleWards = allGeoFeatures
-    .filter((zone) => zone.featureType === "ward")
-    .filter((zone) => {
-      if (!activePanchayat) return true;
-      const officer = officers.find((o) => o.areaName === zone.name);
-      return officer?.panchayatName === activePanchayat;
-    });
+  const visibleWards = allGeoFeatures.filter((zone) => zone.featureType === "ward");
 
   return (
     <div>
