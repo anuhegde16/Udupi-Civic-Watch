@@ -158,6 +158,7 @@ type ReportItem = {
 export default function AdminDashboard() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
   const [selectedPanchayat, setSelectedPanchayat] = useState<string | null>(null);
+  const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
     const from = new Date(now);
@@ -246,16 +247,25 @@ export default function AdminDashboard() {
   }, [officers, scopedOfficers, selectedPanchayat]);
 
   const filteredReports = useMemo(() => {
-    let reports = selectedOfficerId
-      ? allReports.filter((r) => r.assignedOfficerId === selectedOfficerId)
-      : selectedPanchayat
-      ? allReports.filter(
-          (r) =>
-            r.assignedOfficerId !== null &&
-            r.assignedOfficerId !== undefined &&
-            scopedOfficerIds.has(r.assignedOfficerId)
-        )
-      : allReports;
+    let reports: ReportItem[];
+    if (selectedOfficerId) {
+      reports = allReports.filter((r) => r.assignedOfficerId === selectedOfficerId);
+    } else if (selectedWardName) {
+      // Ward chip selected — filter by the officer assigned to that ward (empty if unassigned)
+      const wardOfficer = officers.find((o) => o.areaName === selectedWardName);
+      reports = wardOfficer
+        ? allReports.filter((r) => r.assignedOfficerId === wardOfficer.id)
+        : [];
+    } else if (selectedPanchayat) {
+      reports = allReports.filter(
+        (r) =>
+          r.assignedOfficerId !== null &&
+          r.assignedOfficerId !== undefined &&
+          scopedOfficerIds.has(r.assignedOfficerId)
+      );
+    } else {
+      reports = allReports;
+    }
 
     if (dateRange?.from) {
       const from = startOfDay(dateRange.from);
@@ -267,7 +277,7 @@ export default function AdminDashboard() {
     }
 
     return reports;
-  }, [allReports, selectedOfficerId, selectedPanchayat, scopedOfficerIds, dateRange]);
+  }, [allReports, selectedOfficerId, selectedWardName, selectedPanchayat, officers, scopedOfficerIds, dateRange]);
 
   const isDateFiltered = !!dateRange?.from;
 
@@ -499,6 +509,7 @@ export default function AdminDashboard() {
                   const val = e.target.value === "all" ? null : e.target.value;
                   setSelectedPanchayat(val);
                   setSelectedOfficerId(null);
+                  setSelectedWardName(null);
                 }}
               >
                 <option value="all">All Panchayats</option>
@@ -517,9 +528,10 @@ export default function AdminDashboard() {
               <select
                 className={`bg-transparent text-sm font-semibold outline-none cursor-pointer pr-5 appearance-none ${selectedOfficerId ? "text-primary" : "text-foreground"}`}
                 value={selectedOfficerId ?? "all"}
-                onChange={(e) =>
-                  setSelectedOfficerId(e.target.value === "all" ? null : Number(e.target.value))
-                }
+                onChange={(e) => {
+                  setSelectedOfficerId(e.target.value === "all" ? null : Number(e.target.value));
+                  setSelectedWardName(null);
+                }}
               >
                 <option value="all">{selectedPanchayat ? "All Wards" : "All Zones"}</option>
                 {scopedOfficers.map((o) => (
@@ -663,9 +675,11 @@ export default function AdminDashboard() {
           onZoneSelect={setSelectedOfficerId}
           activePanchayat={selectedPanchayat}
           panchayatOptions={panchayatOptions}
+          onWardSelect={(wardName) => setSelectedWardName(wardName)}
           onPanchayatChange={(p) => {
             setSelectedPanchayat(p);
             setSelectedOfficerId(null);
+            setSelectedWardName(null);
           }}
         />
         {selectedOfficerId && (

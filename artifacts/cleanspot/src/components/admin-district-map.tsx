@@ -81,6 +81,7 @@ interface AdminDistrictMapProps {
   activePanchayat: string | null;
   panchayatOptions: string[];
   onPanchayatChange: (name: string | null) => void;
+  onWardSelect: (wardName: string | null) => void;
 }
 
 export function AdminDistrictMap({
@@ -91,6 +92,7 @@ export function AdminDistrictMap({
   activePanchayat,
   panchayatOptions,
   onPanchayatChange,
+  onWardSelect,
 }: AdminDistrictMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -388,7 +390,7 @@ export function AdminDistrictMap({
             </span>
           </div>
           <button
-            onClick={() => { setActiveZone(null); onZoneSelect(null); }}
+            onClick={() => { setActiveZone(null); onZoneSelect(null); onWardSelect(null); }}
             className={`${chipBase} ${activeZone === null ? chipActive : chipInactive}`}
           >
             <svg
@@ -431,6 +433,7 @@ export function AdminDistrictMap({
                     onClick={() => {
                       setActiveZone(zone.name);
                       onZoneSelect(assignedOfficer ? assignedOfficer.id : null);
+                      onWardSelect(zone.name);
                     }}
                     className={`${chipBase} ${activeZone === zone.name ? chipActive : chipInactive}`}
                     style={
