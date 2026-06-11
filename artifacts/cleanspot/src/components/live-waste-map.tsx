@@ -119,17 +119,20 @@ export function LiveWasteMap() {
 
       for (const feature of geofencesData.features) {
         if (feature.geometry.type === "Polygon") {
+          const props = feature.properties as any;
+          const isWard = props?.type === "ward";
           const latlngs = feature.geometry.coordinates[0].map(
             ([lon, lat]) => [lat, lon] as [number, number]
           );
           const poly = L.polygon(latlngs, {
-            color: "#0e6b7c",
-            weight: 2,
-            dashArray: "7 5",
-            fillColor: "#0e6b7c",
-            fillOpacity: 0.07,
+            // District = thick solid teal frame; wards = thin amber dashed lines inside
+            color: isWard ? "#f59e0b" : "#0d9488",
+            weight: isWard ? 1 : 3.5,
+            dashArray: isWard ? "4 3" : undefined,
+            fillColor: isWard ? "#f59e0b" : "#0d9488",
+            fillOpacity: isWard ? 0.05 : 0,
           }).addTo(map);
-          const name = (feature.properties as any)?.name ?? "Service Zone";
+          const name = props?.name ?? "Service Zone";
           poly.bindTooltip(name, {
             permanent: false,
             direction: "center",

@@ -91,6 +91,7 @@ export function AdminDistrictMap({
   const [activeZone, setActiveZone] = useState<string | null>(
     geoZones[0]?.name ?? null
   );
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -122,6 +123,7 @@ export function AdminDistrictMap({
       }).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      setMapReady(true);
     }
 
     init();
@@ -324,7 +326,7 @@ export function AdminDistrictMap({
     }
 
     drawLayers();
-  }, [reports, officers, selectedOfficerId, onZoneSelect]);
+  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady]);
 
   const chipBase =
     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Report } from "@workspace/api-client-react";
+import geofencesData from "@/data/geofences.json";
 
 interface OfficerZoneMapProps {
   reports: Report[];
@@ -21,7 +22,7 @@ export function OfficerZoneMap({
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
-  const circleRef = useRef<any>(null);
+  const boundsRef = useRef<any>(null);
 
   useEffect(() => {
     async function init() {
@@ -42,18 +43,55 @@ export function OfficerZoneMap({
         maxZoom: 19,
       }).addTo(map);
 
-      const circle = L.circle([centerLat, centerLng], {
-        radius: radiusKm * 1000,
-        color: "#0f766e",
-        fillColor: "#0f766e",
-        fillOpacity: 0.08,
-        weight: 2,
-        dashArray: "6 4",
-      }).addTo(map);
-      circleRef.current = circle;
+      // Draw ward + district boundaries from geofences; highlight the officer's own ward
+      let officerWard: any = null;
+      for (const feature of geofencesData.features) {
+        if (feature.geometry.type !== "Polygon") continue;
+        const props = feature.properties as any;
+        const latlngs = (feature.geometry.coordinates[0] as [number, number][]).map(
+          ([lon, lat]) => [lat, lon] as [number, number]
+        );
+        if (props?.type === "district") {
+          // District = thick solid teal frame
+          L.polygon(latlngs, {
+            color: "#0d9488",
+            weight: 3.5,
+            fillColor: "#0d9488",
+            fillOpacity: 0,
+          }).addTo(map);
+        } else if (props?.type === "ward") {
+          const isMine = props?.name === areaName;
+          const poly = L.polygon(latlngs, {
+            color: "#f59e0b",
+            weight: isMine ? 2.5 : 1,
+            dashArray: isMine ? undefined : "4 3",
+            fillColor: "#f59e0b",
+            fillOpacity: isMine ? 0.15 : 0.04,
+          }).addTo(map);
+          poly.bindTooltip(props?.name ?? "Ward", {
+            direction: "center",
+            className: "zone-label",
+          });
+          if (isMine) officerWard = poly;
+        }
+      }
 
-      // Fit map to circle bounds so the full zone is always visible
-      map.fitBounds(circle.getBounds(), { padding: [20, 20] });
+      // Fit to the officer's own ward if found, else fall back to the radius circle
+      if (officerWard) {
+        boundsRef.current = officerWard.getBounds();
+        map.fitBounds(boundsRef.current, { padding: [20, 20] });
+      } else {
+        const circle = L.circle([centerLat, centerLng], {
+          radius: radiusKm * 1000,
+          color: "#0d9488",
+          fillColor: "#0d9488",
+          fillOpacity: 0.06,
+          weight: 2,
+          dashArray: "6 4",
+        }).addTo(map);
+        boundsRef.current = circle.getBounds();
+        map.fitBounds(boundsRef.current, { padding: [20, 20] });
+      }
 
       leafletMapRef.current = map;
       placeMarkers(L, map, reports, highlightId ?? null);
@@ -160,8 +198,8 @@ export function OfficerZoneMap({
   const zoomIn = () => leafletMapRef.current?.zoomIn();
   const zoomOut = () => leafletMapRef.current?.zoomOut();
   const reCenter = () => {
-    if (leafletMapRef.current && circleRef.current) {
-      leafletMapRef.current.fitBounds(circleRef.current.getBounds(), {
+    if (leafletMapRef.current && boundsRef.current) {
+      leafletMapRef.current.fitBounds(boundsRef.current, {
         padding: [20, 20],
         animate: true,
       });

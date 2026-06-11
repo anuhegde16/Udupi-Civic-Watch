@@ -1,1 +1,2 @@
 - [Geofence extraction from ArcMap GeoPDF](geofence-extraction.md) — extract boundary from PDF vector stream via GPTS/LPTS georef; lat increases with PDF_y (don't ship flipped); keep client+server geofences.json byte-identical.
+- [Leaflet init/draw race](leaflet-init-draw-race.md) — async map init + data-driven draw effect can deadlock when query data is cached; gate draw on a `mapReady` state.
