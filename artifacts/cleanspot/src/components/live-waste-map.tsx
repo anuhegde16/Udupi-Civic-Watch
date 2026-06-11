@@ -49,7 +49,7 @@ const DISTRICT_CENTER: [number, number] = [13.3409, 74.7421];
 const DISTRICT_ZOOM = 11;
 
 const zones: Zone[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon")
+  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
   .map((f) => {
     const coords = f.geometry.coordinates[0];
     const lats = coords.map(([, lat]) => lat);
