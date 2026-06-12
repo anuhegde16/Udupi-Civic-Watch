@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Officer, OfficerList } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
@@ -73,15 +73,28 @@ import geofencesData from "@/data/geofences.json";
 const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
 const ZONE_COLORS = ["#f97316", "#8b5cf6", "#f43f5e", "#3b82f6", "#10b981", "#ec4899"];
 
-const geoZoneNames: string[] = geofencesData.features
+const panchayatNames: string[] = geofencesData.features
+  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
+  .map((f) => (f.properties as any)?.name ?? "")
+  .filter(Boolean);
+
+const allWardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
   .map((f) => (f.properties as any)?.name ?? "Zone");
+
+// Ward features don't carry an explicit panchayat — all wards belong to the single district.
+// When multiple panchayats are added, add a "panchayat" property to each ward feature.
+const wardsByPanchayat: Record<string, string[]> = {};
+panchayatNames.forEach((p) => { wardsByPanchayat[p] = allWardNames; });
+
+const geoZoneNames = allWardNames;
 
 const createOfficerSchema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Valid email is required"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   phone: z.string().optional(),
+  panchayatName: z.string().min(1, "Panchayat is required"),
   areaName: z.string().optional(),
 });
 
@@ -126,9 +139,13 @@ export default function AdminOfficers() {
       email: "",
       password: "",
       phone: "",
+      panchayatName: "",
       areaName: "",
     },
   });
+
+  const selectedPanchayat = useWatch({ control: form.control, name: "panchayatName" });
+  const visibleWards = selectedPanchayat ? (wardsByPanchayat[selectedPanchayat] ?? []) : [];
 
   const officers = officersData?.officers || [];
 
@@ -151,6 +168,7 @@ export default function AdminOfficers() {
     const cleanData = {
       ...data,
       areaName: data.areaName || undefined,
+      panchayatName: data.panchayatName,
     };
     createOfficer.mutate(
       { data: cleanData },
@@ -370,10 +388,44 @@ export default function AdminOfficers() {
                           <MapPin className="w-5 h-5" /> Service Zone Assignment
                         </h3>
                         <p className="text-sm text-foreground/70 font-medium">
-                          Assign this officer to a geofenced service zone. The system will auto-route reports in that zone to them.
+                          Select the panchayat first, then assign the ward. Reports in that ward will be auto-routed to this officer.
                         </p>
                       </div>
                     </div>
+
+                    <FormField
+                      control={form.control}
+                      name="panchayatName"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel className="font-bold text-foreground">Panchayat</FormLabel>
+                          <Select
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              form.setValue("areaName", "");
+                            }}
+                            value={field.value || ""}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                <SelectValue placeholder="Select panchayat…" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {panchayatNames.map((p) => (
+                                <SelectItem key={p} value={p}>
+                                  <span className="flex items-center gap-2">
+                                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                                    {p}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <FormField
                       control={form.control}
@@ -381,27 +433,28 @@ export default function AdminOfficers() {
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
                           <FormLabel className="font-bold text-foreground">
-                            Service Zone{" "}
+                            Ward{" "}
                             <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
                           </FormLabel>
                           <Select
                             onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
                             value={field.value || "__none__"}
+                            disabled={!selectedPanchayat}
                           >
                             <FormControl>
                               <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
-                                <SelectValue placeholder="Select a zone…" />
+                                <SelectValue placeholder={selectedPanchayat ? "Select a ward…" : "Select panchayat first"} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="__none__">
-                                <span className="text-muted-foreground">No zone assigned</span>
+                                <span className="text-muted-foreground">No ward assigned</span>
                               </SelectItem>
-                              {geoZoneNames.map((zoneName) => (
-                                <SelectItem key={zoneName} value={zoneName}>
+                              {visibleWards.map((wardName) => (
+                                <SelectItem key={wardName} value={wardName}>
                                   <span className="flex items-center gap-2">
                                     <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                    {zoneName}
+                                    {wardName}
                                   </span>
                                 </SelectItem>
                               ))}
