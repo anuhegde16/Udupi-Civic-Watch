@@ -81,6 +81,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     {isPanchayatAdmin && (
                       <>
                         <Link href="/master/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Panchayat</Link>
+                        <Link href="/master/analytics" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Analytics</Link>
                       </>
                     )}
                     {isOfficer && (
