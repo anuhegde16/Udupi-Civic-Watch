@@ -165,10 +165,17 @@ export default function MasterDashboard() {
   }
 
   function handleDelete(id: number) {
-    deleteOfficer.mutate(id, {
-      onSuccess: () => toast({ title: "Officer removed" }),
-      onError: (err) => toast({ title: "Failed to remove officer", description: err.message, variant: "destructive" }),
-    });
+    deleteOfficer.mutate(
+      { id },
+      {
+        onSuccess: () => {
+          toast({ title: "Officer removed" });
+          queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+          queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
+        },
+        onError: (err) => toast({ title: "Failed to remove officer", description: err.message, variant: "destructive" }),
+      }
+    );
   }
 
   const isLoading = isLoadingOfficers || isLoadingStats;

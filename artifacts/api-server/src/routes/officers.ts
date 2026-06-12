@@ -156,7 +156,8 @@ router.get("/officers/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...officer, reportCount: total.count, pendingCount: pending.count });
 });
 
-router.patch("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
+router.patch("/officers/:id", requirePanchayatOrControlCenter, async (req, res): Promise<void> => {
+  const user = (req as any).user;
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -168,6 +169,15 @@ router.patch("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", message: parsed.error.message });
     return;
+  }
+
+  // Panchayat admin can only edit officers in their own panchayat
+  if (user.role === "panchayat_admin" && user.panchayatName) {
+    const [target] = await db.select().from(officersTable).where(and(eq(officersTable.id, id), isNull(officersTable.deletedAt))).limit(1);
+    if (!target || target.panchayatName !== user.panchayatName) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
   }
 
   const updates: Record<string, any> = {};
@@ -195,7 +205,8 @@ router.patch("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
   res.json({ ...officer, reportCount: total.count, pendingCount: pending.count });
 });
 
-router.delete("/officers/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/officers/:id", requirePanchayatOrControlCenter, async (req, res): Promise<void> => {
+  const user = (req as any).user;
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -212,6 +223,14 @@ router.delete("/officers/:id", requireAdmin, async (req, res): Promise<void> => 
   if (!existing) {
     res.status(404).json({ error: "Officer not found" });
     return;
+  }
+
+  // Panchayat admin can only delete officers in their own panchayat
+  if (user.role === "panchayat_admin" && user.panchayatName) {
+    if (existing.panchayatName !== user.panchayatName) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
   }
 
   const tombstoneEmail = `__deleted_${id}__${Date.now()}`;
