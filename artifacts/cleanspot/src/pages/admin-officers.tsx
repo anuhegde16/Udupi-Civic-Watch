@@ -458,7 +458,7 @@ export default function AdminOfficers() {
                                 <SelectValue placeholder={selectedPanchayat ? "Select a ward…" : "Select panchayat first"} />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-56 overflow-y-auto">
                               <SelectItem value="__none__">
                                 <span className="text-muted-foreground">No ward assigned</span>
                               </SelectItem>
