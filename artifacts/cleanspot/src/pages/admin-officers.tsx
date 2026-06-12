@@ -149,6 +149,13 @@ export default function AdminOfficers() {
 
   const officers = officersData?.officers || [];
 
+  // areaName → officer name for wards already taken
+  const assignedWardsMap: Record<string, string> = Object.fromEntries(
+    officers
+      .filter((o) => o.areaName)
+      .map((o) => [o.areaName as string, o.name])
+  );
+
   function openZoneEditor(id: number) {
     const idx = officers.findIndex((o) => o.id === id);
     if (idx === -1) return;
@@ -292,18 +299,23 @@ export default function AdminOfficers() {
                 <Plus className="w-5 h-5 mr-2" /> Add Officer
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-2xl rounded-[2rem] p-8 border-border/50 shadow-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader className="mb-6">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
-                  <Shield className="w-7 h-7" />
-                </div>
-                <DialogTitle className="text-3xl font-black font-display tracking-tight">
-                  New Officer
-                </DialogTitle>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-2xl rounded-[2rem] p-0 border-border/50 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="px-8 pt-8 pb-4 shrink-0">
+                <DialogHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <DialogTitle className="text-2xl font-black tracking-tight">
+                      New Officer
+                    </DialogTitle>
+                  </div>
+                </DialogHeader>
+              </div>
 
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+                  <div className="overflow-y-auto flex-1 px-8 py-2 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
                       control={form.control}
@@ -450,14 +462,22 @@ export default function AdminOfficers() {
                               <SelectItem value="__none__">
                                 <span className="text-muted-foreground">No ward assigned</span>
                               </SelectItem>
-                              {visibleWards.map((wardName) => (
-                                <SelectItem key={wardName} value={wardName}>
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                    {wardName}
-                                  </span>
-                                </SelectItem>
-                              ))}
+                              {visibleWards.map((wardName) => {
+                                const assignedTo = assignedWardsMap[wardName];
+                                return (
+                                  <SelectItem key={wardName} value={wardName}>
+                                    <span className="flex items-center gap-2 min-w-0">
+                                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                                      <span className="font-medium">{wardName}</span>
+                                      {assignedTo && (
+                                        <span className="ml-1 text-[11px] text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
+                                          {assignedTo}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -465,8 +485,9 @@ export default function AdminOfficers() {
                       )}
                     />
                   </div>
+                  </div>{/* end scroll area */}
 
-                  <div className="pt-6 flex justify-end gap-3 mt-8 border-t border-border/50 pt-8">
+                  <div className="shrink-0 px-8 pb-8 pt-4 border-t border-border/50 flex justify-end gap-3">
                     <Button
                       type="button"
                       variant="ghost"
