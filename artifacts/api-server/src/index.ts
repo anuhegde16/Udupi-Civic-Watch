@@ -116,8 +116,9 @@ async function ensurePanchayatAdmin() {
 
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, TARGET_EMAIL)).limit(1);
     if (existing.length > 0) {
-      if (!existing[0].panchayatName) {
+      if (existing[0].panchayatName !== TARGET_PANCHAYAT) {
         await db.update(usersTable).set({ panchayatName: TARGET_PANCHAYAT, role: "panchayat_admin" }).where(eq(usersTable.email, TARGET_EMAIL));
+        logger.info(`Normalised panchayat admin name to: ${TARGET_PANCHAYAT}`);
       }
       return;
     }
