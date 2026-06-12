@@ -444,9 +444,6 @@ export function AdminDistrictMap({
                   >
                     <MapPin className="w-3 h-3 shrink-0" />
                     {zone.name}
-                    {assignedOfficer && (
-                      <span className="opacity-70 font-medium">· {assignedOfficer.name}</span>
-                    )}
                   </button>
                 );
               })

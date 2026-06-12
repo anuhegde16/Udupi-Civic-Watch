@@ -102,11 +102,17 @@ async function migrateRoles() {
 async function ensurePanchayatAdmin() {
   try {
     const { db, usersTable } = await import("@workspace/db");
-    const { eq } = await import("drizzle-orm");
+    const { eq, sql } = await import("drizzle-orm");
     const { hashPassword } = await import("./lib/auth");
 
     const TARGET_EMAIL = "saligrama@udupicivicspot.com";
-    const TARGET_PANCHAYAT = "Saligrama Town Panchayat";
+    const TARGET_PANCHAYAT = "Saligrama";
+
+    // Normalise any row that was seeded with the old long-form name
+    await db.execute(sql`
+      UPDATE users SET panchayat_name = 'Saligrama'
+      WHERE panchayat_name = 'Saligrama Town Panchayat' AND role = 'panchayat_admin'
+    `);
 
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, TARGET_EMAIL)).limit(1);
     if (existing.length > 0) {
