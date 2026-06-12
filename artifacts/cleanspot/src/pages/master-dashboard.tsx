@@ -59,6 +59,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import geofencesData from "@/data/geofences.json";
+import { PanchayatMap, type PanchayatMapReport } from "@/components/panchayat-map";
 
 const wardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
@@ -110,6 +111,15 @@ function usePanchayatStats() {
   });
 }
 
+function usePanchayatReports() {
+  return useQuery<{ reports: PanchayatMapReport[]; total: number }>({
+    queryKey: ["panchayat-reports-map"],
+    queryFn: () => customFetch("/api/panchayat/reports"),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+}
+
 function useDeleteOfficer() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -128,6 +138,7 @@ export default function MasterDashboard() {
   const queryClient = useQueryClient();
   const { data: officersData, isLoading: isLoadingOfficers } = usePanchayatOfficers();
   const { data: stats, isLoading: isLoadingStats } = usePanchayatStats();
+  const { data: reportsData } = usePanchayatReports();
   const createOfficer = useCreateOfficer();
   const deleteOfficer = useDeleteOfficer();
   const [createOpen, setCreateOpen] = useState(false);
@@ -325,6 +336,24 @@ export default function MasterDashboard() {
             <span className="text-sm font-medium">Loading stats…</span>
           </div>
         )}
+      </div>
+
+      {/* Panchayat map */}
+      <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-indigo-500" /> Ward Map
+          </h2>
+          <div className="flex items-center gap-3 text-[11px] font-bold text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> New</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> In Progress</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Cleaned</span>
+          </div>
+        </div>
+        <PanchayatMap
+          officers={officers}
+          reports={reportsData?.reports ?? []}
+        />
       </div>
 
       {/* Ward coverage */}
