@@ -200,12 +200,11 @@ export function AdminDistrictMap({
 
   useEffect(() => {
     if (!mapRef.current) return;
-    let scheduled = false;
+    let rafId: number | undefined;
 
     function drawLayers() {
-      if (scheduled) return;
-      scheduled = true;
-      requestAnimationFrame(async () => {
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(async () => {
         if (!mapRef.current) return;
         const L = (await import("leaflet")).default;
         const map = mapRef.current;
@@ -219,9 +218,8 @@ export function AdminDistrictMap({
         // Draw district boundary (teal) first, then ward polygons (amber), then officer markers
         const WARD_AMBER = "#f59e0b";
 
-        allGeoFeatures.forEach((zone, zoneIdx) => {
+        allGeoFeatures.forEach((zone) => {
           if (zone.featureType === "district") {
-            // Outer Saligrama boundary — thick solid teal, no fill, clearly frames the wards
             L.polygon(zone.latlngs, {
               color: "#0d9488",
               weight: 3.5,
@@ -233,36 +231,40 @@ export function AdminDistrictMap({
             return;
           }
 
-          // Ward polygon — amber interior lines, clearly inside the teal frame
           const assignedOfficer = officers.find((o) => o.areaName === zone.name);
           const wardColor = assignedOfficer
             ? ZONE_PALETTE[
                 officers.indexOf(assignedOfficer) % ZONE_PALETTE.length
               ]
             : WARD_AMBER;
-          const isSelected = assignedOfficer
-            ? selectedOfficerId === assignedOfficer.id
-            : false;
+
+          // A ward is highlighted if its chip is active OR its officer is selected
+          const isSelected =
+            zone.name === activeZone ||
+            (assignedOfficer ? selectedOfficerId === assignedOfficer.id : false);
+
+          // Unassigned wards are still visible/interactive when a panchayat is active
+          // (we can't know their panchayat, so we show them all rather than hiding them)
           const isInActivePanchayat =
             !activePanchayat ||
-            (assignedOfficer?.panchayatName === activePanchayat);
+            (assignedOfficer
+              ? assignedOfficer.panchayatName === activePanchayat
+              : true);
 
           const poly = L.polygon(zone.latlngs, {
-            color: isInActivePanchayat ? wardColor : "#d1d5db",
+            color: isInActivePanchayat ? (isSelected ? wardColor : wardColor) : "#d1d5db",
             weight: isSelected ? 2.5 : (isInActivePanchayat ? 1 : 0.5),
             dashArray: isSelected ? undefined : (isInActivePanchayat ? "4 3" : "3 8"),
             fillColor: isInActivePanchayat ? wardColor : "#e5e7eb",
-            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.18 : 0.06),
+            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.22 : 0.06),
             interactive: isInActivePanchayat,
           }).addTo(map);
 
-          // Ward number label in amber when unassigned, officer name when assigned
-          // Only render label when ward is in the active panchayat scope
           if (isInActivePanchayat) {
             const wardNum = zone.name.replace("Ward ", "");
             const labelHtml = assignedOfficer
               ? `<div style="background:${wardColor};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;opacity:${isSelected ? "1" : "0.85"};">${assignedOfficer.name}</div>`
-              : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:0.75;pointer-events:none;">${wardNum}</div>`;
+              : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:${isSelected ? "1" : "0.75"};pointer-events:none;">${wardNum}</div>`;
             const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
             L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
           }
@@ -272,13 +274,15 @@ export function AdminDistrictMap({
             { permanent: false, direction: "center", className: "zone-label" }
           );
 
-          if (assignedOfficer) {
+          if (isInActivePanchayat) {
             poly.on("click", () => {
-              onZoneSelect(selectedOfficerId === assignedOfficer.id ? null : assignedOfficer.id);
+              if (assignedOfficer) {
+                onZoneSelect(selectedOfficerId === assignedOfficer.id ? null : assignedOfficer.id);
+              }
             });
-            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.22 }));
+            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.28 }));
             poly.on("mouseout", () =>
-              poly.setStyle({ fillOpacity: isSelected ? 0.18 : 0.07 })
+              poly.setStyle({ fillOpacity: isSelected ? 0.22 : 0.06 })
             );
           }
         });
@@ -340,7 +344,10 @@ export function AdminDistrictMap({
     }
 
     drawLayers();
-  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady, activePanchayat]);
+    return () => {
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady, activePanchayat, activeZone]);
 
   const chipBase =
     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";
