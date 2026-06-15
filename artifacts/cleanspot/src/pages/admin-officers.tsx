@@ -120,6 +120,7 @@ export default function AdminOfficers() {
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<OfficerZoneDraft | null>(null);
+  const [pendingSubmitData, setPendingSubmitData] = useState<CreateOfficerValues | null>(null);
 
   // Local string state for coordinate inputs — updated on blur, not every keystroke
   const [latStr, setLatStr] = useState("");
@@ -171,7 +172,7 @@ export default function AdminOfficers() {
     });
   }
 
-  const onSubmit = (data: CreateOfficerValues) => {
+  const doCreateOfficer = (data: CreateOfficerValues) => {
     const cleanData = {
       ...data,
       areaName: data.areaName || undefined,
@@ -183,10 +184,12 @@ export default function AdminOfficers() {
         onSuccess: () => {
           toast({ title: "Officer created successfully" });
           setCreateModalOpen(false);
+          setPendingSubmitData(null);
           form.reset();
           queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
         },
         onError: (err) => {
+          setPendingSubmitData(null);
           toast({
             title: "Failed to create officer",
             description: err.message,
@@ -195,6 +198,14 @@ export default function AdminOfficers() {
         },
       }
     );
+  };
+
+  const onSubmit = (data: CreateOfficerValues) => {
+    if (data.areaName && assignedWardsMap[data.areaName]) {
+      setPendingSubmitData(data);
+      return;
+    }
+    doCreateOfficer(data);
   };
 
   const handleDelete = (id: number) => {
@@ -513,6 +524,43 @@ export default function AdminOfficers() {
           </Dialog>
         </div>
       </div>
+
+      <AlertDialog
+        open={!!pendingSubmitData}
+        onOpenChange={(open) => { if (!open) setPendingSubmitData(null); }}
+      >
+        <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-black text-2xl text-foreground font-display">
+              Ward already assigned
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-muted-foreground mt-3 leading-relaxed">
+              {pendingSubmitData?.areaName && assignedWardsMap[pendingSubmitData.areaName] ? (
+                <>
+                  <span className="font-semibold text-foreground">{pendingSubmitData.areaName}</span>
+                  {" is already assigned to "}
+                  <span className="font-semibold text-foreground">{assignedWardsMap[pendingSubmitData.areaName]}</span>
+                  {". Do you want to reassign it to the new officer?"}
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-8 gap-3 sm:gap-0">
+            <AlertDialogCancel
+              className="rounded-xl font-bold h-12 px-6 border-border/50"
+              onClick={() => setPendingSubmitData(null)}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl font-black h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
+              onClick={() => { if (pendingSubmitData) doCreateOfficer(pendingSubmitData); }}
+            >
+              Reassign Ward
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {!isLoading && officers.length > 0 && (
         <div className="bg-card rounded-3xl border border-border/50 shadow-sm overflow-hidden mb-8">
