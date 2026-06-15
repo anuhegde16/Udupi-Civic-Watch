@@ -19,7 +19,7 @@ const emailSchema = z.object({
 });
 
 const otpSchema = z.object({
-  otp: z.string().length(6, "Enter the 6-digit code"),
+  otp: z.string().min(4, "Enter the 6-digit code").max(6, "Enter the 6-digit code"),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string(),
 }).refine((d) => d.newPassword === d.confirmPassword, {
@@ -154,14 +154,9 @@ export function ForgotPassword({ accentClass, onBack }: ForgotPasswordProps) {
                       <Input
                         placeholder="123456"
                         maxLength={6}
-                        pattern="[0-9]*"
                         autoComplete="one-time-code"
                         className="pl-9 text-center tracking-widest font-mono text-lg"
                         {...field}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                          field.onChange(val);
-                        }}
                       />
                     </div>
                   </FormControl>
