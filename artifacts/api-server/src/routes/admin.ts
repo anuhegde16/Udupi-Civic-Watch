@@ -222,6 +222,58 @@ router.post("/admin/panchayat-admins", requireControlCenter, async (req, res): P
   });
 });
 
+router.patch("/admin/panchayat-admins/:id", requireControlCenter, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.id, id), eq(usersTable.role, "panchayat_admin")))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Panchayat Admin not found" });
+    return;
+  }
+
+  const { name, email, panchayatName, password } = req.body ?? {};
+
+  // Check email uniqueness if changing
+  if (email && email !== existing.email) {
+    const [clash] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (clash) {
+      res.status(409).json({ error: "Email already in use by another account" });
+      return;
+    }
+  }
+
+  const updates: Partial<typeof existing> = {};
+  if (name) updates.name = name;
+  if (email) updates.email = email;
+  if (panchayatName) updates.panchayatName = panchayatName;
+  if (password && password.length >= 6) updates.passwordHash = await hashPassword(password);
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, id))
+    .returning();
+
+  logger.info({ userId: id }, "Panchayat admin updated by control center");
+  res.json({
+    id: updated.id,
+    name: updated.name,
+    email: updated.email,
+    panchayatName: updated.panchayatName,
+    createdAt: updated.createdAt,
+  });
+});
+
 router.delete("/admin/panchayat-admins/:id", requireControlCenter, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);

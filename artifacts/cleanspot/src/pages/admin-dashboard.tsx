@@ -29,6 +29,7 @@ import {
   Plus,
   Trash2,
   Building2,
+  Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -145,6 +146,14 @@ const createPanchayatAdminSchema = z.object({
 });
 type CreatePanchayatAdminValues = z.infer<typeof createPanchayatAdminSchema>;
 
+const editPanchayatAdminSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  email: z.string().email("Valid email required"),
+  panchayatName: z.string().min(2, "Panchayat name is required"),
+  password: z.string().max(100).optional().or(z.literal("")),
+});
+type EditPanchayatAdminValues = z.infer<typeof editPanchayatAdminSchema>;
+
 type ReportItem = {
   id: number;
   latitude: number;
@@ -172,6 +181,8 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [paCreateOpen, setPaCreateOpen] = useState(false);
+  const [paEditOpen, setPaEditOpen] = useState(false);
+  const [editingPa, setEditingPa] = useState<PanchayatAdminItem | null>(null);
 
   const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary();
   const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers();
@@ -182,6 +193,11 @@ export default function AdminDashboard() {
   const createPaForm = useForm<CreatePanchayatAdminValues>({
     resolver: zodResolver(createPanchayatAdminSchema),
     defaultValues: { name: "", email: "", password: "", panchayatName: "" },
+  });
+
+  const editPaForm = useForm<EditPanchayatAdminValues>({
+    resolver: zodResolver(editPanchayatAdminSchema),
+    defaultValues: { name: "", email: "", panchayatName: "", password: "" },
   });
 
   const createPaMutation = useMutation({
@@ -196,6 +212,22 @@ export default function AdminDashboard() {
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
+  const editPaMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: EditPanchayatAdminValues }) =>
+      customFetch(`/api/admin/panchayat-admins/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["panchayat-admins"] });
+      toast({ title: "Panchayat Admin updated" });
+      setPaEditOpen(false);
+      setEditingPa(null);
+    },
+    onError: (err: any) => toast({ title: "Failed to update", description: err.message, variant: "destructive" }),
+  });
+
   const deletePaMutation = useMutation({
     mutationFn: (id: number) =>
       customFetch(`/api/admin/panchayat-admins/${id}`, { method: "DELETE" }),
@@ -205,6 +237,12 @@ export default function AdminDashboard() {
     },
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
+
+  function openEditPa(pa: PanchayatAdminItem) {
+    setEditingPa(pa);
+    editPaForm.reset({ name: pa.name, email: pa.email, panchayatName: pa.panchayatName ?? "", password: "" });
+    setPaEditOpen(true);
+  }
 
   const isLoading = isLoadingSummary || isLoadingOfficers || isLoadingAnalytics || isLoadingReports;
 
@@ -1036,31 +1074,114 @@ export default function AdminDashboard() {
                   )}
                   <p className="text-[10px] text-muted-foreground ml-9 mt-0.5">{pa.officerCount} officer{pa.officerCount !== 1 ? "s" : ""}</p>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 -mt-0.5 -mr-0.5">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="rounded-[2rem] p-8">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="font-black text-2xl">Remove Admin?</AlertDialogTitle>
-                      <AlertDialogDescription className="text-base text-muted-foreground mt-3">
-                        This will permanently delete <strong>{pa.name}</strong> ({pa.panchayatName}). Their field officers will remain.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="mt-6 gap-2">
-                      <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
-                      <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => deletePaMutation.mutate(pa.id)}>
-                        Yes, remove
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <div className="flex items-center gap-1 shrink-0 -mt-0.5 -mr-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50"
+                    onClick={() => openEditPa(pa)}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-[2rem] p-8">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-black text-2xl">Remove Admin?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                          This will permanently delete <strong>{pa.name}</strong> ({pa.panchayatName}). Their field officers will remain.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-6 gap-2">
+                        <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                        <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => deletePaMutation.mutate(pa.id)}>
+                          Yes, remove
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
             ))}
           </div>
         )}
+
+        {/* ── Edit Panchayat Admin dialog ── */}
+        <Dialog open={paEditOpen} onOpenChange={(o) => { setPaEditOpen(o); if (!o) setEditingPa(null); }}>
+          <DialogContent className="sm:max-w-md rounded-[2rem] p-8 border-border/50 shadow-2xl">
+            <DialogHeader className="mb-5">
+              <DialogTitle className="text-2xl font-black">Edit Panchayat Admin</DialogTitle>
+            </DialogHeader>
+            {editingPa && (
+              <Form {...editPaForm}>
+                <form
+                  onSubmit={editPaForm.handleSubmit((data) =>
+                    editPaMutation.mutate({ id: editingPa.id, data })
+                  )}
+                  className="space-y-4"
+                >
+                  <FormField control={editPaForm.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold">Full Name</FormLabel>
+                      <FormControl><Input placeholder="Admin Name" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={editPaForm.control} name="panchayatName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold">Panchayat Area</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger className="bg-muted/50 rounded-xl h-11 border-border/50">
+                            <SelectValue placeholder="Select a panchayat…" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {panchayatAreaNames.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              <span className="flex items-center gap-2">
+                                <Building2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                {name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField control={editPaForm.control} name="email" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">Email</FormLabel>
+                        <FormControl><Input type="email" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={editPaForm.control} name="password" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold">New Password</FormLabel>
+                        <FormControl><Input type="text" placeholder="leave blank to keep" {...field} className="rounded-xl h-11 bg-muted/50" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
+                    <Button type="button" variant="ghost" onClick={() => setPaEditOpen(false)} className="rounded-xl h-11">Cancel</Button>
+                    <Button type="submit" className="rounded-xl h-11 font-black px-6 bg-indigo-600 hover:bg-indigo-700" disabled={editPaMutation.isPending}>
+                      {editPaMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* ── Quick actions + coast status ── */}
