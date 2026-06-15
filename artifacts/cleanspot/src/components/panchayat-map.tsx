@@ -207,7 +207,7 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
           const icon = L.divIcon({
             html: `<div style="
               background:${isHighlighted ? "#0d9488" : color};
-              color:#fff;
+              color:#1e293b;
               padding:2px 7px;
               border-radius:20px;
               font-size:11px;
