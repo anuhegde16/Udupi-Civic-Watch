@@ -261,10 +261,8 @@ export function AdminDistrictMap({
           }).addTo(map);
 
           if (isInActivePanchayat) {
-            const wardNum = zone.name.replace("Ward ", "");
-            const labelHtml = assignedOfficer
-              ? `<div style="background:${wardColor};color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);cursor:pointer;opacity:${isSelected ? "1" : "0.85"};">${assignedOfficer.name}</div>`
-              : `<div style="color:${WARD_AMBER};font-size:10px;font-weight:800;opacity:${isSelected ? "1" : "0.75"};pointer-events:none;">${wardNum}</div>`;
+            const wardNum = zone.name.replace(/\D+/g, "");
+            const labelHtml = `<div style="background:${isInActivePanchayat && assignedOfficer ? wardColor : WARD_AMBER};color:#fff;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.22);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">Ward ${wardNum}</div>`;
             const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
             L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
           }
