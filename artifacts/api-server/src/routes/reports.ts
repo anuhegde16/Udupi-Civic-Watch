@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, reportsTable, officersTable } from "@workspace/db";
+import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
-import { sendAssignmentEmail } from "../lib/email";
+import { sendAssignmentEmail, sendStatusUpdateEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
   CreateReportBody,
@@ -335,6 +335,48 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     ...report,
     assignedOfficer: officerRow ? { id: officerRow.id, name: officerRow.name, email: officerRow.email, phone: officerRow.phone, areaName: officerRow.areaName, wardName: officerRow.areaName } : null,
   });
+
+  // Fire-and-forget status-change notifications
+  const newStatus = parsed.data.status;
+  if ((newStatus === "cleaning" || newStatus === "cleaned") && officerRow) {
+    const officerName = officerRow.name;
+    const panchayatName = officerRow.panchayatName;
+
+    (async () => {
+      try {
+        // Panchayat admins for this officer's panchayat
+        const panchayatAdmins = panchayatName
+          ? await db
+              .select({ email: usersTable.email, name: usersTable.name })
+              .from(usersTable)
+              .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, panchayatName)))
+          : [];
+
+        const recipients = [...panchayatAdmins];
+
+        // Control center also gets notified when a report is fully cleaned
+        if (newStatus === "cleaned") {
+          const ccUsers = await db
+            .select({ email: usersTable.email, name: usersTable.name })
+            .from(usersTable)
+            .where(eq(usersTable.role, "control_center"));
+          recipients.push(...ccUsers);
+        }
+
+        await Promise.all(
+          recipients
+            .filter((r) => !!r.email)
+            .map((r) =>
+              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus).catch(
+                (err) => logger.warn({ err, to: r.email }, "Status email failed")
+              )
+            )
+        );
+      } catch (err) {
+        logger.warn({ err }, "Error sending status-change notifications");
+      }
+    })();
+  }
 });
 
 export default router;

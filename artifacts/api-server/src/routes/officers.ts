@@ -3,6 +3,8 @@ import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
 import { eq, sql, and, isNull } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
 import { requireAuth, requireAdmin, requirePanchayatOrControlCenter, hashPassword } from "../lib/auth";
+import { sendWelcomeEmail } from "../lib/email";
+import { logger } from "../lib/logger";
 import geofencesData from "../data/geofences.json";
 
 function computeZoneGeo(zoneName: string): { centerLat: number; centerLng: number } | null {
@@ -131,6 +133,8 @@ router.post("/officers", requirePanchayatOrControlCenter, async (req, res): Prom
     officerId: String(officer.id),
     panchayatName: panchayatName ?? null,
   });
+
+  sendWelcomeEmail(officer).catch((err) => logger.warn({ err }, "Unhandled error in welcome email"));
 
   res.status(201).json({ ...officer, reportCount: 0, pendingCount: 0 });
 });

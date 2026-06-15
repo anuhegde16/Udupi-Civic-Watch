@@ -41,3 +41,9 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SMTP_HOST = "smtp.hostinger.com"
+SMTP_PORT = "465"
