@@ -154,9 +154,14 @@ export function ForgotPassword({ accentClass, onBack }: ForgotPasswordProps) {
                       <Input
                         placeholder="123456"
                         maxLength={6}
-                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        autoComplete="one-time-code"
                         className="pl-9 text-center tracking-widest font-mono text-lg"
                         {...field}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          field.onChange(val);
+                        }}
                       />
                     </div>
                   </FormControl>
