@@ -3,7 +3,13 @@ import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
-import { sendAssignmentEmail } from "../lib/email";
+import {
+  sendAssignmentEmail,
+  sendWelcomeEmail,
+  sendOtpEmail,
+  sendStatusUpdateEmail,
+  type EmailAnalytics,
+} from "../lib/email";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -297,6 +303,89 @@ router.delete("/admin/panchayat-admins/:id", requireControlCenter, async (req, r
 
   logger.info({ userId: id }, "Panchayat admin deleted by control center");
   res.json({ success: true, message: "Panchayat Admin removed" });
+});
+
+// ── Test-send endpoint: fires one of every email type to a given address ────────
+
+router.post("/admin/test-emails", requireControlCenter, async (req, res): Promise<void> => {
+  const { to } = req.body as { to?: string };
+  if (!to || typeof to !== "string" || !to.includes("@")) {
+    res.status(400).json({ error: "Provide a valid 'to' email address" });
+    return;
+  }
+
+  const base = process.env["REPLIT_DOMAINS"]
+    ? `https://${process.env["REPLIT_DOMAINS"]!.split(",")[0]!.trim()}`
+    : process.env["REPLIT_DEV_DOMAIN"]
+      ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+      : "https://cleanspot.replit.app";
+
+  // Realistic mock data — no DB reads
+  const mockOfficer = {
+    id: 999,
+    name: "Rajshekhar M",
+    email: to,
+    phone: "9448263410",
+    areaName: "Ward 1",
+    panchayatName: "Saligrama",
+    areaLat: 13.3409,
+    areaLng: 74.7421,
+    areaRadius: 1.5,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as const;
+
+  const mockReport = {
+    id: 42,
+    description: "Large pile of mixed waste near bus stand",
+    address: "Near Bus Stand, Saligrama, Udupi District",
+    latitude: 13.3409,
+    longitude: 74.7421,
+    status: "cleaning" as const,
+    photoUrl: null,
+    cleanupPhotoUrl: null,
+    assignedOfficerId: 999,
+    reporterIp: "127.0.0.1",
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+    updatedAt: new Date(),
+  };
+
+  const mockAnalytics: EmailAnalytics = {
+    openReports: 7,
+    resolvedThisWeek: 12,
+    avgResponseHours: 4,
+    panchayatName: "Saligrama",
+  };
+
+  const results: { email: string; status: "sent" | "error"; error?: string }[] = [];
+
+  async function tryEmail(label: string, fn: () => Promise<void>) {
+    try {
+      await fn();
+      results.push({ email: label, status: "sent" });
+      logger.info({ label, to }, "Test email sent");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      results.push({ email: label, status: "error", error: msg });
+      logger.warn({ label, to, err }, "Test email failed");
+    }
+  }
+
+  await tryEmail("1_welcome_officer", () => sendWelcomeEmail(mockOfficer as any));
+  await tryEmail("2_report_assigned", () => sendAssignmentEmail(mockOfficer as any, mockReport as any));
+  await tryEmail("3_status_cleaning", () =>
+    sendStatusUpdateEmail(to, "Anu Hegde", mockReport as any, mockOfficer.name, "cleaning", mockAnalytics)
+  );
+  await tryEmail("4_status_cleaned", () =>
+    sendStatusUpdateEmail(to, "Anu Hegde", { ...mockReport, status: "cleaned" } as any, mockOfficer.name, "cleaned", mockAnalytics)
+  );
+  await tryEmail("5_otp_reset", () => sendOtpEmail(to, "847291"));
+
+  const allSent = results.every((r) => r.status === "sent");
+  res.status(allSent ? 200 : 207).json({
+    message: `${results.filter((r) => r.status === "sent").length}/${results.length} test emails dispatched to ${to}`,
+    results,
+  });
 });
 
 export default router;

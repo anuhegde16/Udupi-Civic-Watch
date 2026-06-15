@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
-import { sendAssignmentEmail, sendStatusUpdateEmail } from "../lib/email";
+import { sendAssignmentEmail, sendStatusUpdateEmail, type EmailAnalytics } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
   CreateReportBody,
@@ -363,11 +363,69 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
           recipients.push(...ccUsers);
         }
 
+        // Compute analytics snapshot for this panchayat
+        let analytics: EmailAnalytics | undefined;
+        if (panchayatName) {
+          try {
+            const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+            // Officers in this panchayat
+            const panchayatOfficers = await db
+              .select({ id: officersTable.id })
+              .from(officersTable)
+              .where(eq(officersTable.panchayatName, panchayatName));
+
+            const officerIds = panchayatOfficers.map((o) => o.id);
+
+            if (officerIds.length > 0) {
+              const [openRow] = await db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(reportsTable)
+                .where(and(inArray(reportsTable.assignedOfficerId, officerIds), eq(reportsTable.status, "reported")));
+
+              const [resolvedRow] = await db
+                .select({ count: sql<number>`count(*)::int` })
+                .from(reportsTable)
+                .where(
+                  and(
+                    inArray(reportsTable.assignedOfficerId, officerIds),
+                    eq(reportsTable.status, "cleaned"),
+                    gte(reportsTable.updatedAt, oneWeekAgo)
+                  )
+                );
+
+              // Average hours from report creation to cleaned status (for reports resolved in last 30 days)
+              const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+              const [avgRow] = await db
+                .select({
+                  avg: sql<number>`round(avg(extract(epoch from (updated_at - created_at)) / 3600))::int`,
+                })
+                .from(reportsTable)
+                .where(
+                  and(
+                    inArray(reportsTable.assignedOfficerId, officerIds),
+                    eq(reportsTable.status, "cleaned"),
+                    gte(reportsTable.updatedAt, thirtyDaysAgo)
+                  )
+                );
+
+              analytics = {
+                openReports: openRow?.count ?? 0,
+                resolvedThisWeek: resolvedRow?.count ?? 0,
+                avgResponseHours: avgRow?.avg ?? 0,
+                panchayatName,
+              };
+            }
+          } catch (err) {
+            logger.warn({ err }, "Failed to compute analytics for status email — sending without it");
+          }
+        }
+
         await Promise.all(
           recipients
             .filter((r) => !!r.email)
             .map((r) =>
-              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus).catch(
+              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus, analytics).catch(
                 (err) => logger.warn({ err, to: r.email }, "Status email failed")
               )
             )

@@ -51,7 +51,9 @@ function formatDate(date: Date): string {
   });
 }
 
-function emailHeader(title: string): string {
+// ── Layout helpers ──────────────────────────────────────────────────────────────
+
+function emailShell(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,29 +61,59 @@ function emailHeader(title: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
+<body style="margin:0;padding:0;background:#eef2f7;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
   <tr><td align="center">
-  <table role="presentation" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-    <tr>
-      <td style="background-color:#0d9488;padding:24px 32px;">
-        <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:1px;color:#ccfbf1;text-transform:uppercase;">Udupi District Administration</p>
-        <p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#ffffff;">Udupi Civic Watch</p>
-      </td>
-    </tr>
-    <tr><td style="padding:32px;">`;
-}
+  <table role="presentation" width="100%" style="max-width:580px;">
 
-function emailFooter(): string {
-  return `</td></tr>
+    <!-- Government identity bar -->
     <tr>
-      <td style="background-color:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;">
-        <p style="margin:0;font-size:12px;color:#9ca3af;text-align:center;">
-          Udupi District Administration &bull; Swachh Bharat Mission<br>
-          This is an automated notification. Please do not reply to this email.
+      <td style="background:#1a3a6b;padding:10px 24px;border-radius:8px 8px 0 0;">
+        <p style="margin:0;font-size:10px;font-weight:600;letter-spacing:1.5px;color:#a8c4e8;text-transform:uppercase;text-align:center;">
+          Government of Karnataka &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Swachh Bharat Mission
         </p>
       </td>
     </tr>
+
+    <!-- Teal header -->
+    <tr>
+      <td style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:28px 32px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td>
+              <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:2px;color:#99f6e4;text-transform:uppercase;">Udupi Civic Watch</p>
+              <p style="margin:0;font-size:24px;font-weight:800;color:#ffffff;line-height:1.2;">${escapeHtml(title)}</p>
+            </td>
+            <td align="right" style="vertical-align:top;">
+              <div style="width:44px;height:44px;background:rgba(255,255,255,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">🌿</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Body -->
+    <tr>
+      <td style="background:#ffffff;padding:32px;">
+        ${body}
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f1f5f9;border-top:3px solid #0d9488;padding:20px 32px;border-radius:0 0 8px 8px;">
+        <p style="margin:0 0 6px;font-size:11px;color:#64748b;text-align:center;line-height:1.6;">
+          <strong style="color:#0d9488;">Udupi Civic Watch</strong> &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Swachh Bharat Mission<br>
+          This is an automated notification. Please do not reply to this email.
+        </p>
+        <p style="margin:8px 0 0;font-size:10px;color:#94a3b8;text-align:center;">
+          © 2025 Udupi District Administration, Karnataka, India
+        </p>
+      </td>
+    </tr>
+
   </table>
   </td></tr>
 </table>
@@ -89,46 +121,111 @@ function emailFooter(): string {
 </html>`;
 }
 
+function quoteBlock(quote: string, author: string): string {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr>
+        <td style="border-left:4px solid #0d9488;background:#f0fdfa;padding:16px 20px;border-radius:0 8px 8px 0;">
+          <p style="margin:0 0 6px;font-size:15px;font-style:italic;color:#134e4a;line-height:1.7;">"${escapeHtml(quote)}"</p>
+          <p style="margin:0;font-size:12px;font-weight:700;color:#0d9488;letter-spacing:0.5px;">— ${escapeHtml(author)}</p>
+        </td>
+      </tr>
+    </table>`;
+}
+
 function reportDetailCard(report: Report): string {
   const coordsText = `${report.latitude.toFixed(6)}, ${report.longitude.toFixed(6)}`;
+  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:24px;">
-      <tr><td style="padding:20px 24px;">
+      style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:24px;overflow:hidden;">
+      <tr>
+        <td style="background:#0d9488;padding:10px 20px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#ccfbf1;letter-spacing:1px;text-transform:uppercase;">Report Details</p>
+        </td>
+      </tr>
+      <tr><td style="padding:20px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;width:110px;">Report ID</td>
-            <td style="padding:6px 0;font-size:14px;color:#111827;font-weight:600;">#${report.id}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;width:120px;">Report ID</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;font-weight:700;">#${report.id}</td>
           </tr>
-          <tr><td colspan="2" style="padding:4px 0 12px;border-bottom:1px solid #e5e7eb;"></td></tr>
           ${report.description ? `
           <tr>
-            <td style="padding:12px 0 6px;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Description</td>
-            <td style="padding:12px 0 6px;font-size:14px;color:#374151;line-height:1.5;">${escapeHtml(report.description)}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Description</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;line-height:1.5;">${escapeHtml(report.description)}</td>
           </tr>` : ""}
           ${report.address ? `
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Address</td>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">${escapeHtml(report.address)}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Location</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">${escapeHtml(report.address)}</td>
           </tr>` : ""}
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Coordinates</td>
-            <td style="padding:6px 0;font-size:14px;color:#374151;font-family:monospace;">${coordsText}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">GPS</td>
+            <td style="padding:5px 0;font-size:13px;color:#334155;font-family:monospace;">
+              <a href="${mapsUrl}" style="color:#0d9488;text-decoration:none;">${coordsText} ↗</a>
+            </td>
           </tr>
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Reported</td>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">${formatDate(report.createdAt)}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Reported At</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">${formatDate(report.createdAt)}</td>
           </tr>
         </table>
       </td></tr>
     </table>`;
 }
 
+function analyticsBlock(stats: { openReports: number; resolvedThisWeek: number; avgResponseHours: number; panchayatName?: string }): string {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td style="padding:0 0 10px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">
+            ${stats.panchayatName ? escapeHtml(stats.panchayatName) + " · " : ""}Area Snapshot
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td width="33%" style="text-align:center;background:#fef2f2;border-radius:10px;padding:16px 8px;border:1px solid #fecaca;">
+                <p style="margin:0;font-size:28px;font-weight:800;color:#dc2626;">${stats.openReports}</p>
+                <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#991b1b;text-transform:uppercase;letter-spacing:0.5px;">Open Reports</p>
+              </td>
+              <td width="2%" style="min-width:8px;"></td>
+              <td width="33%" style="text-align:center;background:#f0fdf4;border-radius:10px;padding:16px 8px;border:1px solid #bbf7d0;">
+                <p style="margin:0;font-size:28px;font-weight:800;color:#16a34a;">${stats.resolvedThisWeek}</p>
+                <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Resolved This Week</p>
+              </td>
+              <td width="2%" style="min-width:8px;"></td>
+              <td width="33%" style="text-align:center;background:#eff6ff;border-radius:10px;padding:16px 8px;border:1px solid #bfdbfe;">
+                <p style="margin:0;font-size:28px;font-weight:800;color:#2563eb;">${stats.avgResponseHours}</p>
+                <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.5px;">Avg Response Hrs</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function ctaButton(label: string, url: string, style: "primary" | "outline" = "primary"): string {
+  const bg = style === "primary" ? "#0d9488" : "#ffffff";
+  const color = style === "primary" ? "#ffffff" : "#0d9488";
+  const border = style === "primary" ? "none" : "2px solid #0d9488";
+  return `<a href="${url}" style="display:inline-block;background:${bg};color:${color};text-decoration:none;font-size:14px;font-weight:700;padding:12px 24px;border-radius:8px;border:${border};letter-spacing:0.3px;">${escapeHtml(label)}</a>`;
+}
+
+function divider(): string {
+  return `<hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">`;
+}
+
 // ── Core send ──────────────────────────────────────────────────────────────────
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   if (!transporter) {
-    logger.warn("SMTP not configured (SMTP_HOST/SMTP_USER/SMTP_PASS missing) — skipping email");
+    logger.warn("SMTP not configured — skipping email");
     return;
   }
   try {
@@ -139,132 +236,170 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
   }
 }
 
-// ── Assignment email (field officer) ──────────────────────────────────────────
-
-function buildAssignmentEmail(officer: Officer, report: Report): { subject: string; html: string } {
-  const base = appBaseUrl();
-  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const dashboardUrl = `${base}/officer/dashboard`;
-  const subject = `[Civic Watch] New waste report assigned — #${report.id}`;
-
-  const html = emailHeader(subject) + `
-    <p style="margin:0 0 8px;font-size:16px;color:#111827;">Dear ${escapeHtml(officer.name)},</p>
-    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-      A new waste report has been assigned to you. Please review the details and take action.
-    </p>
-    ${reportDetailCard(report)}
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>
-        <td style="padding-right:12px;">
-          <a href="${mapsUrl}" style="display:inline-block;background-color:#0d9488;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;">Open in Maps</a>
-        </td>
-        <td>
-          <a href="${dashboardUrl}" style="display:inline-block;background-color:#ffffff;color:#0d9488;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;border:1px solid #0d9488;">View Dashboard</a>
-        </td>
-      </tr>
-    </table>
-    <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
-      If you have questions, contact your panchayat admin. Do not reply to this automated message.
-    </p>` + emailFooter();
-
-  return { subject, html };
-}
+// ── 1. Assignment email — field officer ────────────────────────────────────────
 
 export async function sendAssignmentEmail(officer: Officer, report: Report): Promise<void> {
   if (!officer.email) {
     logger.warn({ officerId: officer.id }, "Officer has no email — skipping");
     return;
   }
-  const { subject, html } = buildAssignmentEmail(officer, report);
+
+  const base = appBaseUrl();
+  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
+  const dashUrl = `${base}/officer/dashboard`;
+  const subject = `[Civic Watch] New waste report in your ward — #${report.id}`;
+
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Dear ${escapeHtml(officer.name)},</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      A new waste report has been assigned to your ward. Your prompt action helps keep our community clean and healthy.
+    </p>
+
+    ${quoteBlock(
+      "A clean environment is not a gift to our children — it is a duty we owe them.",
+      "Swachh Bharat Mission"
+    )}
+
+    ${reportDetailCard(report)}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td style="padding-right:12px;">${ctaButton("📍 Open in Maps", mapsUrl)}</td>
+        <td>${ctaButton("View Dashboard", dashUrl, "outline")}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      Please mark this report as <em>Cleaning</em> once you begin work and <em>Cleaned</em> when resolved.
+      Your panchayat admin is notified at each step.
+    </p>`;
+
   logger.info({ officerId: officer.id, reportId: report.id }, "Sending assignment email");
-  await sendEmail(officer.email, subject, html);
+  await sendEmail(officer.email, subject, emailShell("New Report Assigned", body));
 }
 
-// ── Welcome email (new field officer) ─────────────────────────────────────────
+// ── 2. Welcome email — new field officer ──────────────────────────────────────
 
 export async function sendWelcomeEmail(officer: Officer): Promise<void> {
   if (!officer.email) return;
 
   const base = appBaseUrl();
   const loginUrl = `${base}/officer/login`;
-  const subject = `Welcome to Udupi Civic Watch — your account is ready`;
+  const subject = `Welcome to Udupi Civic Watch — your officer account is ready`;
 
-  const html = emailHeader(subject) + `
-    <p style="margin:0 0 8px;font-size:16px;color:#111827;">Dear ${escapeHtml(officer.name)},</p>
-    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-      Your field officer account on the Udupi Civic Watch system has been created.
-      You will receive waste reports for your assigned area and can update their status from your dashboard.
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Welcome, ${escapeHtml(officer.name)}! 🌿</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      Your field officer account on <strong>Udupi Civic Watch</strong> has been created.
+      You are now part of Udupi District's frontline team working to build a cleaner, healthier community.
     </p>
+
+    ${quoteBlock(
+      "Real change, enduring change, happens one step at a time — and every report you resolve is one step forward.",
+      "Udupi District Administration"
+    )}
+
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-      style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:24px;">
-      <tr><td style="padding:20px 24px;">
+      style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:28px;overflow:hidden;">
+      <tr>
+        <td style="background:#0d9488;padding:10px 20px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#ccfbf1;letter-spacing:1px;text-transform:uppercase;">Your Account Details</p>
+        </td>
+      </tr>
+      <tr><td style="padding:20px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${officer.areaName ? `
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;width:110px;">Assigned Ward</td>
-            <td style="padding:6px 0;font-size:14px;color:#111827;">${escapeHtml(officer.areaName)}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;width:130px;">Assigned Ward</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;font-weight:600;">${escapeHtml(officer.areaName)}</td>
+          </tr>` : ""}
+          ${officer.panchayatName ? `
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Panchayat</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;">${escapeHtml(officer.panchayatName)}</td>
           </tr>` : ""}
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Login Email</td>
-            <td style="padding:6px 0;font-size:14px;color:#111827;font-family:monospace;">${escapeHtml(officer.email)}</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Login Email</td>
+            <td style="padding:5px 0;font-size:14px;color:#0d9488;font-family:monospace;">${escapeHtml(officer.email)}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;">Password</td>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">Set by your admin (same as your email unless changed)</td>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Password</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">Same as your email (change after first login)</td>
           </tr>
         </table>
       </td></tr>
     </table>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
       <tr>
-        <td>
-          <a href="${loginUrl}" style="display:inline-block;background-color:#0d9488;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 24px;border-radius:6px;">Log In to Dashboard</a>
-        </td>
+        <td>${ctaButton("🔐 Log In to Dashboard", loginUrl)}</td>
       </tr>
     </table>
-    <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
-      If you did not expect this email, please contact your panchayat administrator.
-    </p>` + emailFooter();
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      If you did not expect this email, please contact your panchayat administrator immediately.
+    </p>`;
 
   logger.info({ officerId: officer.id }, "Sending welcome email");
-  await sendEmail(officer.email, subject, html);
+  await sendEmail(officer.email, subject, emailShell("Welcome to Civic Watch", body));
 }
 
-// ── OTP email (password reset) ────────────────────────────────────────────────
+// ── 3. OTP / password reset ────────────────────────────────────────────────────
 
 export async function sendOtpEmail(email: string, otp: string): Promise<void> {
   const subject = `[Civic Watch] Your password reset code: ${otp}`;
 
-  const html = emailHeader(subject) + `
-    <p style="margin:0 0 16px;font-size:16px;color:#111827;">Password reset requested</p>
-    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-      Use the code below to reset your Udupi Civic Watch password.
-      This code expires in <strong>10 minutes</strong>.
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Password Reset Request</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      We received a request to reset your Udupi Civic Watch password.
+      Use the one-time code below — it expires in <strong>10 minutes</strong>.
     </p>
-    <div style="text-align:center;margin:0 0 28px;">
-      <span style="display:inline-block;font-size:36px;font-weight:800;letter-spacing:12px;color:#0d9488;background:#f0fdfa;border:2px dashed #0d9488;padding:16px 32px;border-radius:12px;">
-        ${otp}
-      </span>
+
+    <div style="text-align:center;margin:0 0 32px;">
+      <div style="display:inline-block;background:#f0fdfa;border:2px dashed #0d9488;border-radius:14px;padding:20px 40px;">
+        <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#0d9488;letter-spacing:2px;text-transform:uppercase;">One-Time Code</p>
+        <p style="margin:0;font-size:42px;font-weight:900;letter-spacing:16px;color:#0d9488;font-family:monospace;">${otp}</p>
+      </div>
     </div>
-    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
-      If you did not request a password reset, you can safely ignore this email.
-      Your password will not change.
-    </p>` + emailFooter();
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      If you did not request a password reset, you can safely ignore this email — your password will not change.
+    </p>`;
 
   logger.info({ to: email }, "Sending OTP email");
-  await sendEmail(email, subject, html);
+  await sendEmail(email, subject, emailShell("Password Reset Code", body));
 }
 
-// ── Status update email (panchayat admin / control center) ────────────────────
+// ── 4. Status update — panchayat admin & control center ───────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  cleaning: "Cleaning in progress",
-  cleaned: "Cleaned ✓",
+export type EmailAnalytics = {
+  openReports: number;
+  resolvedThisWeek: number;
+  avgResponseHours: number;
+  panchayatName?: string;
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  cleaning: "#d97706",
-  cleaned: "#16a34a",
+const STATUS_META: Record<string, { label: string; color: string; bg: string; quote: string; quoteAuthor: string; verb: string }> = {
+  cleaning: {
+    label: "Cleaning In Progress",
+    color: "#92400e",
+    bg: "#fffbeb",
+    verb: "started cleaning",
+    quote: "Action is the foundational key to all success. Every mop, every bag, every effort counts.",
+    quoteAuthor: "District Sanitation Programme",
+  },
+  cleaned: {
+    label: "Cleaned & Resolved ✓",
+    color: "#14532d",
+    bg: "#f0fdf4",
+    verb: "marked as cleaned",
+    quote: "We do not inherit the earth from our ancestors — we borrow it from our children. Today, we gave it back a little cleaner.",
+    quoteAuthor: "Swachh Bharat Mission",
+  },
 };
 
 export async function sendStatusUpdateEmail(
@@ -272,37 +407,47 @@ export async function sendStatusUpdateEmail(
   recipientName: string,
   report: Report,
   officerName: string,
-  newStatus: "cleaning" | "cleaned"
+  newStatus: "cleaning" | "cleaned",
+  analytics?: EmailAnalytics
 ): Promise<void> {
   const base = appBaseUrl();
   const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const dashboardUrl = `${base}/admin/reports`;
-  const label = STATUS_LABELS[newStatus] ?? newStatus;
-  const color = STATUS_COLORS[newStatus] ?? "#0d9488";
-  const subject = `[Civic Watch] Report #${report.id} — ${label}`;
+  const dashUrl = `${base}/admin/reports`;
+  const meta = STATUS_META[newStatus] ?? STATUS_META.cleaned;
+  const subject = `[Civic Watch] Report #${report.id} — ${meta.label}`;
 
-  const html = emailHeader(subject) + `
-    <p style="margin:0 0 8px;font-size:16px;color:#111827;">Dear ${escapeHtml(recipientName)},</p>
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
-      The status of waste report <strong>#${report.id}</strong> has been updated by field officer
-      <strong>${escapeHtml(officerName)}</strong>.
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Dear ${escapeHtml(recipientName)},</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.7;">
+      Field officer <strong>${escapeHtml(officerName)}</strong> has <strong>${meta.verb}</strong> waste report
+      <strong>#${report.id}</strong>.
     </p>
-    <p style="margin:0 0 24px;">
-      <span style="display:inline-block;background-color:${color};color:#fff;font-size:13px;font-weight:700;padding:6px 16px;border-radius:999px;letter-spacing:0.5px;">
-        ${escapeHtml(label)}
+
+    <!-- Status badge -->
+    <div style="margin:0 0 24px;">
+      <span style="display:inline-block;background:${meta.bg};color:${meta.color};border:1.5px solid ${meta.color}33;
+        font-size:13px;font-weight:800;padding:8px 20px;border-radius:999px;letter-spacing:0.5px;">
+        ${escapeHtml(meta.label)}
       </span>
-    </p>
-    ${reportDetailCard(report)}
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>
-        <td style="padding-right:12px;">
-          <a href="${mapsUrl}" style="display:inline-block;background-color:#0d9488;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;">Open in Maps</a>
-        </td>
-        <td>
-          <a href="${dashboardUrl}" style="display:inline-block;background-color:#ffffff;color:#0d9488;text-decoration:none;font-size:14px;font-weight:600;padding:10px 20px;border-radius:6px;border:1px solid #0d9488;">View All Reports</a>
-        </td>
-      </tr>
-    </table>` + emailFooter();
+    </div>
 
-  await sendEmail(to, subject, html);
+    ${quoteBlock(meta.quote, meta.quoteAuthor)}
+
+    ${reportDetailCard(report)}
+
+    ${analytics ? analyticsBlock(analytics) : ""}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td style="padding-right:12px;">${ctaButton("📍 View on Map", mapsUrl)}</td>
+        <td>${ctaButton("All Reports", dashUrl, "outline")}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      You are receiving this because you are listed as ${newStatus === "cleaned" ? "a panchayat admin or control center officer" : "a panchayat admin"} for this area.
+    </p>`;
+
+  await sendEmail(to, subject, emailShell(`Report #${report.id} Update`, body));
 }
