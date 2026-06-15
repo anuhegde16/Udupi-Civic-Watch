@@ -18,13 +18,34 @@ CleanSpot is a mobile-first civic waste reporting platform. Citizens can report 
 - **Build**: esbuild (CJS bundle)
 - **Auth**: Cookie-based sessions with bcryptjs password hashing
 
-## Default Credentials (dev seed data)
+## Default Credentials
 
 - **Admin**: admin@udupicivicwatch.com / admin@udupicivicwatch.com
-- **Officer (Ramesh Shetty)**: byndoor@udupicivicspot.com / byndoor@udupicivicspot.com
-- **Officer (Sujata Rao)**: Udupi@udupicivicspot.com / Udupi@udupicivicspot.com
-- **Officer (Vinay Hegde)**: kundapur@udupicivicspot.com / kundapur@udupicivicspot.com
-- **Password = email** (set this way for easy demo access)
+- **Panchayat Admin (Saligrama)**: saligrama@udupicivicspot.com / saligrama@udupicivicspot.com
+- **Password = email** for all field officers (see table below)
+
+### Saligrama Field Officers
+
+| Ward | Name | Email (= password) | Phone |
+|------|------|--------------------|-------|
+| Ward 1 | Rajshekhar M | rajshekharmattam1968@gmai.com | 9448263410 |
+| Ward 2 | Pradeep | pradeep.preetham@gamil.com | 7760297271 |
+| Ward 3 | Shivaraj Ramesh Naik | shivarajrameshnaik@gmail.com | 9481051039 |
+| Ward 4 | Mamatha | mmamatha23839@gmail.com | 9035627273 |
+| Ward 5 | Udaya Naik | naikudaya68@gmail.com | 9900738870 |
+| Ward 6 | Sharada Bai Prabhu Hiremani | sharadahodlur@gmail.com | 9008979298 |
+| Ward 7 | Sumitha H.V | sumitha.v1980@gmail.com | 8197353162 |
+| Ward 8 | Praveen | praveen.kateel86@gmail.com | 8147447398 |
+| Ward 9 | Prathima | prathimanayari@gmail.com | 9481384791 |
+| Ward 10 | Dinesh | dineshgoldenbridge@gmail.com | 9743493420 |
+| Ward 11 | Lohith | lohithpoojary63@gmail.com | 9620422944 |
+| Ward 12 | Vasanthi | vasanthisudha658@gmail.com | 9964400197 |
+| Ward 13 | Shwetha | swethapoojary461@gmail.com | 9513059755 |
+| Ward 14 | Deepa | maheshdeepa266@gmail.com | 9845687067 |
+| Ward 15 | Pragathi | kunderpragathi@gmail.com | 7892439074 |
+| Ward 16 | Sushma | sushmasushma2069@gmail.com | 9902033726 |
+
+Note: Ward 1 email has a typo (`gmai.com`) and Ward 2 has a typo (`gamil.com`) — entered exactly as provided. Correct via the officer management screen if needed.
 
 ## Interactive Maps
 - **Report page**: Leaflet.js interactive map — click to drop pin, drag to adjust, "Use My Location" / "Place on Map" toggle
