@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, MapPin, Camera, ArrowRight, Activity, Map, ArrowDown, Droplets, Fish, AlertCircle } from "lucide-react";
 import { LiveWasteMap } from "@/components/live-waste-map";
+import { InstallPwaButton } from "@/components/install-pwa-button";
 
 export default function Home() {
   return (
@@ -32,13 +33,14 @@ export default function Home() {
             Snap a photo of waste. Drop a pin. We'll send a team to clean it up.
           </p>
           
-          <div className="pt-4 flex flex-col sm:flex-row gap-4">
+          <div className="pt-4 flex flex-col sm:flex-row gap-4 flex-wrap">
             <Link href="/report" className="block">
               <Button size="lg" className="w-full sm:w-auto h-16 px-8 text-lg font-bold rounded-2xl bg-secondary hover:bg-secondary/90 text-secondary-foreground shadow-xl shadow-secondary/20 transition-all hover:-translate-y-1">
                 <Camera className="w-5 h-5 mr-3" />
                 Report Waste Now
               </Button>
             </Link>
+            <InstallPwaButton />
           </div>
         </div>
       </section>
