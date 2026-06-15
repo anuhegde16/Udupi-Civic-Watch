@@ -6,9 +6,9 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 interface UseInstallPwaReturn {
-  canInstall: boolean;
-  isIos: boolean;
   isInstalled: boolean;
+  isIos: boolean;
+  hasNativePrompt: boolean;
   promptInstall: () => Promise<void>;
 }
 
@@ -35,11 +35,14 @@ export function useInstallPwa(): UseInstallPwaReturn {
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
+    const installedHandler = () => setIsInstalled(true);
+
     window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => setIsInstalled(true));
+    window.addEventListener("appinstalled", installedHandler);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
     };
   }, []);
 
@@ -53,7 +56,10 @@ export function useInstallPwa(): UseInstallPwaReturn {
     }
   };
 
-  const canInstall = !isInstalled && (!!deferredPrompt || isIos);
-
-  return { canInstall, isIos, isInstalled, promptInstall };
+  return {
+    isInstalled,
+    isIos,
+    hasNativePrompt: !!deferredPrompt,
+    promptInstall,
+  };
 }
