@@ -69,7 +69,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto space-y-12">
           <div className="text-center space-y-4">
             <h2 className="text-3xl md:text-4xl font-black text-foreground">The tide is turning, but not fast enough.</h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Every piece of plastic we leave on the shore ends up in the water. We need your eyes on the ground.</p>
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Every piece of plastic we leave on the land ends up in the water. We need your eyes on the ground.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
