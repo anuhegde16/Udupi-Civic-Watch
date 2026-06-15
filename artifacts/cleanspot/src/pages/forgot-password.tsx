@@ -23,7 +23,7 @@ interface ForgotPasswordProps {
   onBack: () => void;
 }
 
-const RESEND_COOLDOWN = 180; // 3 minutes in seconds
+const RESEND_COOLDOWN = 60; // 1 minute in seconds
 
 export function ForgotPassword({ accentClass, onBack }: ForgotPasswordProps) {
   const [step, setStep] = useState<"email" | "otp" | "done">("email");
