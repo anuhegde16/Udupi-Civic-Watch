@@ -230,6 +230,31 @@ export async function sendWelcomeEmail(officer: Officer): Promise<void> {
   await sendEmail(officer.email, subject, html);
 }
 
+// ── OTP email (password reset) ────────────────────────────────────────────────
+
+export async function sendOtpEmail(email: string, otp: string): Promise<void> {
+  const subject = `[Civic Watch] Your password reset code: ${otp}`;
+
+  const html = emailHeader(subject) + `
+    <p style="margin:0 0 16px;font-size:16px;color:#111827;">Password reset requested</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+      Use the code below to reset your Udupi Civic Watch password.
+      This code expires in <strong>10 minutes</strong>.
+    </p>
+    <div style="text-align:center;margin:0 0 28px;">
+      <span style="display:inline-block;font-size:36px;font-weight:800;letter-spacing:12px;color:#0d9488;background:#f0fdfa;border:2px dashed #0d9488;padding:16px 32px;border-radius:12px;">
+        ${otp}
+      </span>
+    </div>
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
+      If you did not request a password reset, you can safely ignore this email.
+      Your password will not change.
+    </p>` + emailFooter();
+
+  logger.info({ to: email }, "Sending OTP email");
+  await sendEmail(email, subject, html);
+}
+
 // ── Status update email (panchayat admin / control center) ────────────────────
 
 const STATUS_LABELS: Record<string, string> = {

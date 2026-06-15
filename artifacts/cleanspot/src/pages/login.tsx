@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/form";
 import { useLogin } from "@workspace/api-client-react";
 import { Shield, UserCog, Lock, Mail } from "lucide-react";
+import { ForgotPassword } from "./forgot-password";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -29,6 +31,7 @@ export default function LoginPage({ portalType }: LoginProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const login = useLogin();
+  const [showForgot, setShowForgot] = useState(false);
 
   const isAdmin = portalType === "admin";
   const isMaster = portalType === "master";
@@ -96,70 +99,86 @@ export default function LoginPage({ portalType }: LoginProps) {
             Udupi Civic Watch
           </h1>
           <p className="text-xs opacity-70 mt-0.5">
-            {portalDesc}
+            {showForgot ? "Password Reset" : portalDesc}
           </p>
         </div>
 
-        {/* Form */}
+        {/* Form area */}
         <div className="px-8 py-7">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Email
-                    </FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          placeholder={placeholder}
-                          className="pl-9"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {showForgot ? (
+            <ForgotPassword
+              accentClass={btnClass}
+              onBack={() => setShowForgot(false)}
+            />
+          ) : (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Email
+                      </FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            placeholder={placeholder}
+                            className="pl-9"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Password
-                    </FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                        <Input
-                          type="password"
-                          placeholder="••••••••"
-                          className="pl-9"
-                          {...field}
-                        />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Password
+                        </FormLabel>
+                        <button
+                          type="button"
+                          onClick={() => setShowForgot(true)}
+                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                        >
+                          Forgot password?
+                        </button>
                       </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Input
+                            type="password"
+                            placeholder="••••••••"
+                            className="pl-9"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Button
-                type="submit"
-                className={`w-full mt-2 ${btnClass}`}
-                disabled={login.isPending}
-              >
-                {login.isPending ? "Signing in…" : "Sign In"}
-              </Button>
-            </form>
-          </Form>
+                <Button
+                  type="submit"
+                  className={`w-full mt-2 ${btnClass}`}
+                  disabled={login.isPending}
+                >
+                  {login.isPending ? "Signing in…" : "Sign In"}
+                </Button>
+              </form>
+            </Form>
+          )}
         </div>
 
         <div className="px-8 pb-6 text-center text-xs text-muted-foreground">
