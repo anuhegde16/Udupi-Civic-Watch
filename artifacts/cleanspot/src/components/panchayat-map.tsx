@@ -81,9 +81,10 @@ export type PanchayatMapReport = {
 interface PanchayatMapProps {
   officers: PanchayatMapOfficer[];
   reports: PanchayatMapReport[];
+  highlightedWard?: string | null;
 }
 
-export function PanchayatMap({ officers, reports }: PanchayatMapProps) {
+export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -185,31 +186,36 @@ export function PanchayatMap({ officers, reports }: PanchayatMapProps) {
 
       wardFeatures.forEach((ward) => {
         const officer = officers.find((o) => o.areaName === ward.name);
+        const isHighlighted = highlightedWard === ward.name;
         const color = officer
           ? OFFICER_PALETTE[officers.indexOf(officer) % OFFICER_PALETTE.length]
           : "#d1d5db";
 
         L.polygon(ward.latlngs, {
-          color: officer ? color : "#d1d5db",
-          weight: officer ? 1.5 : 0.5,
+          color: isHighlighted ? "#0d9488" : officer ? color : "#d1d5db",
+          weight: isHighlighted ? 3 : officer ? 1.5 : 0.5,
           dashArray: officer ? undefined : "4 6",
-          fillColor: officer ? color : "#f3f4f6",
-          fillOpacity: officer ? 0.12 : 0.03,
+          fillColor: isHighlighted ? "#0d9488" : officer ? color : "#f3f4f6",
+          fillOpacity: isHighlighted ? 0.35 : officer ? 0.12 : 0.03,
           interactive: false,
         }).addTo(map);
 
         if (officer) {
+          // Show compact ward number instead of officer name to avoid clutter
+          const wardNum = ward.name.replace(/\D+/g, "");
+          const labelText = wardNum ? wardNum : ward.name.slice(0, 4);
           const icon = L.divIcon({
             html: `<div style="
-              background:${color};
+              background:${isHighlighted ? "#0d9488" : color};
               color:#fff;
-              padding:2px 8px;
+              padding:2px 7px;
               border-radius:20px;
               font-size:11px;
-              font-weight:700;
+              font-weight:800;
               white-space:nowrap;
               box-shadow:0 1px 4px rgba(0,0,0,0.25);
-            ">${officer.name}</div>`,
+              border:${isHighlighted ? "1.5px solid #fff" : "none"};
+            ">${labelText}</div>`,
             className: "",
             iconAnchor: [0, 8],
           });
@@ -258,7 +264,7 @@ export function PanchayatMap({ officers, reports }: PanchayatMapProps) {
       cancelled = true;
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [officers, reports, mapReady]);
+  }, [officers, reports, mapReady, highlightedWard]);
 
   return (
     <div

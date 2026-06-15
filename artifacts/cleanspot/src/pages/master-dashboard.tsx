@@ -60,6 +60,12 @@ import {
 } from "@/components/ui/form";
 import geofencesData from "@/data/geofences.json";
 import { PanchayatMap, type PanchayatMapReport } from "@/components/panchayat-map";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const wardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
@@ -142,6 +148,7 @@ export default function MasterDashboard() {
   const createOfficer = useCreateOfficer();
   const deleteOfficer = useDeleteOfficer();
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedWard, setSelectedWard] = useState<string | null>(null);
 
   const officers = officersData?.officers ?? [];
 
@@ -353,30 +360,37 @@ export default function MasterDashboard() {
         <PanchayatMap
           officers={officers}
           reports={reportsData?.reports ?? []}
+          highlightedWard={selectedWard}
         />
       </div>
 
       {/* Ward coverage */}
       {wardNames.length > 0 && (
         <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
-          <h2 className="text-xl font-black text-foreground mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-black text-foreground mb-1 flex items-center gap-2">
             <MapPin className="w-5 h-5 text-indigo-500" /> Ward Coverage
           </h2>
+          <p className="text-xs text-muted-foreground font-medium mb-4">Tap a ward to see officer details and open reports</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {wardNames.map((ward) => {
               const officer = officers.find((o) => o.areaName === ward);
+              const isSelected = selectedWard === ward;
               return (
-                <div
+                <button
                   key={ward}
-                  className={`rounded-xl px-3 py-2.5 border text-sm font-semibold flex items-center gap-2 ${
-                    officer
-                      ? "bg-primary/5 border-primary/20 text-primary"
-                      : "bg-muted/40 border-border/50 text-muted-foreground"
+                  type="button"
+                  onClick={() => setSelectedWard(isSelected ? null : ward)}
+                  className={`rounded-xl px-3 py-2.5 border text-sm font-semibold flex items-center gap-2 text-left transition-all duration-150 active:scale-95 ${
+                    isSelected
+                      ? "bg-primary border-primary text-primary-foreground shadow-md ring-2 ring-primary/30"
+                      : officer
+                      ? "bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:border-primary/40"
+                      : "bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70"
                   }`}
                 >
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${officer ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary-foreground" : officer ? "bg-primary" : "bg-muted-foreground/40"}`} />
                   <span className="truncate">{ward}</span>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -387,6 +401,141 @@ export default function MasterDashboard() {
           )}
         </div>
       )}
+
+      {/* Ward officer slide-out sheet */}
+      {(() => {
+        const wardOfficer = selectedWard ? officers.find((o) => o.areaName === selectedWard) : null;
+        const wardReports = wardOfficer
+          ? (reportsData?.reports ?? []).filter(
+              (r) => r.assignedOfficerId === wardOfficer.id && r.status !== "cleaned"
+            )
+          : [];
+        const pendingCount = wardOfficer
+          ? (reportsData?.reports ?? []).filter(
+              (r) => r.assignedOfficerId === wardOfficer.id && r.status === "reported"
+            ).length
+          : 0;
+        const cleaningCount = wardOfficer
+          ? (reportsData?.reports ?? []).filter(
+              (r) => r.assignedOfficerId === wardOfficer.id && r.status === "cleaning"
+            ).length
+          : 0;
+
+        return (
+          <Sheet open={!!selectedWard} onOpenChange={(open) => { if (!open) setSelectedWard(null); }}>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+              {/* Header */}
+              <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 pb-5">
+                <SheetHeader className="mb-0">
+                  <SheetTitle className="text-white text-lg font-black">{selectedWard}</SheetTitle>
+                </SheetHeader>
+                {wardOfficer ? (
+                  <div className="flex items-center gap-3 mt-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-white font-black text-xl shrink-0">
+                      {wardOfficer.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-black text-base leading-tight truncate">{wardOfficer.name}</p>
+                      <p className="text-indigo-200 text-xs font-medium mt-0.5">Field Officer</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 mt-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
+                      <Users className="w-6 h-6 text-white/50" />
+                    </div>
+                    <p className="text-white/70 font-medium text-sm">No officer assigned to this ward</p>
+                  </div>
+                )}
+              </div>
+
+              {wardOfficer && (
+                <>
+                  {/* Contact info */}
+                  <div className="px-6 py-4 border-b border-border/50 space-y-2.5">
+                    {wardOfficer.email && (
+                      <a href={`mailto:${wardOfficer.email}`} className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors group">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Mail className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <span className="truncate font-medium group-hover:underline">{wardOfficer.email}</span>
+                      </a>
+                    )}
+                    {wardOfficer.phone && (
+                      <a href={`tel:${wardOfficer.phone}`} className="flex items-center gap-3 text-sm text-foreground hover:text-primary transition-colors group">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Phone className="w-3.5 h-3.5 text-primary" />
+                        </div>
+                        <span className="font-medium group-hover:underline">{wardOfficer.phone}</span>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="px-6 py-4 border-b border-border/50">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="text-center bg-red-50 rounded-xl py-3 border border-red-100">
+                        <p className="text-2xl font-black text-red-600">{pendingCount}</p>
+                        <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide mt-0.5">New</p>
+                      </div>
+                      <div className="text-center bg-amber-50 rounded-xl py-3 border border-amber-100">
+                        <p className="text-2xl font-black text-amber-600">{cleaningCount}</p>
+                        <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wide mt-0.5">In Progress</p>
+                      </div>
+                      <div className="text-center bg-indigo-50 rounded-xl py-3 border border-indigo-100">
+                        <p className="text-2xl font-black text-indigo-600">{wardOfficer.reportCount - wardOfficer.pendingCount}</p>
+                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mt-0.5">Resolved</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pending reports list */}
+                  <div className="flex-1 overflow-y-auto px-6 py-4">
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">
+                      Open Reports ({wardReports.length})
+                    </p>
+                    {wardReports.length === 0 ? (
+                      <div className="flex flex-col items-center py-10 text-center">
+                        <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center mb-3">
+                          <CheckCircle2 className="w-7 h-7 text-green-500" />
+                        </div>
+                        <p className="font-black text-foreground">All clear!</p>
+                        <p className="text-sm text-muted-foreground font-medium mt-1">No open reports for this ward</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {wardReports.map((report) => {
+                          const isNew = report.status === "reported";
+                          return (
+                            <div
+                              key={report.id}
+                              className="bg-muted/40 rounded-xl p-3 border border-border/40"
+                            >
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <span className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">#{report.id}</span>
+                                <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                                  isNew
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}>
+                                  {isNew ? "New" : "In Progress"}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
+                                {report.address ?? `${report.latitude.toFixed(4)}° N, ${report.longitude.toFixed(4)}° E`}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </SheetContent>
+          </Sheet>
+        );
+      })()}
 
       {/* Officers list */}
       <div>
