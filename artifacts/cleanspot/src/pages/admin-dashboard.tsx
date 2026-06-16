@@ -424,7 +424,7 @@ export default function AdminDashboard() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight mb-1 sm:mb-2">
-              Command Center
+              Command Center - DC Office Udupi
             </h1>
             <p className="text-muted-foreground font-medium text-sm sm:text-lg">
               {selectedOfficer
