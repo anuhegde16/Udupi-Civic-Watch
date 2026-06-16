@@ -38,12 +38,13 @@ export default defineConfig({
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "Udupi Civic Watch",
-        short_name: "CivicWatch",
-        description: "Report waste in Udupi District. Snap a photo, drop a pin — a cleanup team is dispatched automatically.",
+        short_name: "Udupi Civic Watch",
+        description: "Report and track waste in Udupi District — Swachh Bharat Mission",
         display: "standalone",
+        orientation: "portrait-primary",
         start_url: "/",
-        background_color: "#FF3C00",
-        theme_color: "#FF3C00",
+        background_color: "#0d9488",
+        theme_color: "#0d9488",
         icons: [
           {
             src: "icon-192.png",
