@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, MapPin, Camera, ArrowRight, Activity, Map, ArrowDown, Droplets, Fish, AlertCircle } from "lucide-react";
 import { LiveWasteMap } from "@/components/live-waste-map";
 import { InstallPwaButton } from "@/components/install-pwa-button";
+import { MyReports } from "@/components/my-reports";
 
 export default function Home() {
   return (
@@ -44,6 +45,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* My Reports */}
+      <MyReports />
 
       {/* Live Waste Map */}
       <section className="mb-16">

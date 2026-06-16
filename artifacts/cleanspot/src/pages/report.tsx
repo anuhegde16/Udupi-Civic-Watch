@@ -8,6 +8,7 @@ import { useCreateReport, useUploadImage } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
 import geofencesData from "@/data/geofences.json";
+import { saveReport } from "@/hooks/use-saved-reports";
 
 // Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
 function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
@@ -160,10 +161,7 @@ export default function Report() {
         onSuccess: (data) => {
           setCreatedId(data.id);
           setStep("success");
-          try {
-            const recent = JSON.parse(localStorage.getItem("recent_reports") || "[]");
-            localStorage.setItem("recent_reports", JSON.stringify([...recent, data.id].slice(-5)));
-          } catch {}
+          saveReport(data.id);
         },
         onError: (err) => toast({ title: "Failed to submit", description: err.message, variant: "destructive" }),
       }
