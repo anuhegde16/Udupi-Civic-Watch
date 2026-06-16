@@ -429,8 +429,6 @@ export default function AdminDashboard() {
             <p className="text-muted-foreground font-medium text-sm sm:text-lg">
               {selectedOfficer
                 ? `Viewing: ${selectedOfficer.areaName || selectedOfficer.name}`
-                : selectedPanchayat
-                ? `${selectedPanchayat} Panchayat — ward-level overview`
                 : "District Administration Overview — Udupi, Karnataka."}
             </p>
           </div>
