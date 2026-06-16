@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import {
   useGetReportsSummary,
   useListOfficers,
@@ -165,6 +166,7 @@ type ReportItem = {
 };
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
   const [selectedPanchayat, setSelectedPanchayat] = useState<string | null>(null);
   const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
@@ -423,6 +425,14 @@ export default function AdminDashboard() {
         <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 bg-primary/5 rounded-bl-[80px] sm:rounded-bl-[120px] pointer-events-none" />
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
+            <p className="text-sm font-medium text-muted-foreground mb-1">
+              {(() => {
+                const h = new Date().getHours();
+                const tod = h >= 5 && h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
+                const first = (user?.name ?? "").split(" ")[0] || "there";
+                return `Good ${tod}, ${first}`;
+              })()}
+            </p>
             <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight mb-1 sm:mb-2">
               Command Center - DC Office Udupi
             </h1>
