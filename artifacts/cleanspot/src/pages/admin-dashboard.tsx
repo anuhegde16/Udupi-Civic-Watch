@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { getGreeting } from "@/lib/greeting";
 import {
   useGetReportsSummary,
   useListOfficers,
@@ -426,12 +427,7 @@ export default function AdminDashboard() {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-1">
-              {(() => {
-                const h = new Date().getHours();
-                const tod = h >= 5 && h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
-                const first = (user?.name ?? "").split(" ")[0] || "there";
-                return `Good ${tod}, ${first}`;
-              })()}
+              {getGreeting(user?.name)}
             </p>
             <h1 className="text-2xl sm:text-4xl font-black text-foreground tracking-tight mb-1 sm:mb-2">
               Command Center - DC Office Udupi

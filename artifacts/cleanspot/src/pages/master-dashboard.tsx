@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch, useCreateOfficer } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -216,12 +217,7 @@ export default function MasterDashboard() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-2">
-              {(() => {
-                const h = new Date().getHours();
-                const tod = h >= 5 && h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
-                const first = (user?.name ?? "").split(" ")[0] || "there";
-                return `Good ${tod}, ${first}`;
-              })()}
+              {getGreeting(user?.name)}
             </p>
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-indigo-200">
               <Users className="w-3.5 h-3.5" /> Panchayat Admin

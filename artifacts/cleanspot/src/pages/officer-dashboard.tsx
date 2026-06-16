@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { getGreeting } from "@/lib/greeting";
 import { useGetOfficerReports, useGetOfficer } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
@@ -157,12 +158,7 @@ export default function OfficerDashboard() {
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-bl-[100px] pointer-events-none" />
         <p className="text-sm font-medium text-muted-foreground mb-1">
-          {(() => {
-            const h = new Date().getHours();
-            const tod = h >= 5 && h < 12 ? "morning" : h < 17 ? "afternoon" : "evening";
-            const first = (user?.name ?? "").split(" ")[0] || "there";
-            return `Good ${tod}, ${first}`;
-          })()}
+          {getGreeting(user?.name)}
         </p>
         <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
           My Zone
