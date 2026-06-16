@@ -274,8 +274,15 @@ export function AdminDistrictMap({
 
           if (isInActivePanchayat) {
             poly.on("click", () => {
-              if (assignedOfficer) {
-                onZoneSelect(selectedOfficerId === assignedOfficer.id ? null : assignedOfficer.id);
+              const alreadyActive = zone.name === activeZone;
+              if (alreadyActive) {
+                setActiveZone(null);
+                onZoneSelect(null);
+                onWardSelect(null);
+              } else {
+                setActiveZone(zone.name);
+                onZoneSelect(assignedOfficer ? assignedOfficer.id : null);
+                onWardSelect(zone.name);
               }
             });
             poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.28 }));
