@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { customFetch, useCreateOfficer } from "@workspace/api-client-react";
+import { customFetch, useCreateOfficer, useUpdateOfficer } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import {
   Mail,
   Phone,
   LayoutList,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +103,12 @@ const createOfficerSchema = z.object({
 });
 type CreateOfficerValues = z.infer<typeof createOfficerSchema>;
 
+const editOfficerSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  phone: z.string().optional(),
+});
+type EditOfficerValues = z.infer<typeof editOfficerSchema>;
+
 function usePanchayatOfficers() {
   return useQuery<{ officers: PanchayatOfficer[]; total: number }>({
     queryKey: ["panchayat-officers"],
@@ -148,8 +155,16 @@ export default function MasterDashboard() {
   const { data: reportsData } = usePanchayatReports();
   const createOfficer = useCreateOfficer();
   const deleteOfficer = useDeleteOfficer();
+  const updateOfficer = useUpdateOfficer();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
+
+  const editForm = useForm<EditOfficerValues>({
+    resolver: zodResolver(editOfficerSchema),
+    defaultValues: { name: "", phone: "" },
+  });
 
   const officers = officersData?.officers ?? [];
 
@@ -189,10 +204,33 @@ export default function MasterDashboard() {
       {
         onSuccess: () => {
           toast({ title: "Officer removed" });
+          setSelectedWard(null);
           queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
           queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
         },
         onError: (err) => toast({ title: "Failed to remove officer", description: err.message, variant: "destructive" }),
+      }
+    );
+  }
+
+  function openEdit(officer: PanchayatOfficer) {
+    setEditingOfficer(officer);
+    editForm.reset({ name: officer.name, phone: officer.phone ?? "" });
+    setEditOpen(true);
+  }
+
+  function handleUpdate(data: EditOfficerValues) {
+    if (!editingOfficer) return;
+    updateOfficer.mutate(
+      { id: editingOfficer.id, data: { name: data.name, phone: data.phone || null } },
+      {
+        onSuccess: () => {
+          toast({ title: "Officer updated" });
+          setEditOpen(false);
+          setEditingOfficer(null);
+          queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+        },
+        onError: (err) => toast({ title: "Failed to update officer", description: err.message, variant: "destructive" }),
       }
     );
   }
@@ -442,6 +480,14 @@ export default function MasterDashboard() {
                       <p className="text-white font-black text-base leading-tight truncate">{wardOfficer.name}</p>
                       <p className="text-indigo-200 text-xs font-medium mt-0.5">Field Officer</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(wardOfficer)}
+                      className="w-8 h-8 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors shrink-0"
+                      title="Edit officer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 mt-4">
@@ -534,12 +580,107 @@ export default function MasterDashboard() {
                       </div>
                     )}
                   </div>
+
+                  {/* Officer actions footer */}
+                  <div className="px-6 pb-6 pt-2 border-t border-border/50 flex gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-xl h-10 font-bold text-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                      onClick={() => openEdit(wardOfficer)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="rounded-xl h-10 font-bold text-sm border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 px-3">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="rounded-[2rem] p-8">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                          <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                            This will permanently delete <strong>{wardOfficer.name}</strong>. Assigned reports will become unassigned.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="mt-6 gap-2">
+                          <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive rounded-xl font-black h-11"
+                            onClick={() => handleDelete(wardOfficer.id)}
+                          >
+                            Yes, remove
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </>
               )}
             </SheetContent>
           </Sheet>
         );
       })()}
+
+      {/* Edit officer dialog */}
+      <Dialog open={editOpen} onOpenChange={(open) => { if (!open) { setEditOpen(false); setEditingOfficer(null); } }}>
+        <DialogContent className="sm:max-w-sm rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
+          <div className="px-7 pt-7 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <DialogTitle className="text-xl font-black tracking-tight">Edit Officer</DialogTitle>
+              </div>
+              {editingOfficer && (
+                <p className="text-sm text-muted-foreground font-medium mt-0.5 pl-12">{editingOfficer.email}</p>
+              )}
+            </DialogHeader>
+          </div>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleUpdate)} className="px-7 pb-7 space-y-4">
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Officer Name" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">
+                      Phone <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="+91 98765 43210" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex gap-2 pt-2">
+                <Button type="button" variant="outline" className="flex-1 rounded-xl h-11 font-bold" onClick={() => { setEditOpen(false); setEditingOfficer(null); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1 rounded-xl h-11 font-black bg-indigo-600 hover:bg-indigo-700" disabled={updateOfficer.isPending}>
+                  {updateOfficer.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       {/* Officers list */}
       <div>
@@ -589,27 +730,38 @@ export default function MasterDashboard() {
                         </p>
                       </div>
                     </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-full -mt-1 -mr-1">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="rounded-[2rem] p-8">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
-                          <AlertDialogDescription className="text-base text-muted-foreground mt-3">
-                            This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter className="mt-6 gap-2">
-                          <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
-                          <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => handleDelete(officer.id)}>
-                            Yes, remove
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <div className="flex items-center gap-1 -mt-1 -mr-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-7 w-7 rounded-full"
+                        onClick={() => openEdit(officer)}
+                        title="Edit officer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-full">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-[2rem] p-8">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                              This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter className="mt-6 gap-2">
+                            <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                            <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => handleDelete(officer.id)}>
+                              Yes, remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5 mb-4">
