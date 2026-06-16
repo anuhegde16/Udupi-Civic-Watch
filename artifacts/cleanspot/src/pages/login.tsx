@@ -40,7 +40,7 @@ export default function LoginPage({ portalType }: LoginProps) {
     ? "admin@udupicivicwatch.com"
     : isMaster
     ? "saligrama@udupicivicspot.com"
-    : "byndoor@udupicivicspot.com";
+    : "saligrama@udupicivicspot.com";
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
