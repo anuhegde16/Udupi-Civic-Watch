@@ -200,7 +200,7 @@ export default function MasterDashboard() {
 
   function handleDelete(id: number) {
     deleteOfficer.mutate(
-      { id },
+      id,
       {
         onSuccess: () => {
           toast({ title: "Officer removed" });
