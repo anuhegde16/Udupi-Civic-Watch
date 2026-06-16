@@ -54,13 +54,13 @@ export default function LoginPage({ portalType }: LoginProps) {
         onSuccess: (data) => {
           const role = data?.user?.role;
           if (role === "admin" || role === "control_center") {
-            setLocation("/admin/dashboard");
+            setLocation("/admin/dashboard", { replace: true });
           } else if (role === "panchayat_admin") {
-            setLocation("/master/dashboard");
+            setLocation("/master/dashboard", { replace: true });
           } else if (role === "officer" || role === "field_officer") {
-            setLocation("/officer/dashboard");
+            setLocation("/officer/dashboard", { replace: true });
           } else {
-            setLocation("/");
+            setLocation("/", { replace: true });
           }
         },
         onError: () => {

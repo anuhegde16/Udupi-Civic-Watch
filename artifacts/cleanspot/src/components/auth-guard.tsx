@@ -40,9 +40,9 @@ export function AuthGuard({ children, roles }: { children: React.ReactNode, role
             : roles?.some((r) => r === "panchayat_admin")
             ? "/master/login"
             : "/staff/login";
-        setLocation(loginPath);
+        setLocation(loginPath, { replace: true });
       } else if (allowedRoles && user?.role && !allowedRoles.includes(user.role)) {
-        setLocation(dashboardFor(user.role));
+        setLocation(dashboardFor(user.role), { replace: true });
       }
     }
   }, [isLoading, isAuthenticated, user, roles, setLocation]);
