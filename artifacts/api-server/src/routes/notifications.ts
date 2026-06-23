@@ -1,10 +1,25 @@
 import { Router, type IRouter } from "express";
 import { db, pushSubscriptionsTable, notificationsTable } from "@workspace/db";
-import { eq, and, desc, count as dbCount, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, count as dbCount } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { VAPID_PUBLIC_KEY } from "../lib/push";
 import { logger } from "../lib/logger";
 import { z } from "zod/v4";
+
+// In-memory IP rate limiter for anonymous push subscriptions: 5 per IP per hour
+const ANON_SUB_RATE_LIMIT = 5;
+const ANON_SUB_WINDOW_MS = 60 * 60 * 1000;
+const anonSubIpMap = new Map<string, number[]>();
+
+function checkAnonSubRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const cutoff = now - ANON_SUB_WINDOW_MS;
+  const timestamps = (anonSubIpMap.get(ip) ?? []).filter((t) => t > cutoff);
+  if (timestamps.length >= ANON_SUB_RATE_LIMIT) return false;
+  timestamps.push(now);
+  anonSubIpMap.set(ip, timestamps);
+  return true;
+}
 
 const router: IRouter = Router();
 
@@ -78,21 +93,8 @@ router.post("/notifications/anonymous-subscription", async (req, res): Promise<v
   const { endpoint, keys, reportId } = parsed.data;
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.ip || "";
 
-  // Rate limit: max 10 anonymous subscriptions per IP per hour
-  const recentCount = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(pushSubscriptionsTable)
-    .where(
-      and(
-        isNull(pushSubscriptionsTable.userId),
-        sql`${pushSubscriptionsTable.createdAt} > NOW() - INTERVAL '1 hour'`,
-        sql`${pushSubscriptionsTable.auth} LIKE ${"%" + ip.slice(-8)}`
-      )
-    );
-
-  // Simple heuristic — also just upsert; endpoint uniqueness prevents spam
-  if ((recentCount[0]?.count ?? 0) > 10) {
-    res.status(429).json({ error: "Too many requests" });
+  if (!checkAnonSubRateLimit(ip)) {
+    res.status(429).json({ error: "Too many requests", message: "You have subscribed too many times recently. Please try again later." });
     return;
   }
 

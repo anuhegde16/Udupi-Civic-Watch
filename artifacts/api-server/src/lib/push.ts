@@ -70,14 +70,28 @@ export async function sendPushToReportSubscriptions(reportId: number, payload: P
 
   if (subs.length === 0) return;
 
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     subs.map((s) => sendPushToSubscription(s.endpoint, s.p256dh, s.auth, payload))
   );
 
-  // One-shot: clean up after delivery so citizen isn't notified repeatedly
-  await db
-    .delete(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.reportId, reportId), isNull(pushSubscriptionsTable.userId)));
+  // One-shot: remove only subscriptions that were successfully delivered.
+  // Transient failures (network, etc.) are kept so the citizen still has a
+  // chance to receive the notification on a retry or the next status change.
+  const successfulEndpoints = subs
+    .filter((_, i) => results[i]?.status === "fulfilled" && (results[i] as PromiseFulfilledResult<boolean>).value === true)
+    .map((s) => s.endpoint);
+
+  if (successfulEndpoints.length > 0) {
+    await db
+      .delete(pushSubscriptionsTable)
+      .where(
+        and(
+          eq(pushSubscriptionsTable.reportId, reportId),
+          isNull(pushSubscriptionsTable.userId),
+          inArray(pushSubscriptionsTable.endpoint, successfulEndpoints)
+        )
+      );
+  }
 }
 
 export async function createNotificationForUsers(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, BellOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
@@ -57,8 +57,29 @@ function OfficerBanner() {
 
 function CitizenBanner({ reportId }: { reportId?: number }) {
   const { permission, isSubscribed, isLoading, supported, subscribe } = useCitizenPushNotifications();
+  const [autoLinked, setAutoLinked] = useState(false);
 
-  if (!supported || isSubscribed || permission === "unsupported" || permission === "granted") return null;
+  // When user already granted permission (e.g. opted in on home page), auto-link
+  // their existing browser push subscription to this specific report ID.
+  // pushManager.subscribe() is idempotent — it returns the existing subscription.
+  useEffect(() => {
+    if (
+      supported &&
+      permission === "granted" &&
+      reportId != null &&
+      !isSubscribed &&
+      !isLoading &&
+      !autoLinked
+    ) {
+      setAutoLinked(true);
+      subscribe(reportId);
+    }
+  }, [supported, permission, reportId, isSubscribed, isLoading, autoLinked, subscribe]);
+
+  if (!supported || isSubscribed || permission === "unsupported") return null;
+
+  // Auto-linking in progress — render nothing; user already said "yes" elsewhere
+  if (permission === "granted") return null;
 
   if (permission === "denied") {
     return (
@@ -129,6 +150,9 @@ export function NotificationHomePill() {
   }
 
   const handleEnable = async () => {
+    // subscribe() without reportId registers the browser push subscription but
+    // does not call the server — the server link happens on the report success
+    // screen via the CitizenBanner auto-link effect.
     const ok = await subscribe();
     if (ok || Notification.permission !== "default") dismiss();
   };
