@@ -3,3 +3,4 @@
 - [Three-tier role hierarchy](three-tier-roles.md) — control_center / panchayat_admin / field_officer; old names are aliases kept for compat.
 - [DB schema push workaround](db-push-workaround.md) — drizzle-kit push hangs on interactive column-rename prompts; use psql direct SQL as fallback.
 - [PWA push + in-app notifications](push-notifications.md) — injectManifest mode required for custom SW; NotificationOptions TS lib lacks vibrate/renotify; notification sound via Web Audio API (not file).
+- [SW dev mode required for push subscriptions](sw-dev-mode.md) — devOptions.enabled:false means navigator.serviceWorker.ready never resolves; subscribe() hangs forever; zero DB subscriptions result; fix is enabled:true + type:"module".
