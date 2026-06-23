@@ -13,6 +13,7 @@ export const reportsTable = pgTable("reports", {
   description: text("description"),
   status: text("status").notNull().default("reported"),
   reporterIp: text("reporter_ip"),
+  reporterEmail: text("reporter_email"),
   assignedOfficerId: integer("assigned_officer_id").references(() => officersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

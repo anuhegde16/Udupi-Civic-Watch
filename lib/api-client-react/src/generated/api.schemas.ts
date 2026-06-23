@@ -120,6 +120,7 @@ export interface CreateReportBody {
   longitude: number;
   address?: string | null;
   description?: string | null;
+  reporterEmail?: string | null;
 }
 
 export type UpdateReportBodyStatus =

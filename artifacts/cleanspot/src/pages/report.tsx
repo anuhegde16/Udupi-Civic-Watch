@@ -2,14 +2,22 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell } from "lucide-react";
 import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
 import geofencesData from "@/data/geofences.json";
 import { saveReport } from "@/hooks/use-saved-reports";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 // Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
 function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
@@ -50,6 +58,10 @@ export default function Report() {
   const [locationMode, setLocationMode] = useState<"auto" | "manual">("auto");
 
   const [description, setDescription] = useState("");
+
+  // Email dialog state
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [reporterEmail, setReporterEmail] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,6 +166,30 @@ export default function Report() {
     }
   };
 
+  const doSubmit = (email?: string) => {
+    setEmailDialogOpen(false);
+    if (!location) return;
+    createReport.mutate(
+      {
+        data: {
+          latitude: location.lat,
+          longitude: location.lng,
+          imageUrl,
+          description: description || undefined,
+          reporterEmail: email || undefined,
+        },
+      },
+      {
+        onSuccess: (data) => {
+          setCreatedId(data.id);
+          setStep("success");
+          saveReport(data.id);
+        },
+        onError: (err) => toast({ title: "Failed to submit", description: err.message, variant: "destructive" }),
+      }
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!imageUrl) {
@@ -168,17 +204,8 @@ export default function Report() {
       toast({ title: "Outside service area", description: "Please move the pin inside the Saligrama service boundary.", variant: "destructive" });
       return;
     }
-    createReport.mutate(
-      { data: { latitude: location.lat, longitude: location.lng, imageUrl, description: description || undefined } },
-      {
-        onSuccess: (data) => {
-          setCreatedId(data.id);
-          setStep("success");
-          saveReport(data.id);
-        },
-        onError: (err) => toast({ title: "Failed to submit", description: err.message, variant: "destructive" }),
-      }
-    );
+    setReporterEmail("");
+    setEmailDialogOpen(true);
   };
 
   if (step === "success") {
@@ -371,6 +398,61 @@ export default function Report() {
           </Button>
         </div>
       </form>
+
+      {/* Email opt-in dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={(open) => { if (!open && !createReport.isPending) setEmailDialogOpen(false); }}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden gap-0">
+          <div className="bg-primary/5 border-b border-primary/10 px-6 pt-6 pb-5">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+              <Bell className="w-6 h-6 text-primary" />
+            </div>
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="text-xl font-black">Get updates on your complaint</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground font-medium leading-relaxed">
+                Add your email and we'll notify you when cleaning starts and when the waste is removed. Completely optional.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="email"
+                placeholder="your@email.com"
+                value={reporterEmail}
+                onChange={(e) => setReporterEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); doSubmit(reporterEmail.trim() || undefined); } }}
+                className="pl-9 h-12 rounded-xl text-base"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Button
+                className="w-full h-12 text-base font-bold rounded-xl"
+                onClick={() => doSubmit(reporterEmail.trim() || undefined)}
+                disabled={createReport.isPending}
+              >
+                {createReport.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Notify Me
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full h-10 text-sm font-medium rounded-xl text-muted-foreground hover:text-foreground"
+                onClick={() => doSubmit(undefined)}
+                disabled={createReport.isPending}
+              >
+                Skip — submit without email
+              </Button>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
+              Your email is used only for updates on this complaint and is not shared with anyone.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

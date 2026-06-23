@@ -120,6 +120,7 @@ export const CreateReportBody = zod.object({
   longitude: zod.number(),
   address: zod.string().nullish(),
   description: zod.string().nullish(),
+  reporterEmail: zod.string().email().nullish(),
 });
 
 /**

@@ -581,6 +581,10 @@ components:
         description:
           type: string
           nullable: true
+        reporterEmail:
+          type: string
+          format: email
+          nullable: true
       required: [latitude, longitude]
 
     UpdateReportBody:

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
-import { sendAssignmentEmail, sendStatusUpdateEmail, sendNewReportToPanchayatAdmins, type EmailAnalytics } from "../lib/email";
+import { sendAssignmentEmail, sendStatusUpdateEmail, sendNewReportToPanchayatAdmins, sendReporterAcknowledgement, sendReporterStatusUpdate, type EmailAnalytics } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
   CreateReportBody,
@@ -124,7 +124,7 @@ router.post("/reports", async (req, res): Promise<void> => {
     return;
   }
 
-  const { latitude, longitude, imageUrl, address, description } = parsed.data;
+  const { latitude, longitude, imageUrl, address, description, reporterEmail } = parsed.data;
   const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "";
 
   // Duplicate check within ~50m radius
@@ -180,6 +180,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       description: description ?? null,
       status: "reported",
       reporterIp,
+      reporterEmail: reporterEmail ?? null,
       assignedOfficerId: officer?.id ?? null,
     })
     .returning();
@@ -199,6 +200,13 @@ router.post("/reports", async (req, res): Promise<void> => {
             .then((admins) => sendNewReportToPanchayatAdmins(officer, report, admins.filter((a) => !!a.email) as { email: string; name: string }[]))
         : Promise.resolve(),
     ]).catch((err) => logger.warn({ err }, "Error in new-report email notifications"));
+  }
+
+  // Send acknowledgement to the reporter if they provided an email (fire-and-forget)
+  if (reporterEmail) {
+    sendReporterAcknowledgement(report, reporterEmail).catch((err) =>
+      logger.warn({ err, reportId: report.id }, "Reporter acknowledgement email failed")
+    );
   }
 
   res.status(201).json({ ...report, assignedOfficer });
@@ -347,8 +355,15 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     assignedOfficer: officerRow ? { id: officerRow.id, name: officerRow.name, email: officerRow.email, phone: officerRow.phone, areaName: officerRow.areaName, wardName: officerRow.areaName } : null,
   });
 
-  // Fire-and-forget status-change notifications
+  // Notify the reporter if they provided an email and status changed (fire-and-forget)
   const newStatus = parsed.data.status;
+  if ((newStatus === "cleaning" || newStatus === "cleaned") && report.reporterEmail) {
+    sendReporterStatusUpdate(report, report.reporterEmail, newStatus).catch((err) =>
+      logger.warn({ err, reportId: report.id }, "Reporter status update email failed")
+    );
+  }
+
+  // Fire-and-forget status-change notifications
   if ((newStatus === "cleaning" || newStatus === "cleaned") && officerRow) {
     const officerName = officerRow.name;
     const panchayatName = officerRow.panchayatName;

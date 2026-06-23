@@ -523,7 +523,169 @@ export async function sendPanchayatAdminWelcomeEmail(admin: {
   await sendEmail(admin.email, subject, emailShell("Panchayat Admin Account Created", body));
 }
 
-// ── 6. New report alert — panchayat admin(s) ─────────────────────────────────
+// ── 6. Reporter acknowledgement — citizen who submitted the report ─────────────
+
+export async function sendReporterAcknowledgement(report: Report, reporterEmail: string): Promise<void> {
+  const base = appBaseUrl();
+  const trackUrl = `${base}/track/${report.id}`;
+  const subject = `Your complaint #${report.id} has been received — Udupi Civic Watch`;
+
+  const coordsText = `${report.latitude.toFixed(6)}, ${report.longitude.toFixed(6)}`;
+  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
+
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Thank you for reporting! 🌿</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      Your waste complaint has been received and a field officer has been notified.
+      We will keep you updated as the situation is addressed.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:24px;overflow:hidden;">
+      <tr>
+        <td style="background:#0d9488;padding:10px 20px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#ccfbf1;letter-spacing:1px;text-transform:uppercase;">Your Complaint Details</p>
+        </td>
+      </tr>
+      <tr><td style="padding:20px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;width:120px;">Complaint ID</td>
+            <td style="padding:5px 0;font-size:18px;color:#0d9488;font-weight:900;font-family:monospace;">#${report.id}</td>
+          </tr>
+          ${report.address ? `
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Location</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">${escapeHtml(report.address)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">GPS</td>
+            <td style="padding:5px 0;font-size:13px;color:#334155;font-family:monospace;">
+              <a href="${mapsUrl}" style="color:#0d9488;text-decoration:none;">${coordsText} ↗</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Submitted At</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">${formatDate(report.createdAt)}</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Status</td>
+            <td style="padding:5px 0;">
+              <span style="display:inline-block;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;font-size:12px;font-weight:700;padding:3px 12px;border-radius:999px;">Reported</span>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td>${ctaButton("📋 Track Your Complaint", trackUrl)}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      You provided this email address when submitting the complaint. You will receive updates when cleaning begins and when the waste has been removed.
+      Save your complaint ID <strong>#${report.id}</strong> to track progress at any time.
+    </p>`;
+
+  logger.info({ reportId: report.id, to: reporterEmail }, "Sending reporter acknowledgement email");
+  await sendEmail(reporterEmail, subject, emailShell("Complaint Received", body));
+}
+
+// ── 7. Reporter status update — cleaning / cleaned ────────────────────────────
+
+export async function sendReporterStatusUpdate(
+  report: Report,
+  reporterEmail: string,
+  newStatus: "cleaning" | "cleaned"
+): Promise<void> {
+  const base = appBaseUrl();
+  const trackUrl = `${base}/track/${report.id}`;
+
+  const isCleaned = newStatus === "cleaned";
+  const subject = isCleaned
+    ? `✅ Waste cleaned — Complaint #${report.id} resolved`
+    : `🚛 Cleaning underway — Complaint #${report.id}`;
+
+  const statusLabel = isCleaned ? "Cleaned & Resolved ✓" : "Cleaning In Progress";
+  const statusBg = isCleaned ? "#f0fdf4" : "#fffbeb";
+  const statusColor = isCleaned ? "#14532d" : "#92400e";
+  const statusBorder = isCleaned ? "#bbf7d0" : "#fde68a";
+
+  const headline = isCleaned
+    ? "The waste has been cleaned up!"
+    : "A sanitation team is on their way";
+  const intro = isCleaned
+    ? `Great news! The waste you reported at complaint <strong>#${report.id}</strong> has been successfully removed by the sanitation team. Thank you for helping keep Udupi's coastline clean.`
+    : `Good news! A sanitation team has begun cleaning the waste you reported at complaint <strong>#${report.id}</strong>. We'll notify you once the area is fully cleared.`;
+
+  const coordsText = `${report.latitude.toFixed(6)}, ${report.longitude.toFixed(6)}`;
+  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
+
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">${escapeHtml(headline)}</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">${intro}</p>
+
+    <div style="margin:0 0 24px;">
+      <span style="display:inline-block;background:${statusBg};color:${statusColor};border:1.5px solid ${statusBorder};
+        font-size:13px;font-weight:800;padding:8px 20px;border-radius:999px;letter-spacing:0.5px;">
+        ${escapeHtml(statusLabel)}
+      </span>
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:24px;overflow:hidden;">
+      <tr>
+        <td style="background:#0d9488;padding:10px 20px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#ccfbf1;letter-spacing:1px;text-transform:uppercase;">Complaint Details</p>
+        </td>
+      </tr>
+      <tr><td style="padding:20px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;width:120px;">Complaint ID</td>
+            <td style="padding:5px 0;font-size:18px;color:#0d9488;font-weight:900;font-family:monospace;">#${report.id}</td>
+          </tr>
+          ${report.address ? `
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;">Location</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">${escapeHtml(report.address)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">GPS</td>
+            <td style="padding:5px 0;font-size:13px;color:#334155;font-family:monospace;">
+              <a href="${mapsUrl}" style="color:#0d9488;text-decoration:none;">${coordsText} ↗</a>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td>${ctaButton("📋 View Complaint Status", trackUrl)}</td>
+      </tr>
+    </table>
+
+    ${isCleaned ? `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#14532d;line-height:1.7;">
+        🌊 <strong>Every report matters.</strong> By taking action, you've helped protect the Arabian Sea coastline and Udupi's beaches from pollution. Your civic responsibility makes a real difference.
+      </p>
+    </div>` : ""}
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      You are receiving this because you provided your email when submitting complaint #${report.id}.
+    </p>`;
+
+  logger.info({ reportId: report.id, to: reporterEmail, status: newStatus }, "Sending reporter status update email");
+  await sendEmail(reporterEmail, subject, emailShell(headline, body));
+}
+
+// ── 8. New report alert — panchayat admin(s) ─────────────────────────────────
 
 export async function sendNewReportToPanchayatAdmins(
   officer: Officer,
