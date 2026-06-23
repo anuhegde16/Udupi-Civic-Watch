@@ -79,6 +79,8 @@ export interface Report {
   address?: string | null;
   description?: string | null;
   status: ReportStatusProperty;
+  /** Only included for admin and panchayat_admin roles */
+  reporterEmail?: string | null;
   reporterIp?: string | null;
   assignedOfficerId?: number | null;
   assignedOfficer?: OfficerBasic | null;

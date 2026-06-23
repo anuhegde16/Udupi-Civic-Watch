@@ -63,7 +63,7 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
     .where(conditions.length > 0 ? and(...conditions) : undefined);
 
   const formatted = reports.map(({ report, officer }) => {
-    const { reporterEmail: _re, reporterIp: _ri, ...safeReport } = report;
+    const { reporterIp: _ri, ...safeReport } = report;
     return {
       ...safeReport,
       assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,

@@ -20,6 +20,7 @@ type Report = {
   imageUrl?: string | null;
   imageUploadedAt?: string | null;
   cleanupImageUrl?: string | null;
+  reporterEmail?: string | null;
   assignedOfficer?: { name: string; areaName?: string | null } | null;
   assignedOfficerId?: number | null;
 };
@@ -502,6 +503,17 @@ export default function AdminReports() {
                   ) : (
                     <span className="font-medium text-muted-foreground italic">Not recorded</span>
                   )}
+                </div>
+              )}
+              {mapReport.reporterEmail && (
+                <div className="flex flex-col gap-0.5 col-span-2">
+                  <span className="font-bold uppercase tracking-wider text-muted-foreground">Reporter Email</span>
+                  <a
+                    href={`mailto:${mapReport.reporterEmail}`}
+                    className="font-medium text-primary hover:underline truncate"
+                  >
+                    {mapReport.reporterEmail}
+                  </a>
                 </div>
               )}
             </div>

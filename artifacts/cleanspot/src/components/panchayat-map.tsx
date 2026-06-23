@@ -78,6 +78,7 @@ export type PanchayatMapReport = {
   assignedOfficerId?: number | null;
   imageUrl?: string | null;
   cleanupImageUrl?: string | null;
+  reporterEmail?: string | null;
 };
 
 interface PanchayatMapProps {

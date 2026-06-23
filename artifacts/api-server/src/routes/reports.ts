@@ -351,8 +351,11 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { report, officer } = row;
+  const isAdminOrPanchayat = user.role === "admin" || user.role === "control_center" || user.role === "panchayat_admin";
+  const safeReport = sanitizeReport(report);
   res.json({
-    ...sanitizeReport(report),
+    ...safeReport,
+    ...(isAdminOrPanchayat && report.reporterEmail ? { reporterEmail: report.reporterEmail } : {}),
     assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   });
 });

@@ -191,6 +191,7 @@ export default function MasterDashboard() {
       officerName: officerName ?? officer?.name ?? null,
       imageUrl: r.imageUrl ?? null,
       cleanupImageUrl: r.cleanupImageUrl ?? null,
+      reporterEmail: r.reporterEmail ?? null,
     });
   }
 

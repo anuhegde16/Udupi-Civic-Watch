@@ -87,12 +87,15 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
     .from(reportsTable)
     .where(and(...conditions));
 
-  const formatted = reports.map(({ report, officer }) => ({
-    ...report,
-    assignedOfficer: officer
-      ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName }
-      : null,
-  }));
+  const formatted = reports.map(({ report, officer }) => {
+    const { reporterIp: _ri, ...safeReport } = report;
+    return {
+      ...safeReport,
+      assignedOfficer: officer
+        ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName }
+        : null,
+    };
+  });
 
   res.json({ reports: formatted, total: countRow.count });
 });

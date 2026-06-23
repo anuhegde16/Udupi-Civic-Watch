@@ -1,6 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Image as ImageIcon, Trash2 } from "lucide-react";
+import { MapPin, Image as ImageIcon, Trash2, Mail } from "lucide-react";
 
 export type ReportDetail = {
   id: number;
@@ -12,6 +12,7 @@ export type ReportDetail = {
   officerName?: string | null;
   imageUrl?: string | null;
   cleanupImageUrl?: string | null;
+  reporterEmail?: string | null;
 };
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -74,6 +75,15 @@ export function ReportDetailSheet({ report, open, onClose }: ReportDetailSheetPr
                   <div className="flex items-center gap-2 text-muted-foreground font-medium">
                     <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-[10px] font-black text-muted-foreground">👤</span>
                     <span><span className="font-black text-foreground">Officer:</span> {report.officerName}</span>
+                  </div>
+                )}
+                {report.reporterEmail && (
+                  <div className="flex items-center gap-2 text-muted-foreground font-medium">
+                    <Mail className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="font-black text-foreground">Reporter:</span>
+                    <a href={`mailto:${report.reporterEmail}`} className="text-primary hover:underline truncate text-sm">
+                      {report.reporterEmail}
+                    </a>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-muted-foreground font-medium">

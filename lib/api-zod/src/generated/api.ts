@@ -94,6 +94,10 @@ export const ListReportsResponse = zod.object({
       address: zod.string().nullish(),
       description: zod.string().nullish(),
       status: zod.enum(["reported", "cleaning", "cleaned"]),
+      reporterEmail: zod
+        .string()
+        .nullish()
+        .describe("Only included for admin and panchayat_admin roles"),
       reporterIp: zod.string().nullish(),
       assignedOfficerId: zod.number().nullish(),
       assignedOfficer: zod
@@ -148,6 +152,10 @@ export const GetReportResponse = zod.object({
   address: zod.string().nullish(),
   description: zod.string().nullish(),
   status: zod.enum(["reported", "cleaning", "cleaned"]),
+  reporterEmail: zod
+    .string()
+    .nullish()
+    .describe("Only included for admin and panchayat_admin roles"),
   reporterIp: zod.string().nullish(),
   assignedOfficerId: zod.number().nullish(),
   assignedOfficer: zod
@@ -192,6 +200,10 @@ export const UpdateReportResponse = zod.object({
   address: zod.string().nullish(),
   description: zod.string().nullish(),
   status: zod.enum(["reported", "cleaning", "cleaned"]),
+  reporterEmail: zod
+    .string()
+    .nullish()
+    .describe("Only included for admin and panchayat_admin roles"),
   reporterIp: zod.string().nullish(),
   assignedOfficerId: zod.number().nullish(),
   assignedOfficer: zod
@@ -380,6 +392,10 @@ export const GetOfficerReportsResponse = zod.object({
       address: zod.string().nullish(),
       description: zod.string().nullish(),
       status: zod.enum(["reported", "cleaning", "cleaned"]),
+      reporterEmail: zod
+        .string()
+        .nullish()
+        .describe("Only included for admin and panchayat_admin roles"),
       reporterIp: zod.string().nullish(),
       assignedOfficerId: zod.number().nullish(),
       assignedOfficer: zod
@@ -430,6 +446,10 @@ export const AdminListReportsResponse = zod.object({
       address: zod.string().nullish(),
       description: zod.string().nullish(),
       status: zod.enum(["reported", "cleaning", "cleaned"]),
+      reporterEmail: zod
+        .string()
+        .nullish()
+        .describe("Only included for admin and panchayat_admin roles"),
       reporterIp: zod.string().nullish(),
       assignedOfficerId: zod.number().nullish(),
       assignedOfficer: zod
@@ -476,6 +496,10 @@ export const ReassignReportResponse = zod.object({
   address: zod.string().nullish(),
   description: zod.string().nullish(),
   status: zod.enum(["reported", "cleaning", "cleaned"]),
+  reporterEmail: zod
+    .string()
+    .nullish()
+    .describe("Only included for admin and panchayat_admin roles"),
   reporterIp: zod.string().nullish(),
   assignedOfficerId: zod.number().nullish(),
   assignedOfficer: zod

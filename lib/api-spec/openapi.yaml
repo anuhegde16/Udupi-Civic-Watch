@@ -614,6 +614,10 @@ components:
         status:
           type: string
           enum: [reported, cleaning, cleaned]
+        reporterEmail:
+          type: string
+          nullable: true
+          description: Only included for admin and panchayat_admin roles
         reporterIp:
           type: string
           nullable: true
