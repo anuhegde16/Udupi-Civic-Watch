@@ -351,13 +351,18 @@ export default function AdminReports() {
                     </div>
 
                     {/* Officer row */}
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
                       {report.assignedOfficer ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <div className="w-6 h-6 rounded-full bg-secondary/20 text-secondary-foreground flex items-center justify-center font-black text-[10px] shrink-0">
                             {report.assignedOfficer.name.charAt(0)}
                           </div>
                           <span className="text-xs font-bold text-foreground/80">{report.assignedOfficer.name}</span>
+                          {report.assignedOfficer.areaName && (
+                            <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
+                              Ward: {report.assignedOfficer.areaName}
+                            </span>
+                          )}
                         </div>
                       ) : (
                         <span className="text-[11px] font-black uppercase tracking-wider text-destructive bg-destructive/10 px-2 py-0.5 rounded-md">
@@ -421,6 +426,14 @@ export default function AdminReports() {
                 </DialogTitle>
                 {mapReport?.address && (
                   <p className="text-muted-foreground font-medium text-sm mt-0.5">{mapReport.address}</p>
+                )}
+                {mapReport?.assignedOfficer && (
+                  <p className="text-xs font-semibold text-muted-foreground mt-1 flex items-center gap-1.5">
+                    <span>{mapReport.assignedOfficer.name}</span>
+                    {mapReport.assignedOfficer.areaName && (
+                      <span className="bg-muted px-1.5 py-0.5 rounded-md">Ward: {mapReport.assignedOfficer.areaName}</span>
+                    )}
+                  </p>
                 )}
               </div>
             </div>
