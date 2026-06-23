@@ -70,6 +70,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 
 const wardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
@@ -165,6 +166,22 @@ export default function MasterDashboard() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
+  const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+
+  function openReport(r: PanchayatMapReport, officerName?: string) {
+    const officer = officers.find((o) => o.id === r.assignedOfficerId);
+    setSelectedReport({
+      id: r.id,
+      address: r.address,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      status: r.status,
+      wardName: (officer ?? null)?.areaName ?? null,
+      officerName: officerName ?? officer?.name ?? null,
+      imageUrl: r.imageUrl ?? null,
+      cleanupImageUrl: r.cleanupImageUrl ?? null,
+    });
+  }
 
   const editForm = useForm<EditOfficerValues>({
     resolver: zodResolver(editOfficerSchema),
@@ -440,17 +457,25 @@ export default function MasterDashboard() {
                   {filtered.map((r) => {
                     const officer = officers.find((o) => o.id === r.assignedOfficerId);
                     return (
-                      <div key={r.id} className="flex items-start gap-3 bg-background rounded-xl px-3 py-2.5 border border-border/50">
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => openReport(r)}
+                        className="flex items-start gap-3 bg-background rounded-xl px-3 py-2.5 border border-border/50 w-full text-left hover:border-primary/40 hover:bg-primary/5 active:scale-[0.98] transition-all"
+                      >
                         <span className="text-[10px] font-black text-muted-foreground font-mono mt-0.5 shrink-0">#{r.id}</span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground leading-snug truncate">
                             {r.address ?? `${r.latitude.toFixed(4)}° N, ${r.longitude.toFixed(4)}° E`}
                           </p>
                           {officer && (
-                            <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{officer.name} · {officer.areaName}</p>
+                            <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
+                              {officer.name} · <span className="font-semibold">Ward:</span> {officer.areaName}
+                            </p>
                           )}
                         </div>
-                      </div>
+                        <span className="text-[10px] text-primary font-bold shrink-0 mt-0.5">View →</span>
+                      </button>
                     );
                   })}
                 </div>
@@ -643,9 +668,11 @@ export default function MasterDashboard() {
                         {wardReports.map((report) => {
                           const isNew = report.status === "reported";
                           return (
-                            <div
+                            <button
                               key={report.id}
-                              className="bg-muted/40 rounded-xl p-3 border border-border/40"
+                              type="button"
+                              onClick={() => openReport(report, wardOfficer?.name)}
+                              className="bg-muted/40 rounded-xl p-3 border border-border/40 w-full text-left hover:border-primary/40 hover:bg-primary/5 active:scale-[0.98] transition-all"
                             >
                               <div className="flex items-start justify-between gap-2 mb-1">
                                 <span className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">#{report.id}</span>
@@ -660,7 +687,8 @@ export default function MasterDashboard() {
                               <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">
                                 {report.address ?? `${report.latitude.toFixed(4)}° N, ${report.longitude.toFixed(4)}° E`}
                               </p>
-                            </div>
+                              <p className="text-[10px] text-primary font-bold mt-1.5">Tap to view photo →</p>
+                            </button>
                           );
                         })}
                       </div>
@@ -911,6 +939,12 @@ export default function MasterDashboard() {
           </div>
         )}
       </div>
+
+      <ReportDetailSheet
+        report={selectedReport}
+        open={selectedReport !== null}
+        onClose={() => setSelectedReport(null)}
+      />
     </div>
   );
 }

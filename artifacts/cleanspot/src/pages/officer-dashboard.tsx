@@ -173,7 +173,7 @@ export default function OfficerDashboard() {
         </h1>
         <p className="text-muted-foreground font-medium">
           {officerData?.areaName
-            ? `${officerData.areaName}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
+            ? `Ward: ${officerData.areaName}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
             : "Your assigned area"}
         </p>
 
