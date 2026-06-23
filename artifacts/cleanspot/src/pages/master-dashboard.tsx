@@ -22,6 +22,8 @@ import {
   Phone,
   LayoutList,
   Pencil,
+  FileWarning,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -411,6 +413,51 @@ export default function MasterDashboard() {
             <span className="text-sm font-medium">Loading stats…</span>
           </div>
         )}
+
+        {/* Filtered reports list — visible when a status card is active */}
+        {!isLoading && statusFilter !== "all" && (() => {
+          const filtered = allReports.filter((r) => r.status === statusFilter);
+          const label = statusFilter === "reported" ? "New" : statusFilter === "cleaning" ? "In Progress" : "Cleaned";
+          const labelColor = statusFilter === "reported" ? "text-destructive bg-destructive/10" : statusFilter === "cleaning" ? "text-orange-600 bg-orange-50" : "text-primary bg-primary/10";
+          return (
+            <div className="mt-5 border-t border-border/40 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${labelColor}`}>
+                  {label} — {filtered.length} report{filtered.length !== 1 ? "s" : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                >
+                  <X className="w-3 h-3" /> Clear filter
+                </button>
+              </div>
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground font-medium text-center py-4">No reports with this status.</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {filtered.map((r) => {
+                    const officer = officers.find((o) => o.id === r.assignedOfficerId);
+                    return (
+                      <div key={r.id} className="flex items-start gap-3 bg-background rounded-xl px-3 py-2.5 border border-border/50">
+                        <span className="text-[10px] font-black text-muted-foreground font-mono mt-0.5 shrink-0">#{r.id}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground leading-snug truncate">
+                            {r.address ?? `${r.latitude.toFixed(4)}° N, ${r.longitude.toFixed(4)}° E`}
+                          </p>
+                          {officer && (
+                            <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{officer.name} · {officer.areaName}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Panchayat map */}
