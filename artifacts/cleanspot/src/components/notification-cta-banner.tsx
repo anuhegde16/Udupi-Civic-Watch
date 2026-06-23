@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Bell, BellOff, X } from "lucide-react";
+import { Bell, BellOff, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useCitizenPushNotifications } from "@/hooks/use-citizen-push-notifications";
@@ -125,57 +125,44 @@ export function NotificationCTABanner(props: NotificationCTABannerProps) {
   return <CitizenBanner reportId={(props as CitizenBannerProps).reportId} />;
 }
 
-const CITIZEN_PUSH_KEY = "citizen-push-decided";
-
 export function NotificationHomePill() {
   const { permission, isSubscribed, isLoading, supported, subscribe } = useCitizenPushNotifications();
-  const [dismissed, setDismissed] = useState<boolean>(() => {
-    try { return localStorage.getItem(CITIZEN_PUSH_KEY) === "skipped"; } catch { return false; }
-  });
 
-  const dismiss = () => {
-    try { localStorage.setItem(CITIZEN_PUSH_KEY, "skipped"); } catch {}
-    setDismissed(true);
-  };
+  // Never render if the browser can't support push at all
+  if (!supported || permission === "unsupported") return null;
 
-  if (
-    !supported ||
-    isSubscribed ||
-    dismissed ||
-    permission === "unsupported" ||
-    permission === "granted" ||
-    permission === "denied"
-  ) {
-    return null;
-  }
+  const enabled = isSubscribed || permission === "granted";
+  const denied = permission === "denied";
 
   const handleEnable = async () => {
-    // subscribe() without reportId registers the browser push subscription but
-    // does not call the server — the server link happens on the report success
-    // screen via the CitizenBanner auto-link effect.
-    const ok = await subscribe();
-    if (ok || Notification.permission !== "default") dismiss();
+    await subscribe();
   };
 
   return (
     <div className="flex items-center gap-2 mt-3 animate-in fade-in duration-500">
       <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1.5 text-white/80">
-        <Bell className="w-3.5 h-3.5 text-white/60 shrink-0" />
-        <span className="text-xs font-medium">Get notified about your reports</span>
-        <button
-          onClick={handleEnable}
-          disabled={isLoading}
-          className="text-xs font-bold text-secondary hover:text-secondary/80 transition-colors disabled:opacity-60 ml-0.5"
-        >
-          {isLoading ? "…" : "Enable"}
-        </button>
-        <button
-          onClick={dismiss}
-          className="text-white/40 hover:text-white/70 transition-colors ml-0.5"
-          aria-label="Dismiss"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        {enabled ? (
+          <CheckCircle2 className="w-3.5 h-3.5 text-secondary shrink-0" />
+        ) : denied ? (
+          <BellOff className="w-3.5 h-3.5 text-white/40 shrink-0" />
+        ) : (
+          <Bell className="w-3.5 h-3.5 text-white/60 shrink-0" />
+        )}
+        <span className="text-xs font-medium">
+          {enabled ? "Notifications enabled" : "Get notified about your reports"}
+        </span>
+        {!enabled && !denied && (
+          <button
+            onClick={handleEnable}
+            disabled={isLoading}
+            className="text-xs font-bold text-secondary hover:text-secondary/80 transition-colors disabled:opacity-60 ml-0.5"
+          >
+            {isLoading ? "…" : "Enable"}
+          </button>
+        )}
+        {denied && (
+          <span className="text-xs text-white/40 ml-0.5">Blocked in browser settings</span>
+        )}
       </div>
     </div>
   );
