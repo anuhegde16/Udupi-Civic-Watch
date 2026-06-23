@@ -197,7 +197,7 @@ router.post("/reports", async (req, res): Promise<void> => {
   let assignedOfficer = null;
 
   // Always notify control center about every new report regardless of assignment
-  const ccRowsForNewReport = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"));
+  const ccRowsForNewReport = await db.select({ id: usersTable.id }).from(usersTable).where(inArray(usersTable.role, ["control_center", "admin"]));
   const ccNewReportUserIds = ccRowsForNewReport.map((r) => r.id);
   const notifBodyBase = `Report #${report.id}${report.address ? ` — ${report.address}` : ""}`;
   if (ccNewReportUserIds.length > 0) {
@@ -434,7 +434,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
           ? await db
               .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
               .from(usersTable)
-              .where(eq(usersTable.role, "control_center"))
+              .where(inArray(usersTable.role, ["control_center", "admin"]))
           : [];
 
         // Push notifications for status change — panchayat admins + control center (both for any status change)
@@ -443,7 +443,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
 
         // Control center gets both cleaning and cleaned events
         const ccUsersForPush = newStatus === "cleaning"
-          ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"))
+          ? await db.select({ id: usersTable.id }).from(usersTable).where(inArray(usersTable.role, ["control_center", "admin"]))
           : ccUsers;
 
         const panchayatAdminIds = panchayatAdmins.map((r) => r.id);
