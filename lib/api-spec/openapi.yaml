@@ -524,7 +524,9 @@ components:
       properties:
         status:
           type: string
-      required: [status]
+        smtpConfigured:
+          type: boolean
+      required: [status, smtpConfigured]
 
     ErrorResponse:
       type: object

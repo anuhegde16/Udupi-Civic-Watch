@@ -7,6 +7,7 @@
  */
 export interface HealthStatus {
   status: string;
+  smtpConfigured: boolean;
 }
 
 export interface ErrorResponse {

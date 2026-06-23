@@ -5,6 +5,7 @@ import {
   useGetReportsSummary,
   useListOfficers,
   useAdminListReports,
+  useHealthCheck,
   customFetch,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -200,6 +201,9 @@ export default function AdminDashboard() {
     queryFn: () => customFetch("/api/admin/test-mode"),
   });
   const testModeActive = testModeData?.testMode ?? false;
+
+  const { data: healthData } = useHealthCheck();
+  const smtpConfigured = healthData?.smtpConfigured ?? null;
 
   const setTestModeMutation = useMutation({
     mutationFn: (enabled: boolean) =>
@@ -1253,26 +1257,48 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 p-4 bg-muted/40 rounded-2xl border border-border/50">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <p className="text-sm font-black text-foreground">Test Mode</p>
-              {testModeActive ? (
-                <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">ACTIVE</span>
-              ) : (
-                <span className="text-[10px] font-bold bg-muted text-muted-foreground border border-border px-2 py-0.5 rounded-full">Off</span>
-              )}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 p-4 bg-muted/40 rounded-2xl border border-border/50">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-black text-foreground">Test Mode</p>
+                {testModeActive ? (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">ACTIVE</span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-muted text-muted-foreground border border-border px-2 py-0.5 rounded-full">Off</span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground font-medium">
+                When active, all pages show a TEST MODE banner and the report form allows manual map placement for testing outside the service area.
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground font-medium">
-              When active, all pages show a TEST MODE banner and the report form allows manual map placement for testing outside the service area.
-            </p>
+            <Switch
+              checked={testModeActive}
+              onCheckedChange={(checked) => setTestModeMutation.mutate(checked)}
+              disabled={setTestModeMutation.isPending}
+              className="shrink-0"
+            />
           </div>
-          <Switch
-            checked={testModeActive}
-            onCheckedChange={(checked) => setTestModeMutation.mutate(checked)}
-            disabled={setTestModeMutation.isPending}
-            className="shrink-0"
-          />
+
+          <div className="flex items-center justify-between gap-4 p-4 bg-muted/40 rounded-2xl border border-border/50">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-black text-foreground">Email (SMTP)</p>
+                {smtpConfigured === null ? (
+                  <span className="text-[10px] font-bold bg-muted text-muted-foreground border border-border px-2 py-0.5 rounded-full">Checking…</span>
+                ) : smtpConfigured ? (
+                  <span className="text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">Configured</span>
+                ) : (
+                  <span className="text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">Not configured</span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground font-medium">
+                {smtpConfigured === false
+                  ? "SMTP credentials are missing — assignment and welcome emails will not be sent. Set SMTP_USER and SMTP_PASS in Replit Secrets."
+                  : "Transactional emails: officer assignments, status updates, password resets."}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

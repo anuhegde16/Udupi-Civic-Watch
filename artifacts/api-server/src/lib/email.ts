@@ -6,7 +6,7 @@ const SMTP_HOST = process.env["SMTP_HOST"];
 const SMTP_PORT = parseInt(process.env["SMTP_PORT"] ?? "465", 10);
 const SMTP_USER = process.env["SMTP_USER"];
 const SMTP_PASS = process.env["SMTP_PASS"];
-const FROM_ADDRESS = process.env["SMTP_FROM"] ?? "Udupi Civic Watch <noreply@udupicivicwatch.com>";
+const FROM_ADDRESS = process.env["SMTP_FROM"] ?? "Udupi Civic Watch <info@udupicivicwatch.in>";
 
 function createTransport() {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
@@ -19,6 +19,10 @@ function createTransport() {
 }
 
 const transporter = createTransport();
+
+export function isSmtpConfigured(): boolean {
+  return transporter !== null;
+}
 
 const CONTROL_CENTER_URL = "https://udupicivicwatch.in/admin/login";
 const PANCHAYAT_ADMIN_URL = "https://udupicivicwatch.in/master/login";
@@ -222,14 +226,21 @@ function divider(): string {
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   if (!transporter) {
-    logger.warn("SMTP not configured — skipping email");
-    return;
+    const missing = [
+      !SMTP_HOST && "SMTP_HOST",
+      !SMTP_USER && "SMTP_USER",
+      !SMTP_PASS && "SMTP_PASS",
+    ]
+      .filter(Boolean)
+      .join(", ");
+    throw new Error(`SMTP not configured — missing env vars: ${missing}`);
   }
   try {
     await transporter.sendMail({ from: FROM_ADDRESS, to, subject, html });
     logger.info({ to, subject }, "Email sent");
   } catch (err) {
     logger.warn({ err, to }, "Failed to send email");
+    throw err;
   }
 }
 
