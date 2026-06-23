@@ -152,8 +152,22 @@ async function seedOfficerPanchayatNames() {
   }
 }
 
+async function ensureReportsColumns() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS image_uploaded_at timestamp with time zone
+    `);
+    logger.info("reports schema columns verified");
+  } catch (err) {
+    logger.warn({ err }, "Could not ensure reports columns");
+  }
+}
+
 async function start() {
   await ensureAdminExists();
+  await ensureReportsColumns();
   await migrateRoles();
   await ensurePanchayatAdmin();
   await seedOfficerPanchayatNames();
