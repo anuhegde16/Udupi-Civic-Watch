@@ -179,10 +179,23 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   const officer = await findOfficerForLocation(latitude, longitude);
 
+  // Extract the server-assigned upload timestamp from the filename (format: TIMESTAMP-random.ext)
+  let imageUploadedAt: Date | null = null;
+  if (imageUrl) {
+    const filenameMatch = imageUrl.match(/\/uploads\/files\/(\d+)-[^/]+$/);
+    if (filenameMatch && filenameMatch[1]) {
+      const ts = parseInt(filenameMatch[1], 10);
+      if (!isNaN(ts) && ts > 0) {
+        imageUploadedAt = new Date(ts);
+      }
+    }
+  }
+
   const [report] = await db
     .insert(reportsTable)
     .values({
       imageUrl: imageUrl ?? null,
+      imageUploadedAt,
       latitude,
       longitude,
       address: address ?? null,

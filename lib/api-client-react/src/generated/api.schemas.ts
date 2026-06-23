@@ -70,6 +70,8 @@ export interface OfficerBasic {
 export interface Report {
   id: number;
   imageUrl?: string | null;
+  /** Server-recorded timestamp of when the photo was uploaded */
+  imageUploadedAt?: string | null;
   cleanupImageUrl?: string | null;
   latitude: number;
   longitude: number;
@@ -240,6 +242,8 @@ export interface UploadImageBody {
 
 export interface UploadImageResponse {
   url: string;
+  /** Server-recorded timestamp of when this image was uploaded */
+  uploadedAt: string;
 }
 
 export type ListReportsParams = {

@@ -169,6 +169,23 @@ export default function OfficerReportDetail() {
                 </div>
               </div>
 
+              {report.imageUrl && (
+                <div className="flex flex-col gap-1 mb-6">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Photo Uploaded At</p>
+                  {report.imageUploadedAt ? (
+                    <div className="flex items-center gap-2 text-foreground font-medium bg-muted/50 p-3 rounded-xl">
+                      <Camera className="w-5 h-5 text-primary shrink-0" />
+                      <p>{format(new Date(report.imageUploadedAt), "MMM d, yyyy 'at' h:mm a")}</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-muted-foreground font-medium bg-muted/50 p-3 rounded-xl">
+                      <Camera className="w-5 h-5 shrink-0" />
+                      <p className="text-sm">Upload time not recorded</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <a href={osmUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
                 <Button variant="outline" className="w-full h-12 font-bold rounded-xl border-primary/20 text-primary hover:bg-primary/5 group">
                   Open in Maps

@@ -591,6 +591,11 @@ components:
         imageUrl:
           type: string
           nullable: true
+        imageUploadedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Server-recorded timestamp of when the photo was uploaded
         cleanupImageUrl:
           type: string
           nullable: true
@@ -943,4 +948,8 @@ components:
       properties:
         url:
           type: string
-      required: [url]
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Server-recorded timestamp of when this image was uploaded
+      required: [url, uploadedAt]

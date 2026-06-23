@@ -34,7 +34,8 @@ router.post("/uploads/image", async (req, res): Promise<void> => {
   const buffer = Buffer.from(base64Data, "base64");
   fs.writeFileSync(filepath, buffer);
 
-  res.json({ url: `/api/uploads/files/${filename}` });
+  const uploadedAt = new Date().toISOString();
+  res.json({ url: `/api/uploads/files/${filename}`, uploadedAt });
 });
 
 router.get("/uploads/files/:filename", async (req, res): Promise<void> => {

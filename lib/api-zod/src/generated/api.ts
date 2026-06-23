@@ -83,6 +83,10 @@ export const ListReportsResponse = zod.object({
     zod.object({
       id: zod.number(),
       imageUrl: zod.string().nullish(),
+      imageUploadedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Server-recorded timestamp of when the photo was uploaded"),
       cleanupImageUrl: zod.string().nullish(),
       latitude: zod.number(),
       longitude: zod.number(),
@@ -133,6 +137,10 @@ export const GetReportParams = zod.object({
 export const GetReportResponse = zod.object({
   id: zod.number(),
   imageUrl: zod.string().nullish(),
+  imageUploadedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Server-recorded timestamp of when the photo was uploaded"),
   cleanupImageUrl: zod.string().nullish(),
   latitude: zod.number(),
   longitude: zod.number(),
@@ -173,6 +181,10 @@ export const UpdateReportBody = zod.object({
 export const UpdateReportResponse = zod.object({
   id: zod.number(),
   imageUrl: zod.string().nullish(),
+  imageUploadedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Server-recorded timestamp of when the photo was uploaded"),
   cleanupImageUrl: zod.string().nullish(),
   latitude: zod.number(),
   longitude: zod.number(),
@@ -353,6 +365,10 @@ export const GetOfficerReportsResponse = zod.object({
     zod.object({
       id: zod.number(),
       imageUrl: zod.string().nullish(),
+      imageUploadedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Server-recorded timestamp of when the photo was uploaded"),
       cleanupImageUrl: zod.string().nullish(),
       latitude: zod.number(),
       longitude: zod.number(),
@@ -399,6 +415,10 @@ export const AdminListReportsResponse = zod.object({
     zod.object({
       id: zod.number(),
       imageUrl: zod.string().nullish(),
+      imageUploadedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Server-recorded timestamp of when the photo was uploaded"),
       cleanupImageUrl: zod.string().nullish(),
       latitude: zod.number(),
       longitude: zod.number(),
@@ -441,6 +461,10 @@ export const ReassignReportBody = zod.object({
 export const ReassignReportResponse = zod.object({
   id: zod.number(),
   imageUrl: zod.string().nullish(),
+  imageUploadedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Server-recorded timestamp of when the photo was uploaded"),
   cleanupImageUrl: zod.string().nullish(),
   latitude: zod.number(),
   longitude: zod.number(),
@@ -554,4 +578,7 @@ export const UploadImageBody = zod.object({
 
 export const UploadImageResponse = zod.object({
   url: zod.string(),
+  uploadedAt: zod.coerce
+    .date()
+    .describe("Server-recorded timestamp of when this image was uploaded"),
 });

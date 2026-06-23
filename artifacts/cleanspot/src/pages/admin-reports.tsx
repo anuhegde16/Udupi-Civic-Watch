@@ -18,6 +18,7 @@ type Report = {
   status: string;
   createdAt: string;
   imageUrl?: string | null;
+  imageUploadedAt?: string | null;
   cleanupImageUrl?: string | null;
   assignedOfficer?: { name: string; areaName?: string | null } | null;
   assignedOfficerId?: number | null;
@@ -486,6 +487,25 @@ export default function AdminReports() {
               </div>
             )}
           </div>
+
+          {mapReport && (
+            <div className="px-6 sm:px-8 py-4 border-t border-border/50 grid grid-cols-2 gap-3 text-xs">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-bold uppercase tracking-wider text-muted-foreground">Reported At</span>
+                <span className="font-medium text-foreground">{format(new Date(mapReport.createdAt), "MMM d, yyyy 'at' h:mm a")}</span>
+              </div>
+              {mapReport.imageUrl && (
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-bold uppercase tracking-wider text-muted-foreground">Photo Uploaded At</span>
+                  {mapReport.imageUploadedAt ? (
+                    <span className="font-medium text-foreground">{format(new Date(mapReport.imageUploadedAt), "MMM d, yyyy 'at' h:mm a")}</span>
+                  ) : (
+                    <span className="font-medium text-muted-foreground italic">Not recorded</span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="px-6 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row gap-2 sm:gap-3 border-t border-border/50 bg-muted/20">
             <Button variant="ghost" className="rounded-xl font-bold h-11 order-last sm:order-first" onClick={() => setMapReport(null)}>

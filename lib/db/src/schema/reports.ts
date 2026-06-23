@@ -6,6 +6,7 @@ import { officersTable } from "./officers";
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),
   imageUrl: text("image_url"),
+  imageUploadedAt: timestamp("image_uploaded_at", { withTimezone: true }),
   cleanupImageUrl: text("cleanup_image_url"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
