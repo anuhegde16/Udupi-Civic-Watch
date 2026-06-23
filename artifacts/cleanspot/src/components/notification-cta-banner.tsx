@@ -127,13 +127,17 @@ export function NotificationCTABanner(props: NotificationCTABannerProps) {
 
 export function NotificationHomePill() {
   const { permission, isSubscribed, isLoading, supported, subscribe } = useCitizenPushNotifications();
+  const [tried, setTried] = useState(false);
 
   // Never render if the browser can't support push at all
   if (!supported || permission === "unsupported") return null;
 
   const enabled = isSubscribed || permission === "granted";
+  // Blocked = either the browser denied it, or we tried and it came back denied
+  const blocked = permission === "denied" || (tried && permission !== "granted");
 
   const handleEnable = async () => {
+    setTried(true);
     await subscribe();
   };
 
@@ -146,9 +150,13 @@ export function NotificationHomePill() {
           <Bell className="w-3.5 h-3.5 text-white/60 shrink-0" />
         )}
         <span className="text-xs font-medium">
-          {enabled ? "Notifications enabled" : "Get notified about your reports"}
+          {enabled
+            ? "Notifications enabled"
+            : blocked
+            ? "Allow notifications in browser settings"
+            : "Get notified about your reports"}
         </span>
-        {!enabled && (
+        {!enabled && !blocked && (
           <button
             onClick={handleEnable}
             disabled={isLoading}
