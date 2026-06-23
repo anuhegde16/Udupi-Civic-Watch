@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, Hand, AlertTriangle } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle } from "lucide-react";
 import { useCreateReport, useUploadImage } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
@@ -46,7 +46,6 @@ export default function Report() {
 
   const [location, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [locationMode, setLocationMode] = useState<"auto" | "manual">("auto");
 
   const [description, setDescription] = useState("");
 
@@ -77,8 +76,7 @@ export default function Report() {
     setIsLocating(true);
     if (!navigator.geolocation) {
       setIsLocating(false);
-      setLocationMode("manual");
-      toast({ title: "GPS not available", description: "Tap on the map to mark the waste location inside the highlighted zone.", variant: "destructive" });
+      toast({ title: "GPS not available", description: "This device does not support GPS. Location is required to submit a report.", variant: "destructive" });
       return;
     }
 
@@ -88,8 +86,7 @@ export default function Report() {
       if (!resolved) {
         resolved = true;
         setIsLocating(false);
-        setLocationMode("manual");
-        toast({ title: "Location unavailable", description: "Could not get your GPS location. Tap on the map to mark the waste location inside the highlighted zone.", variant: "destructive" });
+        toast({ title: "Location unavailable", description: "Could not get your GPS location. Please ensure location permission is granted and try again.", variant: "destructive" });
       }
     }, 5000);
 
@@ -99,7 +96,6 @@ export default function Report() {
         resolved = true;
         clearTimeout(fallbackTimer);
         setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setLocationMode("auto");
         setIsLocating(false);
       },
       (err) => {
@@ -107,10 +103,9 @@ export default function Report() {
         resolved = true;
         clearTimeout(fallbackTimer);
         setIsLocating(false);
-        setLocationMode("manual");
         const msg = err.code === 1
-          ? "Location permission denied. Tap on the map to mark the waste location inside the highlighted zone."
-          : "Could not get your location. Tap on the map to mark the waste location inside the highlighted zone.";
+          ? "Location permission denied. Please allow location access and tap Refresh to try again."
+          : "Could not get your GPS location. Please ensure location permission is granted and try again.";
         toast({ title: "Location unavailable", description: msg, variant: "destructive" });
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -147,8 +142,12 @@ export default function Report() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!imageUrl) {
+      toast({ title: "Photo required", description: "Please take a photo of the waste before submitting.", variant: "destructive" });
+      return;
+    }
     if (!location) {
-      toast({ title: "Location required", description: "Please set a location on the map before submitting.", variant: "destructive" });
+      toast({ title: "Location required", description: "GPS location is required. Please allow location access and try again.", variant: "destructive" });
       return;
     }
     if (outsideFence) {
@@ -215,7 +214,7 @@ export default function Report() {
             Take a Photo
             {isUploading && <Loader2 className="w-4 h-4 animate-spin text-primary ml-auto" />}
           </Label>
-          <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+          <input type="file" capture="environment" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
           {!imagePreview ? (
             <button
               type="button"
@@ -249,26 +248,10 @@ export default function Report() {
             </Label>
           </div>
 
-          {/* Mode toggle */}
-          <div className="flex gap-2 p-1 bg-muted rounded-xl">
-            <button
-              type="button"
-              onClick={() => { setLocationMode("auto"); getLocation(); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${locationMode === "auto" ? "bg-card shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Navigation className="w-4 h-4" />
-              Use My Location
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLocationMode("manual");
-              }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${locationMode === "manual" ? "bg-card shadow text-primary" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Hand className="w-4 h-4" />
-              Place on Map
-            </button>
+          {/* GPS status */}
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Navigation className="w-4 h-4 text-primary shrink-0" />
+            <span>Location is detected automatically using your phone's GPS</span>
           </div>
 
           {/* Map container */}
@@ -285,6 +268,7 @@ export default function Report() {
                 height="300px"
                 geofenceRing={geofenceRing}
                 outsideFence={outsideFence}
+                readonly={true}
               />
             )}
           </div>
@@ -300,13 +284,6 @@ export default function Report() {
             </div>
           )}
 
-          {locationMode === "manual" && location && !outsideFence && (
-            <p className="text-sm text-center text-muted-foreground font-medium flex items-center justify-center gap-2 animate-in fade-in duration-300">
-              <MapPin className="w-4 h-4 text-primary shrink-0" />
-              Drag the pin to the exact waste location. You can also tap anywhere to move it.
-            </p>
-          )}
-
           {location && !outsideFence && (
             <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
@@ -314,13 +291,11 @@ export default function Report() {
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-mono font-bold text-foreground">{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
-                <span className="text-xs text-muted-foreground font-medium">Saligrama, Udupi District — pin is draggable</span>
+                <span className="text-xs text-muted-foreground font-medium">Saligrama, Udupi District — GPS location</span>
               </div>
-              {locationMode === "auto" && (
-                <Button type="button" variant="ghost" size="sm" onClick={getLocation} className="ml-auto h-8 text-primary hover:bg-primary/10 font-bold rounded-lg text-xs">
-                  Refresh
-                </Button>
-              )}
+              <Button type="button" variant="ghost" size="sm" onClick={getLocation} className="ml-auto h-8 text-primary hover:bg-primary/10 font-bold rounded-lg text-xs">
+                Refresh
+              </Button>
             </div>
           )}
         </div>
@@ -345,7 +320,7 @@ export default function Report() {
             type="submit"
             size="lg"
             className="w-full h-16 text-xl font-black rounded-2xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 transition-all hover:-translate-y-1 disabled:opacity-70 disabled:shadow-none disabled:transform-none disabled:cursor-not-allowed"
-            disabled={!location || isLocating || isUploading || createReport.isPending || outsideFence}
+            disabled={!imageUrl || !location || isLocating || isUploading || createReport.isPending || outsideFence}
           >
             {createReport.isPending ? (
               <Loader2 className="w-6 h-6 mr-2 animate-spin" />

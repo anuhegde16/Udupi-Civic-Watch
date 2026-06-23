@@ -29,9 +29,10 @@ interface MapPickerProps {
   height?: string;
   geofenceRing?: [number, number][]; // GeoJSON [lon, lat] pairs
   outsideFence?: boolean;
+  readonly?: boolean;
 }
 
-export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence }: MapPickerProps) {
+export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence, readonly = false }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
@@ -67,28 +68,32 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
     }
 
     if (value) {
-      const m = L.marker([value.lat, value.lng], { draggable: true, icon: buildIcon() }).addTo(map);
+      const m = L.marker([value.lat, value.lng], { draggable: !readonly, icon: buildIcon() }).addTo(map);
       markerRef.current = m;
-      m.on("dragend", () => {
-        const { lat, lng } = m.getLatLng();
+      if (!readonly) {
+        m.on("dragend", () => {
+          const { lat, lng } = m.getLatLng();
+          onChange({ lat, lng });
+        });
+      }
+    }
+
+    if (!readonly) {
+      map.on("click", (e: L.LeafletMouseEvent) => {
+        const { lat, lng } = e.latlng;
+        if (markerRef.current) {
+          markerRef.current.setLatLng([lat, lng]);
+        } else {
+          const m = L.marker([lat, lng], { draggable: true, icon: buildIcon() }).addTo(map);
+          markerRef.current = m;
+          m.on("dragend", () => {
+            const { lat: dlat, lng: dlng } = m.getLatLng();
+            onChange({ lat: dlat, lng: dlng });
+          });
+        }
         onChange({ lat, lng });
       });
     }
-
-    map.on("click", (e: L.LeafletMouseEvent) => {
-      const { lat, lng } = e.latlng;
-      if (markerRef.current) {
-        markerRef.current.setLatLng([lat, lng]);
-      } else {
-        const m = L.marker([lat, lng], { draggable: true, icon: buildIcon() }).addTo(map);
-        markerRef.current = m;
-        m.on("dragend", () => {
-          const { lat: dlat, lng: dlng } = m.getLatLng();
-          onChange({ lat: dlat, lng: dlng });
-        });
-      }
-      onChange({ lat, lng });
-    });
 
     mapRef.current = map;
 
