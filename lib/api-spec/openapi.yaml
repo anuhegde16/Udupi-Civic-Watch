@@ -659,6 +659,10 @@ components:
         cleanupImageUrl:
           type: string
           nullable: true
+        wardName:
+          type: string
+          nullable: true
+          description: Ward handling this report (from assigned officer)
       required: [id, status, createdAt, updatedAt]
 
     ReportsSummary:

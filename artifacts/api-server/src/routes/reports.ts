@@ -284,19 +284,26 @@ router.get("/reports/:id/track", async (req, res): Promise<void> => {
     return;
   }
 
-  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
+  const [row] = await db
+    .select({ report: reportsTable, officer: officersTable })
+    .from(reportsTable)
+    .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
+    .where(eq(reportsTable.id, id))
+    .limit(1);
 
-  if (!report) {
+  if (!row) {
     res.status(404).json({ error: "Report not found" });
     return;
   }
 
+  const { report, officer } = row;
   res.json({
     id: report.id,
     status: report.status,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
     cleanupImageUrl: report.cleanupImageUrl,
+    wardName: officer?.areaName ?? null,
   });
 });
 

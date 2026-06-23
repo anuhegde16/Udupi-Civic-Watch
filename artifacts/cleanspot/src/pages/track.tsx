@@ -1,6 +1,6 @@
 import { useRoute } from "wouter";
 import { useTrackReport, getTrackReportQueryKey } from "@workspace/api-client-react";
-import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info } from "lucide-react";
+import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Track() {
@@ -87,6 +87,12 @@ export default function Track() {
           <span className="bg-primary/10 text-primary text-sm font-mono font-bold px-3 py-1 rounded-lg">#{id}</span>
         </div>
         <p className="text-muted-foreground font-medium">Track the progress of your civic report.</p>
+        {report.wardName && (
+          <div className="mt-3 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary shrink-0" />
+            <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{report.wardName}</span></span>
+          </div>
+        )}
         
         {report.status !== 'cleaned' && (
           <div className="mt-4 p-3 bg-secondary/10 rounded-xl border border-secondary/20 flex items-start gap-3">

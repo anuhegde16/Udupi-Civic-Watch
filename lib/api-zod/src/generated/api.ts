@@ -224,6 +224,10 @@ export const TrackReportResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   cleanupImageUrl: zod.string().nullish(),
+  wardName: zod
+    .string()
+    .nullish()
+    .describe("Ward handling this report (from assigned officer)"),
 });
 
 /**

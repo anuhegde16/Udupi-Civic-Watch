@@ -106,6 +106,8 @@ export interface ReportStatus {
   createdAt: string;
   updatedAt: string;
   cleanupImageUrl?: string | null;
+  /** Ward handling this report (from assigned officer) */
+  wardName?: string | null;
 }
 
 export interface ReportsSummary {

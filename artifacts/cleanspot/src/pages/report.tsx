@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid } from "lucide-react";
 import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,7 @@ export default function Report() {
 
   const [step, setStep] = useState<"form" | "success">("form");
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [assignedWardName, setAssignedWardName] = useState<string | null>(null);
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -182,6 +183,7 @@ export default function Report() {
       {
         onSuccess: (data) => {
           setCreatedId(data.id);
+          setAssignedWardName(data.assignedOfficer?.wardName ?? null);
           setStep("success");
           saveReport(data.id);
         },
@@ -222,6 +224,12 @@ export default function Report() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-secondary/5 rounded-bl-full" />
           <p className="text-sm text-muted-foreground font-bold mb-1 uppercase tracking-wider">Report ID</p>
           <p className="text-4xl font-mono font-black text-foreground">#{createdId}</p>
+          {assignedWardName && (
+            <div className="mt-3 flex items-center gap-2 pt-3 border-t border-border/50">
+              <LayoutGrid className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{assignedWardName}</span></span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-3 w-full">
           <Button size="lg" className="w-full text-lg h-14 rounded-xl" onClick={() => setLocation(`/track/${createdId}`)}>
