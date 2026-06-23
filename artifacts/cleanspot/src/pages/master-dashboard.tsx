@@ -24,6 +24,7 @@ import {
   Pencil,
   FileWarning,
   X,
+  KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +112,14 @@ const editOfficerSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("Valid email required"),
   password: z.string().optional(),
-});
+  confirmPassword: z.string().optional(),
+}).refine(
+  (d) => !d.password || d.password.length >= 6,
+  { message: "Password must be at least 6 characters", path: ["password"] }
+).refine(
+  (d) => !d.password || d.password === d.confirmPassword,
+  { message: "Passwords do not match", path: ["confirmPassword"] }
+);
 type EditOfficerValues = z.infer<typeof editOfficerSchema>;
 
 function usePanchayatOfficers() {
@@ -188,7 +196,7 @@ export default function MasterDashboard() {
 
   const editForm = useForm<EditOfficerValues>({
     resolver: zodResolver(editOfficerSchema),
-    defaultValues: { name: "", phone: "", email: "", password: "" },
+    defaultValues: { name: "", phone: "", email: "", password: "", confirmPassword: "" },
   });
 
   const officers = officersData?.officers ?? [];
@@ -240,20 +248,21 @@ export default function MasterDashboard() {
 
   function openEdit(officer: PanchayatOfficer) {
     setEditingOfficer(officer);
-    editForm.reset({ name: officer.name, phone: officer.phone ?? "", email: officer.email, password: "" });
+    editForm.reset({ name: officer.name, phone: officer.phone ?? "", email: officer.email, password: "", confirmPassword: "" });
     setEditOpen(true);
   }
 
   function handleUpdate(data: EditOfficerValues) {
     if (!editingOfficer) return;
+    const passwordChanged = !!data.password;
     const payload: Record<string, any> = { name: data.name, phone: data.phone || null };
     if (data.email && data.email !== editingOfficer.email) payload.email = data.email;
-    if (data.password) payload.password = data.password;
+    if (passwordChanged) payload.password = data.password;
     updateOfficer.mutate(
       { id: editingOfficer.id, data: payload },
       {
         onSuccess: () => {
-          toast({ title: "Officer updated" });
+          toast({ title: passwordChanged ? "Password reset successfully" : "Officer updated" });
           setEditOpen(false);
           setEditingOfficer(null);
           queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
@@ -798,21 +807,41 @@ export default function MasterDashboard() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={editForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-bold text-foreground">
-                      New Password <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="text" placeholder="Leave blank to keep current" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="pt-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-sm font-bold text-foreground">Reset Password</span>
+                  <span className="text-xs text-muted-foreground font-medium">(leave blank for no change)</span>
+                </div>
+                <div className="space-y-3">
+                  <FormField
+                    control={editForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold text-foreground text-sm">New Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="Min 6 characters" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={editForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="font-bold text-foreground text-sm">Confirm Password</FormLabel>
+                        <FormControl>
+                          <Input type="password" placeholder="Re-enter new password" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
               <div className="flex gap-2 pt-2">
                 <Button type="button" variant="outline" className="flex-1 rounded-xl h-11 font-bold" onClick={() => { setEditOpen(false); setEditingOfficer(null); }}>
                   Cancel
