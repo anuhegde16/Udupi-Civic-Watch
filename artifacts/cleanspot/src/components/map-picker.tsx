@@ -37,6 +37,11 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const fenceLayerRef = useRef<L.Polygon | null>(null);
+  const readonlyRef = useRef(readonly);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => { readonlyRef.current = readonly; }, [readonly]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -73,27 +78,28 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       if (!readonly) {
         m.on("dragend", () => {
           const { lat, lng } = m.getLatLng();
-          onChange({ lat, lng });
+          onChangeRef.current({ lat, lng });
         });
       }
     }
 
-    if (!readonly) {
-      map.on("click", (e: L.LeafletMouseEvent) => {
-        const { lat, lng } = e.latlng;
-        if (markerRef.current) {
-          markerRef.current.setLatLng([lat, lng]);
-        } else {
-          const m = L.marker([lat, lng], { draggable: true, icon: buildIcon() }).addTo(map);
-          markerRef.current = m;
-          m.on("dragend", () => {
-            const { lat: dlat, lng: dlng } = m.getLatLng();
-            onChange({ lat: dlat, lng: dlng });
-          });
-        }
-        onChange({ lat, lng });
-      });
-    }
+    // Always register click handler — gate on readonlyRef so it respects
+    // runtime changes (e.g. switching from GPS to Manual in test mode)
+    map.on("click", (e: L.LeafletMouseEvent) => {
+      if (readonlyRef.current) return;
+      const { lat, lng } = e.latlng;
+      if (markerRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+      } else {
+        const m = L.marker([lat, lng], { draggable: true, icon: buildIcon() }).addTo(map);
+        markerRef.current = m;
+        m.on("dragend", () => {
+          const { lat: dlat, lng: dlng } = m.getLatLng();
+          onChangeRef.current({ lat: dlat, lng: dlng });
+        });
+      }
+      onChangeRef.current({ lat, lng });
+    });
 
     mapRef.current = map;
 
@@ -104,6 +110,23 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       fenceLayerRef.current = null;
     };
   }, []);
+
+  // Dynamically toggle marker draggability when readonly prop changes
+  useEffect(() => {
+    const m = markerRef.current;
+    if (!m) return;
+    if (!readonly) {
+      (m as any).dragging?.enable();
+      m.off("dragend");
+      m.on("dragend", () => {
+        const { lat, lng } = m.getLatLng();
+        onChangeRef.current({ lat, lng });
+      });
+    } else {
+      (m as any).dragging?.disable();
+      m.off("dragend");
+    }
+  }, [readonly]);
 
   // Update fence colour and zoom when outside state changes
   useEffect(() => {
@@ -130,7 +153,7 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       if (!readonly) {
         m.on("dragend", () => {
           const { lat, lng } = m.getLatLng();
-          onChange({ lat, lng });
+          onChangeRef.current({ lat, lng });
         });
       }
     }
