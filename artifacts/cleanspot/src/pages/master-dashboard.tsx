@@ -162,6 +162,7 @@ export default function MasterDashboard() {
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
 
   const editForm = useForm<EditOfficerValues>({
     resolver: zodResolver(editOfficerSchema),
@@ -242,12 +243,23 @@ export default function MasterDashboard() {
 
   const isLoading = isLoadingOfficers || isLoadingStats;
 
-  const statCards = [
-    { label: "Total", value: stats?.total ?? 0, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60" },
-    { label: "New", value: stats?.reported ?? 0, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
-    { label: "In Progress", value: stats?.cleaning ?? 0, icon: <Clock className="w-5 h-5" />, color: "text-orange-500", bg: "bg-orange-50" },
-    { label: "Cleaned", value: stats?.cleaned ?? 0, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
+  type StatFilter = "all" | "reported" | "cleaning" | "cleaned";
+  const statCards: { label: string; value: number; icon: React.ReactNode; color: string; bg: string; activeBg: string; filter: StatFilter }[] = [
+    { label: "Total", value: stats?.total ?? 0, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60", activeBg: "bg-muted ring-2 ring-foreground/30", filter: "all" },
+    { label: "New", value: stats?.reported ?? 0, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8", activeBg: "bg-destructive/20 ring-2 ring-destructive/40", filter: "reported" },
+    { label: "In Progress", value: stats?.cleaning ?? 0, icon: <Clock className="w-5 h-5" />, color: "text-orange-500", bg: "bg-orange-50", activeBg: "bg-orange-100 ring-2 ring-orange-400/40", filter: "cleaning" },
+    { label: "Cleaned", value: stats?.cleaned ?? 0, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8", activeBg: "bg-primary/20 ring-2 ring-primary/40", filter: "cleaned" },
   ];
+
+  // Wards that have at least one report matching the active status filter
+  const allReports = reportsData?.reports ?? [];
+  const filteredWardNames = statusFilter === "all"
+    ? wardNames
+    : wardNames.filter((ward) => {
+        const officer = officers.find((o) => o.areaName === ward);
+        if (!officer) return false;
+        return allReports.some((r) => r.assignedOfficerId === officer.id && r.status === statusFilter);
+      });
 
   const completionRate =
     (stats?.total ?? 0) > 0 ? Math.round(((stats?.cleaned ?? 0) / stats!.total) * 100) : 0;
@@ -362,15 +374,24 @@ export default function MasterDashboard() {
         {/* Stats */}
         {!isLoading && (
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-            {statCards.map((s) => (
-              <div key={s.label} className={`${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
-                <div className={`${s.color} shrink-0`}>{s.icon}</div>
-                <div>
-                  <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
-                  <div className="text-xs text-muted-foreground font-semibold">{s.label}</div>
-                </div>
-              </div>
-            ))}
+            {statCards.map((s) => {
+              const isActive = statusFilter === s.filter;
+              return (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => setStatusFilter(isActive ? "all" : s.filter)}
+                  className={`${isActive ? s.activeBg : s.bg} rounded-2xl px-4 py-3 flex items-center gap-3 transition-all duration-150 hover:brightness-95 active:scale-95 cursor-pointer text-left w-full`}
+                  title={isActive ? "Show all wards" : `Filter by: ${s.label}`}
+                >
+                  <div className={`${s.color} shrink-0`}>{s.icon}</div>
+                  <div>
+                    <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                    <div className="text-xs text-muted-foreground font-semibold">{s.label}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
         {!isLoading && (stats?.total ?? 0) > 0 && (
@@ -414,37 +435,50 @@ export default function MasterDashboard() {
       {/* Ward coverage */}
       {wardNames.length > 0 && (
         <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
-          <h2 className="text-xl font-black text-foreground mb-1 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-indigo-500" /> Ward Coverage
-          </h2>
-          <p className="text-xs text-muted-foreground font-medium mb-4">Tap a ward to see officer details and open reports</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {wardNames.map((ward) => {
-              const officer = officers.find((o) => o.areaName === ward);
-              const isSelected = selectedWard === ward;
-              return (
-                <button
-                  key={ward}
-                  type="button"
-                  onClick={() => setSelectedWard(isSelected ? null : ward)}
-                  className={`rounded-xl px-3 py-2.5 border text-sm font-semibold flex items-center gap-2 text-left transition-all duration-150 active:scale-95 ${
-                    isSelected
-                      ? "bg-primary border-primary text-primary-foreground shadow-md ring-2 ring-primary/30"
-                      : officer
-                      ? "bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:border-primary/40"
-                      : "bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70"
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary-foreground" : officer ? "bg-primary" : "bg-muted-foreground/40"}`} />
-                  <span className="truncate">{ward}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-indigo-500" /> Ward Coverage
+            </h2>
+            {statusFilter !== "all" && (
+              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-full">
+                {filteredWardNames.length} of {wardNames.length} wards
+              </span>
+            )}
           </div>
-          {unassignedWards.length > 0 && (
-            <p className="text-xs text-amber-600 font-medium mt-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-              {unassignedWards.length} ward{unassignedWards.length !== 1 ? "s" : ""} without an assigned officer
-            </p>
+          <p className="text-xs text-muted-foreground font-medium mb-4">Tap a ward to see officer details and open reports</p>
+          {filteredWardNames.length === 0 && statusFilter !== "all" ? (
+            <p className="text-sm text-muted-foreground font-medium text-center py-6">No wards have reports with this status.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {filteredWardNames.map((ward) => {
+                  const officer = officers.find((o) => o.areaName === ward);
+                  const isSelected = selectedWard === ward;
+                  return (
+                    <button
+                      key={ward}
+                      type="button"
+                      onClick={() => setSelectedWard(isSelected ? null : ward)}
+                      className={`rounded-xl px-3 py-2.5 border text-sm font-semibold flex items-center gap-2 text-left transition-all duration-150 active:scale-95 ${
+                        isSelected
+                          ? "bg-primary border-primary text-primary-foreground shadow-md ring-2 ring-primary/30"
+                          : officer
+                          ? "bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:border-primary/40"
+                          : "bg-muted/40 border-border/50 text-muted-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary-foreground" : officer ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                      <span className="truncate">{ward}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {unassignedWards.length > 0 && (
+                <p className="text-xs text-amber-600 font-medium mt-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  {unassignedWards.length} ward{unassignedWards.length !== 1 ? "s" : ""} without an assigned officer
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
