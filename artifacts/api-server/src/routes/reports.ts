@@ -13,7 +13,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, getSessionUser } from "../lib/auth";
 import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
-import { notifyAndPush } from "../lib/push";
+import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
 
 const router: IRouter = Router();
 
@@ -435,6 +435,17 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     sendReporterStatusUpdate(report, report.reporterEmail, newStatus).catch((err) =>
       logger.warn({ err, reportId: report.id }, "Reporter status update email failed")
     );
+  }
+
+  // Notify citizen push subscribers (anonymous, linked to this report) when cleaned
+  if (newStatus === "cleaned" && newStatus !== oldStatus) {
+    sendPushToReportSubscriptions(report.id, {
+      title: "Your Report Has Been Cleaned! ✓",
+      body: `Report #${report.id} has been cleaned. Thank you for helping keep Udupi clean.`,
+      type: "report_cleaned",
+      reportId: report.id,
+      url: `/track/${report.id}`,
+    }).catch((err) => logger.warn({ err, reportId: report.id }, "Citizen push notification failed"));
   }
 
   // Fire-and-forget status-change notifications

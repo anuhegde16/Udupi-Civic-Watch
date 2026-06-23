@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, MapPin, Camera, ArrowRight, Activity, Map, ArrowDown, Droplets, Fish, AlertCircle } from "lucide-react";
 import { LiveWasteMap } from "@/components/live-waste-map";
 import { InstallPwaButton } from "@/components/install-pwa-button";
+import { NotificationHomePill } from "@/components/notification-cta-banner";
 import { MyReports } from "@/components/my-reports";
 
 export default function Home() {
@@ -43,6 +44,7 @@ export default function Home() {
             </Link>
             <InstallPwaButton />
           </div>
+          <NotificationHomePill />
         </div>
       </section>
 

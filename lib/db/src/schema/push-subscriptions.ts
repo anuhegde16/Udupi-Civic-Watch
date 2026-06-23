@@ -3,7 +3,8 @@ import { usersTable } from "./users";
 
 export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
+  userId: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
+  reportId: integer("report_id"),
   endpoint: text("endpoint").notNull().unique(),
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),

@@ -18,6 +18,7 @@ import type {
 
 import type {
   AdminListReportsParams,
+  AnonymousPushSubscriptionBody,
   CreateOfficerBody,
   CreateReportBody,
   DeletePushSubscriptionBody,
@@ -2095,6 +2096,94 @@ export const useMarkAllNotificationsRead = <
   TContext
 > => {
   return useMutation(getMarkAllNotificationsReadMutationOptions(options));
+};
+
+/**
+ * @summary Save an anonymous push subscription linked to a report (no auth required)
+ */
+export const getSaveAnonymousPushSubscriptionUrl = () => {
+  return `/api/notifications/anonymous-subscription`;
+};
+
+export const saveAnonymousPushSubscription = async (
+  anonymousPushSubscriptionBody: AnonymousPushSubscriptionBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getSaveAnonymousPushSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(anonymousPushSubscriptionBody),
+  });
+};
+
+export const getSaveAnonymousPushSubscriptionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAnonymousPushSubscription>>,
+    TError,
+    { data: BodyType<AnonymousPushSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof saveAnonymousPushSubscription>>,
+  TError,
+  { data: BodyType<AnonymousPushSubscriptionBody> },
+  TContext
+> => {
+  const mutationKey = ["saveAnonymousPushSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof saveAnonymousPushSubscription>>,
+    { data: BodyType<AnonymousPushSubscriptionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return saveAnonymousPushSubscription(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SaveAnonymousPushSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof saveAnonymousPushSubscription>>
+>;
+export type SaveAnonymousPushSubscriptionMutationBody =
+  BodyType<AnonymousPushSubscriptionBody>;
+export type SaveAnonymousPushSubscriptionMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary Save an anonymous push subscription linked to a report (no auth required)
+ */
+export const useSaveAnonymousPushSubscription = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof saveAnonymousPushSubscription>>,
+    TError,
+    { data: BodyType<AnonymousPushSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof saveAnonymousPushSubscription>>,
+  TError,
+  { data: BodyType<AnonymousPushSubscriptionBody> },
+  TContext
+> => {
+  return useMutation(getSaveAnonymousPushSubscriptionMutationOptions(options));
 };
 
 /**

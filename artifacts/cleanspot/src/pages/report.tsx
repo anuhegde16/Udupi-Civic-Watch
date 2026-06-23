@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { NotificationCTABanner } from "@/components/notification-cta-banner";
 
 // Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
 function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
@@ -231,7 +232,8 @@ export default function Report() {
             </div>
           )}
         </div>
-        <div className="flex flex-col gap-3 w-full">
+        <NotificationCTABanner variant="citizen" reportId={createdId ?? undefined} />
+        <div className="flex flex-col gap-3 w-full mt-4">
           <Button size="lg" className="w-full text-lg h-14 rounded-xl" onClick={() => setLocation(`/track/${createdId}`)}>
             Track Progress
           </Button>

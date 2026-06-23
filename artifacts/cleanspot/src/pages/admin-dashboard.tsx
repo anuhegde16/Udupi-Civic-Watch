@@ -95,6 +95,7 @@ import {
   Cell,
 } from "recharts";
 import { AdminDistrictMap } from "@/components/admin-district-map";
+import { NotificationCTABanner } from "@/components/notification-cta-banner";
 import type { MapReport, MapOfficer } from "@/components/admin-district-map";
 
 const panchayatAreaNames: string[] = geofencesData.features
@@ -451,6 +452,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="pb-12 animate-in fade-in duration-500">
+      <NotificationCTABanner variant="officer" />
       {/* ── Header + zone filter ── */}
       <div className="mb-5 sm:mb-8 bg-card rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 bg-primary/5 rounded-bl-[80px] sm:rounded-bl-[120px] pointer-events-none" />

@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { db, pushSubscriptionsTable, notificationsTable, usersTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 const VAPID_PUBLIC_KEY = process.env["VAPID_PUBLIC_KEY"];
@@ -58,6 +58,26 @@ export async function sendPushToUsers(userIds: number[], payload: PushPayload): 
   await Promise.allSettled(
     subs.map((s) => sendPushToSubscription(s.endpoint, s.p256dh, s.auth, payload))
   );
+}
+
+export async function sendPushToReportSubscriptions(reportId: number, payload: PushPayload): Promise<void> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+
+  const subs = await db
+    .select()
+    .from(pushSubscriptionsTable)
+    .where(and(eq(pushSubscriptionsTable.reportId, reportId), isNull(pushSubscriptionsTable.userId)));
+
+  if (subs.length === 0) return;
+
+  await Promise.allSettled(
+    subs.map((s) => sendPushToSubscription(s.endpoint, s.p256dh, s.auth, payload))
+  );
+
+  // One-shot: clean up after delivery so citizen isn't notified repeatedly
+  await db
+    .delete(pushSubscriptionsTable)
+    .where(and(eq(pushSubscriptionsTable.reportId, reportId), isNull(pushSubscriptionsTable.userId)));
 }
 
 export async function createNotificationForUsers(

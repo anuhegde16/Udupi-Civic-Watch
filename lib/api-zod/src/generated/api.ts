@@ -599,6 +599,23 @@ export const MarkAllNotificationsReadResponse = zod.object({
 });
 
 /**
+ * @summary Save an anonymous push subscription linked to a report (no auth required)
+ */
+export const SaveAnonymousPushSubscriptionBody = zod.object({
+  endpoint: zod.string().url(),
+  keys: zod.object({
+    p256dh: zod.string(),
+    auth: zod.string(),
+  }),
+  reportId: zod.number(),
+});
+
+export const SaveAnonymousPushSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary Upload an image and get back a URL
  */
 export const UploadImageBody = zod.object({

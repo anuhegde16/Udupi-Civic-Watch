@@ -165,9 +165,22 @@ async function ensureReportsColumns() {
   }
 }
 
+async function ensurePushSubscriptionsColumns() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`ALTER TABLE push_subscriptions ALTER COLUMN user_id DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS report_id integer`);
+    logger.info("push_subscriptions schema columns verified");
+  } catch (err) {
+    logger.warn({ err }, "Could not ensure push_subscriptions columns");
+  }
+}
+
 async function start() {
   await ensureAdminExists();
   await ensureReportsColumns();
+  await ensurePushSubscriptionsColumns();
   await migrateRoles();
   await ensurePanchayatAdmin();
   await seedOfficerPanchayatNames();

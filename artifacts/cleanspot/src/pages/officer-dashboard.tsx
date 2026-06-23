@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfficerZoneMap } from "@/components/officer-zone-map";
+import { NotificationCTABanner } from "@/components/notification-cta-banner";
 
 type StatusFilter = "all" | "reported" | "cleaning" | "cleaned";
 type SortOption = "newest" | "oldest" | "status";
@@ -162,6 +163,7 @@ export default function OfficerDashboard() {
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
+      <NotificationCTABanner variant="officer" />
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-bl-[100px] pointer-events-none" />

@@ -498,6 +498,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /notifications/anonymous-subscription:
+    post:
+      operationId: saveAnonymousPushSubscription
+      tags: [notifications]
+      summary: Save an anonymous push subscription linked to a report (no auth required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnonymousPushSubscriptionBody"
+      responses:
+        "200":
+          description: Subscription saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "429":
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /uploads/image:
     post:
       operationId: uploadImage
@@ -912,6 +937,24 @@ components:
               type: string
           required: [p256dh, auth]
       required: [endpoint, keys]
+
+    AnonymousPushSubscriptionBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required: [p256dh, auth]
+        reportId:
+          type: integer
+      required: [endpoint, keys, reportId]
 
     NotificationItem:
       type: object

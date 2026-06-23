@@ -225,6 +225,17 @@ export interface PushSubscriptionBody {
   keys: PushSubscriptionBodyKeys;
 }
 
+export type AnonymousPushSubscriptionBodyKeys = {
+  p256dh: string;
+  auth: string;
+};
+
+export interface AnonymousPushSubscriptionBody {
+  endpoint: string;
+  keys: AnonymousPushSubscriptionBodyKeys;
+  reportId: number;
+}
+
 export interface NotificationItem {
   id: number;
   title: string;

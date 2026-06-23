@@ -72,6 +72,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
+import { NotificationCTABanner } from "@/components/notification-cta-banner";
 
 const wardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
@@ -322,6 +323,7 @@ export default function MasterDashboard() {
 
   return (
     <div className="pb-12 animate-in fade-in duration-500 space-y-6">
+      <NotificationCTABanner variant="officer" />
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/5 rounded-bl-[100px] pointer-events-none" />
