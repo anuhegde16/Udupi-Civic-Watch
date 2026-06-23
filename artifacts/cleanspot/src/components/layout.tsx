@@ -1,12 +1,55 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, FlaskConical } from "lucide-react";
+import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, FlaskConical, Bell, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { NotificationBell } from "@/components/notification-bell";
+import { usePushNotifications } from "@/hooks/use-push-notifications";
+
+function PushPromptBanner() {
+  const { isAuthenticated } = useAuth();
+  const { supported, permission, isSubscribed, isLoading, subscribe } = usePushNotifications();
+  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem("push-prompt-dismissed") === "1");
+
+  useEffect(() => {
+    // Mark as shown once on mount so we don't re-show after dismissal within the same session
+  }, []);
+
+  if (!isAuthenticated || !supported || permission === "denied" || isSubscribed || dismissed) {
+    return null;
+  }
+
+  const handleDismiss = () => {
+    sessionStorage.setItem("push-prompt-dismissed", "1");
+    setDismissed(true);
+  };
+
+  const handleEnable = async () => {
+    await subscribe();
+    sessionStorage.setItem("push-prompt-dismissed", "1");
+    setDismissed(true);
+  };
+
+  return (
+    <div className="bg-primary/10 border-b border-primary/20 px-4 py-2.5 flex items-center gap-3">
+      <Bell className="h-4 w-4 text-primary shrink-0" />
+      <p className="text-sm text-foreground flex-1">
+        <span className="font-semibold">Stay updated</span> — enable push notifications to get instant alerts for new reports and status changes.
+      </p>
+      <div className="flex items-center gap-2 shrink-0">
+        <Button size="sm" className="h-7 text-xs px-3" onClick={handleEnable} disabled={isLoading}>
+          Enable
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleDismiss}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isAdmin, isOfficer, isPanchayatAdmin, logout } = useAuth();
@@ -168,6 +211,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* One-time push notification permission prompt for logged-in users */}
+      <PushPromptBanner />
 
       {testModeActive && (
         <div className="bg-amber-400 text-amber-950 text-sm font-bold text-center py-2 px-4 flex items-center justify-center gap-2 z-40">

@@ -16,7 +16,7 @@ const PushSubscriptionBody = z.object({
   }),
 });
 
-router.get("/notifications/vapid-public-key", requireAuth, (req, res): void => {
+router.get("/notifications/vapid-public-key", (req, res): void => {
   if (!VAPID_PUBLIC_KEY) {
     res.status(503).json({ error: "Push notifications not configured" });
     return;

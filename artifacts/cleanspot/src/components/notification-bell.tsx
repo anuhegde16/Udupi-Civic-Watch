@@ -39,7 +39,7 @@ function timeAgo(dateStr: string): string {
 
 function playNotificationSound() {
   try {
-    const audio = new Audio("/notification.wav");
+    const audio = new Audio("/notification.mp3");
     audio.volume = 0.6;
     audio.play().catch(() => {});
   } catch {
@@ -73,7 +73,7 @@ export function NotificationBell() {
     queryKey: ["notifications"],
     queryFn: () => customFetch<NotificationsResponse>("/api/notifications"),
     enabled: isAuthenticated,
-    refetchInterval: 15000,
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
   });
 

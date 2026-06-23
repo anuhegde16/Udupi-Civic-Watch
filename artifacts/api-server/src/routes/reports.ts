@@ -195,10 +195,25 @@ router.post("/reports", async (req, res): Promise<void> => {
     .returning();
 
   let assignedOfficer = null;
+
+  // Always notify control center about every new report regardless of assignment
+  const ccRowsForNewReport = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"));
+  const ccNewReportUserIds = ccRowsForNewReport.map((r) => r.id);
+  const notifBodyBase = `Report #${report.id}${report.address ? ` — ${report.address}` : ""}`;
+  if (ccNewReportUserIds.length > 0) {
+    notifyAndPush(ccNewReportUserIds, {
+      title: "New Waste Report",
+      body: notifBodyBase,
+      type: "new_report",
+      reportId: report.id,
+      url: "/admin/dashboard",
+    }).catch((err) => logger.warn({ err }, "CC new-report notify failed"));
+  }
+
   if (officer) {
     assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName };
 
-    // Collect user IDs to notify (field officer's user account + panchayat admins + control center)
+    // Collect user IDs to notify (field officer's user account + panchayat admins)
     const officerUserRows = await db
       .select({ id: usersTable.id })
       .from(usersTable)
@@ -213,10 +228,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       : [];
     const panchayatAdminUserIds = panchayatAdminRows.map((r) => r.id);
 
-    const ccRows = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"));
-    const ccUserIds = ccRows.map((r) => r.id);
-
-    const notifBody = `Report #${report.id} assigned${report.address ? ` — ${report.address}` : ""}`;
+    const notifBody = `Report #${report.id} assigned to ${officer.name}${report.address ? ` — ${report.address}` : ""}`;
 
     // Notify the field officer and their panchayat admin(s) in parallel (fire-and-forget)
     Promise.allSettled([
@@ -225,11 +237,11 @@ router.post("/reports", async (req, res): Promise<void> => {
         ? sendNewReportToPanchayatAdmins(officer, report, panchayatAdminRows.filter((a) => !!a.email) as { email: string; name: string }[])
         : Promise.resolve(),
       notifyAndPush(officerUserIds, {
-        title: "New Waste Report",
+        title: "New Report Assigned",
         body: notifBody,
         type: "new_report",
         reportId: report.id,
-        url: "/staff/login",
+        url: "/officer/dashboard",
       }),
       notifyAndPush(panchayatAdminUserIds, {
         title: "New Waste Report",
@@ -237,13 +249,6 @@ router.post("/reports", async (req, res): Promise<void> => {
         type: "new_report",
         reportId: report.id,
         url: "/master/dashboard",
-      }),
-      notifyAndPush(ccUserIds, {
-        title: "New Waste Report",
-        body: notifBody,
-        type: "new_report",
-        reportId: report.id,
-        url: "/admin/dashboard",
       }),
     ]).catch((err) => logger.warn({ err }, "Error in new-report notifications"));
   }
@@ -472,7 +477,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
-            url: "/staff/login",
+            url: "/officer/dashboard",
           }).catch((err) => logger.warn({ err }, "Officer self-notify push failed"));
         }
 
