@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useTrackReport } from "@workspace/api-client-react";
+import { useTrackReport, getTrackReportQueryKey } from "@workspace/api-client-react";
 import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info } from "lucide-react";
 import { format } from "date-fns";
 
@@ -9,6 +9,7 @@ export default function Track() {
   
   const { data: report, isLoading, error } = useTrackReport(id, { 
     query: { 
+      queryKey: getTrackReportQueryKey(id),
       enabled: !!id,
       refetchInterval: 10000 // Poll every 10s for updates
     } 

@@ -18,7 +18,7 @@ export default function OfficerReportDetail() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  const { data: report, isLoading } = useGetReport(id, { query: { enabled: !!id } });
+  const { data: report, isLoading } = useGetReport(id, { query: { queryKey: getGetReportQueryKey(id), enabled: !!id } });
   const updateReport = useUpdateReport();
   const uploadImage = useUploadImage();
   

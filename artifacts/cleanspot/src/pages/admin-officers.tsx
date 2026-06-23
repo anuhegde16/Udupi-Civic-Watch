@@ -271,9 +271,30 @@ export default function AdminOfficers() {
     );
   };
 
-  const handleSaveZone = () => {
+  const handleSaveZone = async () => {
     if (!editingZone) return;
     const snapshot = editingZone;
+
+    // Optimistic update before firing the mutation
+    await queryClient.cancelQueries({ queryKey: getListOfficersQueryKey() });
+    const previous = queryClient.getQueryData<OfficerList>(getListOfficersQueryKey());
+    queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        officers: old.officers.map((o: Officer) =>
+          o.id === snapshot.officerId
+            ? {
+                ...o,
+                areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
+                centerLat: snapshot.lat,
+                centerLng: snapshot.lng,
+              }
+            : o
+        ),
+      };
+    });
+
     updateOfficer.mutate(
       {
         id: snapshot.officerId,
@@ -284,30 +305,10 @@ export default function AdminOfficers() {
         },
       },
       {
-        onMutate: async () => {
-          await queryClient.cancelQueries({ queryKey: getListOfficersQueryKey() });
-          const previous = queryClient.getQueryData<OfficerList>(getListOfficersQueryKey());
-          queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), (old) => {
-            if (!old) return old;
-            return {
-              ...old,
-              officers: old.officers.map((o: Officer) =>
-                o.id === snapshot.officerId
-                  ? {
-                      ...o,
-                      areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
-                      centerLat: snapshot.lat,
-                      centerLng: snapshot.lng,
-                    }
-                  : o
-              ),
-            };
-          });
-          return { previous };
-        },
-        onError: (err, _vars, context: { previous?: OfficerList } | undefined) => {
-          if (context?.previous) {
-            queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), context.previous);
+        onError: (err) => {
+          // Rollback optimistic update on error
+          if (previous) {
+            queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), previous);
           }
           toast({
             title: "Failed to save zone",

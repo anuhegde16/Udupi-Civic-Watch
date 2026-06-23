@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
-import { useGetOfficerReports, useGetOfficer } from "@workspace/api-client-react";
+import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
@@ -43,11 +43,11 @@ export default function OfficerDashboard() {
   const { data: allData, isLoading } = useGetOfficerReports(
     officerId,
     {},
-    { query: { enabled: !!officerId } },
+    { query: { queryKey: getGetOfficerReportsQueryKey(officerId), enabled: !!officerId } },
   );
 
   const { data: officerData } = useGetOfficer(officerId, {
-    query: { enabled: !!officerId },
+    query: { queryKey: getGetOfficerQueryKey(officerId), enabled: !!officerId },
   });
 
   const allReports = allData?.reports || [];

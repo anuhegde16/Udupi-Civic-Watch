@@ -1,10 +1,10 @@
-import { useGetMe, useLogout } from "@workspace/api-client-react";
+import { useGetMe, useLogout, getGetMeQueryKey } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { data: user, isLoading, error } = useGetMe({ query: { retry: false } });
+  const { data: user, isLoading, error } = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
   const logoutMutation = useLogout();
   const [, setLocation] = useLocation();
 

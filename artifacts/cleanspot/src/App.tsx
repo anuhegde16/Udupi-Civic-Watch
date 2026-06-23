@@ -29,7 +29,7 @@ function Router() {
         <Route path="/report" component={Report} />
         <Route path="/track" component={TrackSearch} />
         <Route path="/track/:id" component={Track} />
-        <Route path="/login" component={Login} />
+        <Route path="/login">{() => <Login />}</Route>
         <Route path="/staff/login">{() => <Login portalType="staff" />}</Route>
         <Route path="/admin/login">{() => <Login portalType="admin" />}</Route>
         <Route path="/master/login">{() => <Login portalType="master" />}</Route>
