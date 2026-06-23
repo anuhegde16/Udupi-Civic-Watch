@@ -20,13 +20,10 @@ function createTransport() {
 
 const transporter = createTransport();
 
-function appBaseUrl(): string {
-  const domains = process.env["REPLIT_DOMAINS"];
-  if (domains) return `https://${domains.split(",")[0].trim()}`;
-  const dev = process.env["REPLIT_DEV_DOMAIN"];
-  if (dev) return `https://${dev}`;
-  return process.env["APP_URL"] ?? "https://cleanspot.replit.app";
-}
+const CONTROL_CENTER_URL = "https://udupicivicwatch.in/admin/login";
+const PANCHAYAT_ADMIN_URL = "https://udupicivicwatch.in/master/login";
+const FIELD_OFFICER_URL = "https://udupicivicwatch.in/staff/login";
+const CITIZEN_TRACK_URL = "https://udupicivicwatch.in/track";
 
 function googleMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps?q=${lat},${lng}`;
@@ -244,9 +241,8 @@ export async function sendAssignmentEmail(officer: Officer, report: Report): Pro
     return;
   }
 
-  const base = appBaseUrl();
   const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const dashUrl = `${base}/officer/dashboard`;
+  const dashUrl = FIELD_OFFICER_URL;
   const subject = `[Civic Watch] New waste report in your ward — #${report.id}`;
 
   const body = `
@@ -284,8 +280,7 @@ export async function sendAssignmentEmail(officer: Officer, report: Report): Pro
 export async function sendWelcomeEmail(officer: Officer): Promise<void> {
   if (!officer.email) return;
 
-  const base = appBaseUrl();
-  const loginUrl = `${base}/officer/login`;
+  const loginUrl = FIELD_OFFICER_URL;
   const subject = `Welcome to Udupi Civic Watch — your officer account is ready`;
 
   const body = `
@@ -408,11 +403,11 @@ export async function sendStatusUpdateEmail(
   report: Report,
   officerName: string,
   newStatus: "cleaning" | "cleaned",
-  analytics?: EmailAnalytics
+  analytics?: EmailAnalytics,
+  isControlCenter?: boolean
 ): Promise<void> {
-  const base = appBaseUrl();
   const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const dashUrl = `${base}/admin/reports`;
+  const dashUrl = isControlCenter ? CONTROL_CENTER_URL : PANCHAYAT_ADMIN_URL;
   const meta = STATUS_META[newStatus] ?? STATUS_META.cleaned;
   const subject = `[Civic Watch] Report #${report.id} — ${meta.label}`;
 
@@ -461,8 +456,7 @@ export async function sendPanchayatAdminWelcomeEmail(admin: {
 }): Promise<void> {
   if (!admin.email) return;
 
-  const base = appBaseUrl();
-  const loginUrl = `${base}/master/login`;
+  const loginUrl = PANCHAYAT_ADMIN_URL;
   const subject = `Welcome to Udupi Civic Watch — your panchayat admin account is ready`;
 
   const body = `
@@ -526,8 +520,7 @@ export async function sendPanchayatAdminWelcomeEmail(admin: {
 // ── 6. Reporter acknowledgement — citizen who submitted the report ─────────────
 
 export async function sendReporterAcknowledgement(report: Report, reporterEmail: string): Promise<void> {
-  const base = appBaseUrl();
-  const trackUrl = `${base}/track/${report.id}`;
+  const trackUrl = CITIZEN_TRACK_URL;
   const subject = `Your complaint #${report.id} has been received — Udupi Civic Watch`;
 
   const coordsText = `${report.latitude.toFixed(6)}, ${report.longitude.toFixed(6)}`;
@@ -601,8 +594,7 @@ export async function sendReporterStatusUpdate(
   reporterEmail: string,
   newStatus: "cleaning" | "cleaned"
 ): Promise<void> {
-  const base = appBaseUrl();
-  const trackUrl = `${base}/track/${report.id}`;
+  const trackUrl = CITIZEN_TRACK_URL;
 
   const isCleaned = newStatus === "cleaned";
   const subject = isCleaned
@@ -695,8 +687,7 @@ export async function sendNewReportToPanchayatAdmins(
   if (panchayatAdmins.length === 0) return;
 
   const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
-  const base = appBaseUrl();
-  const dashUrl = `${base}/master/reports`;
+  const dashUrl = PANCHAYAT_ADMIN_URL;
   const panchayat = officer.panchayatName ?? "your panchayat";
   const ward = officer.areaName ?? "an assigned ward";
   const subject = `[Civic Watch] New waste report in ${panchayat} — #${report.id}`;
@@ -828,8 +819,7 @@ export async function sendWeeklyDigest(opts: {
   panchayatName?: string;
 }): Promise<void> {
   const { to, recipientName, weekLabel, stats, officerRows, panchayatRows, isControlCenter, panchayatName } = opts;
-  const base = appBaseUrl();
-  const dashUrl = isControlCenter ? `${base}/admin/reports` : `${base}/master/reports`;
+  const dashUrl = isControlCenter ? CONTROL_CENTER_URL : PANCHAYAT_ADMIN_URL;
   const scope = isControlCenter ? "Udupi District" : (panchayatName ?? "Your Panchayat");
   const subject = `[Civic Watch] Weekly Report — ${scope} — ${weekLabel}`;
 

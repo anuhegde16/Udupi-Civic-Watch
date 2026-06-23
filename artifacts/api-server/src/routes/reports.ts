@@ -386,16 +386,13 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
               .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, panchayatName)))
           : [];
 
-        const recipients = [...panchayatAdmins];
-
         // Control center also gets notified when a report is fully cleaned
-        if (newStatus === "cleaned") {
-          const ccUsers = await db
-            .select({ email: usersTable.email, name: usersTable.name })
-            .from(usersTable)
-            .where(eq(usersTable.role, "control_center"));
-          recipients.push(...ccUsers);
-        }
+        const ccUsers = newStatus === "cleaned"
+          ? await db
+              .select({ email: usersTable.email, name: usersTable.name })
+              .from(usersTable)
+              .where(eq(usersTable.role, "control_center"))
+          : [];
 
         // Compute analytics snapshot for this panchayat
         let analytics: EmailAnalytics | undefined;
@@ -455,15 +452,23 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
           }
         }
 
-        await Promise.all(
-          recipients
+        // Send to panchayat admins and control center separately so each gets the correct CTA URL
+        await Promise.all([
+          ...panchayatAdmins
             .filter((r) => !!r.email)
             .map((r) =>
-              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus, analytics).catch(
+              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus, analytics, false).catch(
                 (err) => logger.warn({ err, to: r.email }, "Status email failed")
               )
-            )
-        );
+            ),
+          ...ccUsers
+            .filter((r) => !!r.email)
+            .map((r) =>
+              sendStatusUpdateEmail(r.email!, r.name ?? "Admin", report, officerName, newStatus, analytics, true).catch(
+                (err) => logger.warn({ err, to: r.email }, "Status email failed")
+              )
+            ),
+        ]);
       } catch (err) {
         logger.warn({ err }, "Error sending status-change notifications");
       }
