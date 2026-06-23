@@ -47,6 +47,5 @@ channel = "stable-25_05"
 [userenv.shared]
 SMTP_HOST = "smtp.hostinger.com"
 SMTP_PORT = "465"
-VAPID_PUBLIC_KEY = "BMTa7zLkOLbs9ml1y6JJoakwv5xSZvRSQF5ZQY2nBSV4BVmbvENx0wvXef6Z1oIoIUQhOrF65RSJ_FgGi-vEKyA"
-VAPID_PRIVATE_KEY = "5UziH-TcT2P-q11r5NfPXbig5uGvPMvO3TFBwYHDSDY"
+VAPID_PUBLIC_KEY = "BLBe7LuDG7MtopGPL_Z_a5_ea8rOnpl4kHXnUObuUZ06S1dWSFDt8ykm4HbxI5mTSDGQgJd_9jF5OXa38K4g3ZY"
 VAPID_SUBJECT = "mailto:admin@udupicivicwatch.com"

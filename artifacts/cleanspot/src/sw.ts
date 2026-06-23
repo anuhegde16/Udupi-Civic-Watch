@@ -43,7 +43,18 @@ self.addEventListener("push", (event: PushEvent) => {
     requireInteraction: false,
   };
 
-  event.waitUntil(self.registration.showNotification(payload.title, options));
+  event.waitUntil(
+    self.registration.showNotification(payload.title, options).then(() => {
+      // Signal all focused page clients to play the notification sound
+      return self.clients
+        .matchAll({ type: "window", includeUncontrolled: true })
+        .then((clients) => {
+          for (const client of clients) {
+            client.postMessage({ type: "push-received", payload });
+          }
+        });
+    })
+  );
 });
 
 self.addEventListener("notificationclick", (event: NotificationEvent) => {

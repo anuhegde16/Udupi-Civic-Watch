@@ -17,6 +17,7 @@ interface NotificationItem {
   body: string;
   type: string;
   reportId: number | null;
+  url: string | null;
   read: boolean;
   createdAt: string;
 }
@@ -38,18 +39,26 @@ function timeAgo(dateStr: string): string {
 
 function playNotificationSound() {
   try {
-    const ctx = new AudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.4);
+    const audio = new Audio("/notification.wav");
+    audio.volume = 0.6;
+    audio.play().catch(() => {});
   } catch {
+    // Fallback: Web Audio API oscillator if audio file fails
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+    } catch {
+      // Silent fail
+    }
   }
 }
 
@@ -70,12 +79,28 @@ export function NotificationBell() {
 
   const unreadCount = data?.unreadCount ?? 0;
 
+  // Play sound when unread count increases (polling-based foreground detection)
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
       playNotificationSound();
     }
     prevUnreadRef.current = unreadCount;
   }, [unreadCount]);
+
+  // Listen for push-received messages from service worker (fired on background push → foreground)
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "push-received") {
+        playNotificationSound();
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      }
+    };
+
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, [queryClient]);
 
   const markReadMutation = useMutation({
     mutationFn: (id: number) =>

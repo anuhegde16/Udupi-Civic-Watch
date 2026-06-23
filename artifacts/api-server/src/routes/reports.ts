@@ -198,7 +198,7 @@ router.post("/reports", async (req, res): Promise<void> => {
   if (officer) {
     assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName };
 
-    // Collect user IDs to notify (field officer's user account + panchayat admins)
+    // Collect user IDs to notify (field officer's user account + panchayat admins + control center)
     const officerUserRows = await db
       .select({ id: usersTable.id })
       .from(usersTable)
@@ -213,12 +213,10 @@ router.post("/reports", async (req, res): Promise<void> => {
       : [];
     const panchayatAdminUserIds = panchayatAdminRows.map((r) => r.id);
 
-    const notifPayload = {
-      title: "New Waste Report",
-      body: `Report #${report.id} assigned${report.address ? ` — ${report.address}` : ""}`,
-      type: "new_report",
-      reportId: report.id,
-    };
+    const ccRows = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"));
+    const ccUserIds = ccRows.map((r) => r.id);
+
+    const notifBody = `Report #${report.id} assigned${report.address ? ` — ${report.address}` : ""}`;
 
     // Notify the field officer and their panchayat admin(s) in parallel (fire-and-forget)
     Promise.allSettled([
@@ -226,8 +224,27 @@ router.post("/reports", async (req, res): Promise<void> => {
       panchayatAdminRows.length > 0
         ? sendNewReportToPanchayatAdmins(officer, report, panchayatAdminRows.filter((a) => !!a.email) as { email: string; name: string }[])
         : Promise.resolve(),
-      notifyAndPush(officerUserIds, notifPayload),
-      notifyAndPush(panchayatAdminUserIds, notifPayload),
+      notifyAndPush(officerUserIds, {
+        title: "New Waste Report",
+        body: notifBody,
+        type: "new_report",
+        reportId: report.id,
+        url: "/staff/login",
+      }),
+      notifyAndPush(panchayatAdminUserIds, {
+        title: "New Waste Report",
+        body: notifBody,
+        type: "new_report",
+        reportId: report.id,
+        url: "/master/dashboard",
+      }),
+      notifyAndPush(ccUserIds, {
+        title: "New Waste Report",
+        body: notifBody,
+        type: "new_report",
+        reportId: report.id,
+        url: "/admin/dashboard",
+      }),
     ]).catch((err) => logger.warn({ err }, "Error in new-report notifications"));
   }
 
@@ -415,22 +432,36 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
               .where(eq(usersTable.role, "control_center"))
           : [];
 
-        // Push notifications for status change — all panchayat admins + control center
+        // Push notifications for status change — panchayat admins + control center (both for any status change)
         const statusLabel = newStatus === "cleaning" ? "Cleaning Started" : "Report Cleaned ✓";
         const pushBody = `Report #${report.id} — ${officerName} ${newStatus === "cleaning" ? "started cleaning" : "marked as cleaned"}`;
+
+        // Control center gets both cleaning and cleaned events
+        const ccUsersForPush = newStatus === "cleaning"
+          ? await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, "control_center"))
+          : ccUsers;
+
         const panchayatAdminIds = panchayatAdmins.map((r) => r.id);
-        const ccUserIds = ccUsers.map((r) => r.id);
-        const notifUserIds = [...new Set([...panchayatAdminIds, ...ccUserIds])];
+        const ccUserIds = [...new Set([...ccUsersForPush.map((r) => r.id)])];
 
-        notifyAndPush(notifUserIds, {
-          title: statusLabel,
-          body: pushBody,
-          type: `status_${newStatus}`,
-          reportId: report.id,
-        }).catch((err) => logger.warn({ err }, "Status push notification failed"));
+        await Promise.allSettled([
+          panchayatAdminIds.length > 0 ? notifyAndPush(panchayatAdminIds, {
+            title: statusLabel,
+            body: pushBody,
+            type: `status_${newStatus}`,
+            reportId: report.id,
+            url: "/master/dashboard",
+          }) : Promise.resolve(),
+          ccUserIds.length > 0 ? notifyAndPush(ccUserIds, {
+            title: statusLabel,
+            body: pushBody,
+            type: `status_${newStatus}`,
+            reportId: report.id,
+            url: "/admin/dashboard",
+          }) : Promise.resolve(),
+        ]);
 
-        // Also notify the field officer about status changes they make themselves
-        // (so they have a record in their bell)
+        // Also notify the field officer (so they have a record in their bell)
         const officerUserRows = await db
           .select({ id: usersTable.id })
           .from(usersTable)
@@ -441,6 +472,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
+            url: "/staff/login",
           }).catch((err) => logger.warn({ err }, "Officer self-notify push failed"));
         }
 

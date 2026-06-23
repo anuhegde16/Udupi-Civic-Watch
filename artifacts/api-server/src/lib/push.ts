@@ -62,7 +62,7 @@ export async function sendPushToUsers(userIds: number[], payload: PushPayload): 
 
 export async function createNotificationForUsers(
   userIds: number[],
-  payload: Pick<PushPayload, "title" | "body" | "type" | "reportId">
+  payload: Pick<PushPayload, "title" | "body" | "type" | "reportId" | "url">
 ): Promise<void> {
   if (userIds.length === 0) return;
   await db.insert(notificationsTable).values(
@@ -72,6 +72,7 @@ export async function createNotificationForUsers(
       body: payload.body,
       type: payload.type,
       reportId: payload.reportId ?? null,
+      url: payload.url ?? null,
     }))
   );
 }
@@ -85,17 +86,4 @@ export async function notifyAndPush(
     createNotificationForUsers(userIds, payload),
     sendPushToUsers(userIds, payload),
   ]);
-}
-
-export async function getUserIdsByRole(role: string, panchayatName?: string): Promise<number[]> {
-  let q = db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.role, role));
-  const rows = await q;
-  if (panchayatName) {
-    const filtered = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(and(eq(usersTable.role, role), eq(usersTable.panchayatName, panchayatName)));
-    return filtered.map((r) => r.id);
-  }
-  return rows.map((r) => r.id);
 }

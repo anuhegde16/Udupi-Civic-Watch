@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, pushSubscriptionsTable, notificationsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count as dbCount } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { VAPID_PUBLIC_KEY } from "../lib/push";
 import { logger } from "../lib/logger";
@@ -63,15 +63,20 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
   const user = (req as any).user;
   const limit = Math.min(parseInt((req.query["limit"] as string) ?? "50", 10), 100);
 
-  const items = await db
-    .select()
-    .from(notificationsTable)
-    .where(eq(notificationsTable.userId, user.id))
-    .orderBy(desc(notificationsTable.createdAt))
-    .limit(limit);
+  const [items, [unreadRow]] = await Promise.all([
+    db
+      .select()
+      .from(notificationsTable)
+      .where(eq(notificationsTable.userId, user.id))
+      .orderBy(desc(notificationsTable.createdAt))
+      .limit(limit),
+    db
+      .select({ count: dbCount() })
+      .from(notificationsTable)
+      .where(and(eq(notificationsTable.userId, user.id), eq(notificationsTable.read, false))),
+  ]);
 
-  const unreadCount = items.filter((n) => !n.read).length;
-  res.json({ notifications: items, unreadCount });
+  res.json({ notifications: items, unreadCount: unreadRow?.count ?? 0 });
 });
 
 router.post("/notifications/:id/read", requireAuth, async (req, res): Promise<void> => {
