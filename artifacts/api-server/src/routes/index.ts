@@ -6,6 +6,7 @@ import officersRouter from "./officers";
 import adminRouter from "./admin";
 import uploadsRouter from "./uploads";
 import panchayatRouter from "./panchayat";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(officersRouter);
 router.use(adminRouter);
 router.use(panchayatRouter);
 router.use(uploadsRouter);
+router.use(notificationsRouter);
 
 export default router;

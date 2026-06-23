@@ -18,6 +18,8 @@ tags:
     description: Admin operations
   - name: auth
     description: Authentication operations
+  - name: notifications
+    description: In-app and push notification operations
 paths:
   /healthz:
     get:
@@ -391,6 +393,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Report"
+
+  /notifications/vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [notifications]
+      summary: Get VAPID public key for push subscription
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKeyResponse"
+
+  /notifications/push-subscription:
+    post:
+      operationId: savePushSubscription
+      tags: [notifications]
+      summary: Save or update a browser push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscriptionBody"
+      responses:
+        "200":
+          description: Subscription saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    delete:
+      operationId: deletePushSubscription
+      tags: [notifications]
+      summary: Remove a push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+              required: [endpoint]
+      responses:
+        "200":
+          description: Subscription removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for the current user
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationList"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
 
   /uploads/image:
     post:
@@ -768,6 +874,61 @@ components:
         centerLng:
           type: number
           nullable: true
+
+    VapidPublicKeyResponse:
+      type: object
+      properties:
+        publicKey:
+          type: string
+      required: [publicKey]
+
+    PushSubscriptionBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+          format: uri
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required: [p256dh, auth]
+      required: [endpoint, keys]
+
+    NotificationItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        body:
+          type: string
+        type:
+          type: string
+        reportId:
+          type: integer
+          nullable: true
+        read:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, title, body, type, read, createdAt]
+
+    NotificationList:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationItem"
+        unreadCount:
+          type: integer
+      required: [notifications, unreadCount]
 
     UploadImageBody:
       type: object

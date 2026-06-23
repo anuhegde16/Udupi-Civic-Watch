@@ -6,6 +6,7 @@ import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, F
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { NotificationBell } from "@/components/notification-bell";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isAdmin, isOfficer, isPanchayatAdmin, logout } = useAuth();
@@ -49,13 +50,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
 
-          {/* Menu — always visible, content changes based on auth */}
-          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-foreground hover:bg-primary/5 hover:text-primary rounded-full">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
+          {/* Notification bell + Menu */}
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-foreground hover:bg-primary/5 hover:text-primary rounded-full">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
 
             {isAuthenticated ? (
               /* Authenticated staff menu */
@@ -161,7 +164,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </div>
               </SheetContent>
             )}
-          </Sheet>
+            </Sheet>
+          </div>
         </div>
       </header>
 

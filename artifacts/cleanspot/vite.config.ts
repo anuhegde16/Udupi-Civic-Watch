@@ -34,7 +34,11 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
       registerType: "autoUpdate",
+      injectRegister: "auto",
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
       manifest: {
         name: "Udupi Civic Watch",
@@ -60,20 +64,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
-        navigateFallback: "/index.html",
-        globPatterns: ["**/*.{js,css,html,png,svg,jpg,jpeg,webp,woff2}"],
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+      devOptions: {
+        enabled: false,
       },
     }),
     ...(process.env.NODE_ENV !== "production" &&

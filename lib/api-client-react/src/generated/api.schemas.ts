@@ -204,6 +204,35 @@ export interface UpdateOfficerBody {
   centerLng?: number | null;
 }
 
+export interface VapidPublicKeyResponse {
+  publicKey: string;
+}
+
+export type PushSubscriptionBodyKeys = {
+  p256dh: string;
+  auth: string;
+};
+
+export interface PushSubscriptionBody {
+  endpoint: string;
+  keys: PushSubscriptionBodyKeys;
+}
+
+export interface NotificationItem {
+  id: number;
+  title: string;
+  body: string;
+  type: string;
+  reportId?: number | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationList {
+  notifications: NotificationItem[];
+  unreadCount: number;
+}
+
 export interface UploadImageBody {
   /** Base64 data URL of the image */
   dataUrl: string;
@@ -256,3 +285,11 @@ export const AdminListReportsStatus = {
   cleaning: "cleaning",
   cleaned: "cleaned",
 } as const;
+
+export type DeletePushSubscriptionBody = {
+  endpoint: string;
+};
+
+export type ListNotificationsParams = {
+  limit?: number;
+};

@@ -13,6 +13,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, getSessionUser } from "../lib/auth";
 import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
+import { notifyAndPush } from "../lib/push";
 
 const router: IRouter = Router();
 
@@ -197,17 +198,37 @@ router.post("/reports", async (req, res): Promise<void> => {
   if (officer) {
     assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName };
 
+    // Collect user IDs to notify (field officer's user account + panchayat admins)
+    const officerUserRows = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, officer.email));
+    const officerUserIds = officerUserRows.map((r) => r.id);
+
+    const panchayatAdminRows = officer.panchayatName
+      ? await db
+          .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
+          .from(usersTable)
+          .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, officer.panchayatName)))
+      : [];
+    const panchayatAdminUserIds = panchayatAdminRows.map((r) => r.id);
+
+    const notifPayload = {
+      title: "New Waste Report",
+      body: `Report #${report.id} assigned${report.address ? ` — ${report.address}` : ""}`,
+      type: "new_report",
+      reportId: report.id,
+    };
+
     // Notify the field officer and their panchayat admin(s) in parallel (fire-and-forget)
     Promise.allSettled([
       sendAssignmentEmail(officer, report),
-      officer.panchayatName
-        ? db
-            .select({ email: usersTable.email, name: usersTable.name })
-            .from(usersTable)
-            .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, officer.panchayatName)))
-            .then((admins) => sendNewReportToPanchayatAdmins(officer, report, admins.filter((a) => !!a.email) as { email: string; name: string }[]))
+      panchayatAdminRows.length > 0
+        ? sendNewReportToPanchayatAdmins(officer, report, panchayatAdminRows.filter((a) => !!a.email) as { email: string; name: string }[])
         : Promise.resolve(),
-    ]).catch((err) => logger.warn({ err }, "Error in new-report email notifications"));
+      notifyAndPush(officerUserIds, notifPayload),
+      notifyAndPush(panchayatAdminUserIds, notifPayload),
+    ]).catch((err) => logger.warn({ err }, "Error in new-report notifications"));
   }
 
   // Send acknowledgement to the reporter if they provided an email (fire-and-forget)
@@ -381,7 +402,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
         // Panchayat admins for this officer's panchayat
         const panchayatAdmins = panchayatName
           ? await db
-              .select({ email: usersTable.email, name: usersTable.name })
+              .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
               .from(usersTable)
               .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, panchayatName)))
           : [];
@@ -389,10 +410,39 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
         // Control center also gets notified when a report is fully cleaned
         const ccUsers = newStatus === "cleaned"
           ? await db
-              .select({ email: usersTable.email, name: usersTable.name })
+              .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
               .from(usersTable)
               .where(eq(usersTable.role, "control_center"))
           : [];
+
+        // Push notifications for status change — all panchayat admins + control center
+        const statusLabel = newStatus === "cleaning" ? "Cleaning Started" : "Report Cleaned ✓";
+        const pushBody = `Report #${report.id} — ${officerName} ${newStatus === "cleaning" ? "started cleaning" : "marked as cleaned"}`;
+        const panchayatAdminIds = panchayatAdmins.map((r) => r.id);
+        const ccUserIds = ccUsers.map((r) => r.id);
+        const notifUserIds = [...new Set([...panchayatAdminIds, ...ccUserIds])];
+
+        notifyAndPush(notifUserIds, {
+          title: statusLabel,
+          body: pushBody,
+          type: `status_${newStatus}`,
+          reportId: report.id,
+        }).catch((err) => logger.warn({ err }, "Status push notification failed"));
+
+        // Also notify the field officer about status changes they make themselves
+        // (so they have a record in their bell)
+        const officerUserRows = await db
+          .select({ id: usersTable.id })
+          .from(usersTable)
+          .where(eq(usersTable.email, officerRow.email));
+        if (officerUserRows.length > 0) {
+          notifyAndPush(officerUserRows.map((r) => r.id), {
+            title: statusLabel,
+            body: pushBody,
+            type: `status_${newStatus}`,
+            reportId: report.id,
+          }).catch((err) => logger.warn({ err }, "Officer self-notify push failed"));
+        }
 
         // Compute analytics snapshot for this panchayat
         let analytics: EmailAnalytics | undefined;

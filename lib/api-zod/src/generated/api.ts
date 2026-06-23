@@ -467,6 +467,85 @@ export const ReassignReportResponse = zod.object({
 });
 
 /**
+ * @summary Get VAPID public key for push subscription
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  publicKey: zod.string(),
+});
+
+/**
+ * @summary Save or update a browser push subscription
+ */
+export const SavePushSubscriptionBody = zod.object({
+  endpoint: zod.string().url(),
+  keys: zod.object({
+    p256dh: zod.string(),
+    auth: zod.string(),
+  }),
+});
+
+export const SavePushSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Remove a push subscription
+ */
+export const DeletePushSubscriptionBody = zod.object({
+  endpoint: zod.string(),
+});
+
+export const DeletePushSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary List notifications for the current user
+ */
+export const listNotificationsQueryLimitDefault = 50;
+
+export const ListNotificationsQueryParams = zod.object({
+  limit: zod.coerce.number().default(listNotificationsQueryLimitDefault),
+});
+
+export const ListNotificationsResponse = zod.object({
+  notifications: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      body: zod.string(),
+      type: zod.string(),
+      reportId: zod.number().nullish(),
+      read: zod.boolean(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  unreadCount: zod.number(),
+});
+
+/**
+ * @summary Mark a notification as read
+ */
+export const MarkNotificationReadParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MarkNotificationReadResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const MarkAllNotificationsReadResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary Upload an image and get back a URL
  */
 export const UploadImageBody = zod.object({

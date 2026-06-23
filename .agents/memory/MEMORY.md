@@ -2,3 +2,4 @@
 - [Leaflet init/draw race](leaflet-init-draw-race.md) — async map init + data-driven draw effect can deadlock when query data is cached; gate draw on a `mapReady` state.
 - [Three-tier role hierarchy](three-tier-roles.md) — control_center / panchayat_admin / field_officer; old names are aliases kept for compat.
 - [DB schema push workaround](db-push-workaround.md) — drizzle-kit push hangs on interactive column-rename prompts; use psql direct SQL as fallback.
+- [PWA push + in-app notifications](push-notifications.md) — injectManifest mode required for custom SW; NotificationOptions TS lib lacks vibrate/renotify; notification sound via Web Audio API (not file).
