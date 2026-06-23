@@ -62,10 +62,13 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
     .from(reportsTable)
     .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-  const formatted = reports.map(({ report, officer }) => ({
-    ...report,
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
-  }));
+  const formatted = reports.map(({ report, officer }) => {
+    const { reporterEmail: _re, reporterIp: _ri, ...safeReport } = report;
+    return {
+      ...safeReport,
+      assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
+    };
+  });
 
   res.json({ reports: formatted, total: countRow.count });
 });
@@ -105,8 +108,9 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
 
   sendAssignmentEmail(officer, report).catch((err) => logger.warn({ err }, "Unhandled error in assignment email"));
 
+  const { reporterEmail: _re, reporterIp: _ri, ...safeReport } = report;
   res.json({
-    ...report,
+    ...safeReport,
     assignedOfficer: { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName },
   });
 });

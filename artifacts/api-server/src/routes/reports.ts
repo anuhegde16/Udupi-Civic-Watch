@@ -16,6 +16,14 @@ import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
 
 const router: IRouter = Router();
 
+// Strip citizen PII from all outbound report objects — never expose to API callers
+function sanitizeReport<T extends { reporterEmail?: string | null; reporterIp?: string | null }>(
+  report: T
+): Omit<T, "reporterEmail" | "reporterIp"> {
+  const { reporterEmail: _re, reporterIp: _ri, ...safe } = report;
+  return safe;
+}
+
 const DUPLICATE_RADIUS_DEG = 0.0004;
 const RATE_LIMIT_HOURS = 1;
 const RATE_LIMIT_MAX = 5;
@@ -110,7 +118,7 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(conditions.length > 0 ? and(...conditions) : undefined);
 
   const formatted = reports.map(({ report, officer }) => ({
-    ...report,
+    ...sanitizeReport(report),
     assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   }));
 
@@ -209,7 +217,7 @@ router.post("/reports", async (req, res): Promise<void> => {
     );
   }
 
-  res.status(201).json({ ...report, assignedOfficer });
+  res.status(201).json({ ...sanitizeReport(report), assignedOfficer });
 });
 
 router.get("/reports/:id/track", async (req, res): Promise<void> => {
@@ -281,7 +289,7 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
 
   const { report, officer } = row;
   res.json({
-    ...report,
+    ...sanitizeReport(report),
     assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
   });
 });
@@ -295,33 +303,33 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // Always fetch existing — needed for auth checks AND to capture old status for email deduplication
+  const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+  const oldStatus = existing.status;
+
   const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
-  if (isFieldOfficer || user.role === "panchayat_admin") {
-    const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
-    if (!existing) {
-      res.status(404).json({ error: "Report not found" });
+  if (isFieldOfficer) {
+    if (existing.assignedOfficerId !== user.officerId) {
+      res.status(403).json({ error: "Access denied: report is not assigned to you" });
       return;
     }
-    if (isFieldOfficer) {
-      if (existing.assignedOfficerId !== user.officerId) {
-        res.status(403).json({ error: "Access denied: report is not assigned to you" });
-        return;
-      }
-    } else {
-      // panchayat_admin
-      if (!user.panchayatName || !existing.assignedOfficerId) {
-        res.status(403).json({ error: "Access denied" });
-        return;
-      }
-      const [assignedOfficer] = await db
-        .select({ panchayatName: officersTable.panchayatName })
-        .from(officersTable)
-        .where(eq(officersTable.id, existing.assignedOfficerId))
-        .limit(1);
-      if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
-        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
-        return;
-      }
+  } else if (user.role === "panchayat_admin") {
+    if (!user.panchayatName || !existing.assignedOfficerId) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+    const [assignedOfficer] = await db
+      .select({ panchayatName: officersTable.panchayatName })
+      .from(officersTable)
+      .where(eq(officersTable.id, existing.assignedOfficerId))
+      .limit(1);
+    if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
+      res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+      return;
     }
   }
 
@@ -351,13 +359,13 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     : [];
 
   res.json({
-    ...report,
+    ...sanitizeReport(report),
     assignedOfficer: officerRow ? { id: officerRow.id, name: officerRow.name, email: officerRow.email, phone: officerRow.phone, areaName: officerRow.areaName, wardName: officerRow.areaName } : null,
   });
 
-  // Notify the reporter if they provided an email and status changed (fire-and-forget)
+  // Notify the reporter only when status actually changes — prevents duplicate emails
   const newStatus = parsed.data.status;
-  if ((newStatus === "cleaning" || newStatus === "cleaned") && report.reporterEmail) {
+  if (newStatus && newStatus !== oldStatus && (newStatus === "cleaning" || newStatus === "cleaned") && report.reporterEmail) {
     sendReporterStatusUpdate(report, report.reporterEmail, newStatus).catch((err) =>
       logger.warn({ err, reportId: report.id }, "Reporter status update email failed")
     );
