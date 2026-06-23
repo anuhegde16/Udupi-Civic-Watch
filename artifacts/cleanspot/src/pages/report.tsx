@@ -3,8 +3,9 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle } from "lucide-react";
-import { useCreateReport, useUploadImage } from "@workspace/api-client-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand } from "lucide-react";
+import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
 import geofencesData from "@/data/geofences.json";
@@ -46,6 +47,7 @@ export default function Report() {
 
   const [location, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [locationMode, setLocationMode] = useState<"auto" | "manual">("auto");
 
   const [description, setDescription] = useState("");
 
@@ -53,6 +55,13 @@ export default function Report() {
 
   const createReport = useCreateReport();
   const uploadImage = useUploadImage();
+
+  const { data: testModeData } = useQuery({
+    queryKey: ["test-mode"],
+    queryFn: () => customFetch<{ testMode: boolean }>("/api/admin/test-mode"),
+    refetchInterval: 10000,
+  });
+  const testMode = testModeData?.testMode ?? false;
 
   // Extract the first geofence ring for the map overlay
   const geofenceRing = useMemo<[number, number][] | undefined>(() => {
@@ -103,10 +112,15 @@ export default function Report() {
         resolved = true;
         clearTimeout(fallbackTimer);
         setIsLocating(false);
-        const msg = err.code === 1
-          ? "Location permission denied. Please allow location access and tap Refresh to try again."
-          : "Could not get your GPS location. Please ensure location permission is granted and try again.";
-        toast({ title: "Location unavailable", description: msg, variant: "destructive" });
+        if (testMode) {
+          setLocationMode("manual");
+          toast({ title: "GPS unavailable — using manual placement", description: "Test mode active: drag the pin to set the report location." });
+        } else {
+          const msg = err.code === 1
+            ? "Location permission denied. Please allow location access and tap Refresh to try again."
+            : "Could not get your GPS location. Please ensure location permission is granted and try again.";
+          toast({ title: "Location unavailable", description: msg, variant: "destructive" });
+        }
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
@@ -150,7 +164,7 @@ export default function Report() {
       toast({ title: "Location required", description: "GPS location is required. Please allow location access and try again.", variant: "destructive" });
       return;
     }
-    if (outsideFence) {
+    if (outsideFence && !testMode) {
       toast({ title: "Outside service area", description: "Please move the pin inside the Saligrama service boundary.", variant: "destructive" });
       return;
     }
@@ -246,13 +260,38 @@ export default function Report() {
               <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">2</span>
               Location
             </Label>
+            {testMode && (
+              <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => setLocationMode("auto")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${locationMode === "auto" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Navigation className="w-3.5 h-3.5" /> GPS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLocationMode("manual")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${locationMode === "manual" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Hand className="w-3.5 h-3.5" /> Manual
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* GPS status */}
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Navigation className="w-4 h-4 text-primary shrink-0" />
-            <span>Location is detected automatically using your phone's GPS</span>
-          </div>
+          {/* GPS / manual status hint */}
+          {(!testMode || locationMode === "auto") ? (
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Navigation className="w-4 h-4 text-primary shrink-0" />
+              <span>Location is detected automatically using your phone's GPS</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
+              <Hand className="w-4 h-4 shrink-0" />
+              <span>Drag the pin or tap the map to set the exact waste location</span>
+            </div>
+          )}
 
           {/* Map container */}
           <div className="rounded-2xl overflow-hidden border border-border shadow-inner bg-muted" style={{ height: "300px" }}>
@@ -268,13 +307,13 @@ export default function Report() {
                 height="300px"
                 geofenceRing={geofenceRing}
                 outsideFence={outsideFence}
-                readonly={true}
+                readonly={!testMode || locationMode === "auto"}
               />
             )}
           </div>
 
-          {/* Out-of-bounds warning */}
-          {outsideFence && location && (
+          {/* Out-of-bounds warning (suppressed in test mode) */}
+          {outsideFence && location && !testMode && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <div>
@@ -320,11 +359,11 @@ export default function Report() {
             type="submit"
             size="lg"
             className="w-full h-16 text-xl font-black rounded-2xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 transition-all hover:-translate-y-1 disabled:opacity-70 disabled:shadow-none disabled:transform-none disabled:cursor-not-allowed"
-            disabled={!imageUrl || !location || isLocating || isUploading || createReport.isPending || outsideFence}
+            disabled={!imageUrl || !location || isLocating || isUploading || createReport.isPending || (outsideFence && !testMode)}
           >
             {createReport.isPending ? (
               <Loader2 className="w-6 h-6 mr-2 animate-spin" />
-            ) : outsideFence ? (
+            ) : outsideFence && !testMode ? (
               <span className="flex items-center"><AlertTriangle className="ml-2 w-5 h-5 mr-2" /> Outside Service Area</span>
             ) : (
               <span className="flex items-center">Submit Report <ArrowRight className="ml-2 w-6 h-6" /></span>

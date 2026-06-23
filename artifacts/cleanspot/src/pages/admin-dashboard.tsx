@@ -32,7 +32,9 @@ import {
   Trash2,
   Building2,
   Pencil,
+  FlaskConical,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -192,6 +194,23 @@ export default function AdminDashboard() {
   const { data: analytics, isLoading: isLoadingAnalytics } = useAnalytics();
   const { data: allReportsData, isLoading: isLoadingReports } = useAdminListReports({ limit: 500 });
   const { data: panchayatAdminsData } = usePanchayatAdmins();
+
+  const { data: testModeData } = useQuery<{ testMode: boolean }>({
+    queryKey: ["test-mode"],
+    queryFn: () => customFetch("/api/admin/test-mode"),
+  });
+  const testModeActive = testModeData?.testMode ?? false;
+
+  const setTestModeMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      customFetch("/api/admin/test-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testMode: enabled }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["test-mode"] }),
+    onError: (err: any) => toast({ title: "Failed to update test mode", description: err.message, variant: "destructive" }),
+  });
 
   const createPaForm = useForm<CreatePanchayatAdminValues>({
     resolver: zodResolver(createPanchayatAdminSchema),
@@ -1219,6 +1238,41 @@ export default function AdminDashboard() {
             </span>
             .
           </p>
+        </div>
+      </div>
+
+      {/* ── System Settings ── */}
+      <div className="mt-5 sm:mt-8 bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-5 sm:p-8">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+            <FlaskConical className="w-5 h-5 text-amber-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-foreground">System Settings</h2>
+            <p className="text-xs text-muted-foreground font-medium">Control center configuration</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 p-4 bg-muted/40 rounded-2xl border border-border/50">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-sm font-black text-foreground">Test Mode</p>
+              {testModeActive ? (
+                <span className="text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">ACTIVE</span>
+              ) : (
+                <span className="text-[10px] font-bold bg-muted text-muted-foreground border border-border px-2 py-0.5 rounded-full">Off</span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">
+              When active, all pages show a TEST MODE banner and the report form allows manual map placement for testing outside the service area.
+            </p>
+          </div>
+          <Switch
+            checked={testModeActive}
+            onCheckedChange={(checked) => setTestModeMutation.mutate(checked)}
+            disabled={setTestModeMutation.isPending}
+            className="shrink-0"
+          />
         </div>
       </div>
     </div>

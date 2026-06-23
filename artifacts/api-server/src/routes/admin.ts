@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
@@ -13,6 +14,24 @@ import {
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+// ── Test mode (in-memory, resets on restart) ────────────────────────────────
+let testMode = false;
+
+router.get("/admin/test-mode", (req, res): void => {
+  res.json({ testMode });
+});
+
+router.post("/admin/test-mode", requireControlCenter, (req, res): void => {
+  const parsed = z.object({ testMode: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "testMode must be a boolean" });
+    return;
+  }
+  testMode = parsed.data.testMode;
+  logger.info({ testMode }, "Test mode updated by control center");
+  res.json({ testMode });
+});
 
 router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const queryParsed = AdminListReportsQueryParams.safeParse(req.query);

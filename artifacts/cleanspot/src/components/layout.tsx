@@ -2,14 +2,23 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock } from "lucide-react";
+import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, FlaskConical } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isAdmin, isOfficer, isPanchayatAdmin, logout } = useAuth();
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+
+  const { data: testModeData } = useQuery({
+    queryKey: ["test-mode"],
+    queryFn: () => customFetch<{ testMode: boolean }>("/api/admin/test-mode"),
+    refetchInterval: 10000,
+  });
+  const testModeActive = testModeData?.testMode ?? false;
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background relative overflow-hidden">
@@ -155,6 +164,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Sheet>
         </div>
       </header>
+
+      {testModeActive && (
+        <div className="bg-amber-400 text-amber-950 text-sm font-bold text-center py-2 px-4 flex items-center justify-center gap-2 z-40">
+          <FlaskConical className="w-4 h-4 shrink-0" />
+          TEST MODE ACTIVE — Location &amp; restrictions are relaxed for testing
+        </div>
+      )}
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 md:py-8 flex flex-col z-10 relative">
         {children}
