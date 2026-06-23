@@ -7,15 +7,18 @@
     "hello": "tsx ./src/hello.ts",
     "seed:officers": "tsx ./src/seed-real-officers.ts",
     "gen:pwa-icons": "tsx ./src/generate-pwa-icons.ts",
+    "test:emails": "tsx ./src/test-emails.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "nodemailer": "^6.10.1",
     "pg": "^8.20.0",
     "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/node": "catalog:",
     "@types/pg": "^8.11.14",
     "tsx": "catalog:"
