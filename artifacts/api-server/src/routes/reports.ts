@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
-import { sendAssignmentEmail, sendStatusUpdateEmail, type EmailAnalytics } from "../lib/email";
+import { sendAssignmentEmail, sendStatusUpdateEmail, sendNewReportToPanchayatAdmins, type EmailAnalytics } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
   CreateReportBody,
@@ -187,7 +187,18 @@ router.post("/reports", async (req, res): Promise<void> => {
   let assignedOfficer = null;
   if (officer) {
     assignedOfficer = { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName };
-    sendAssignmentEmail(officer, report).catch((err) => logger.warn({ err }, "Unhandled error in assignment email"));
+
+    // Notify the field officer and their panchayat admin(s) in parallel (fire-and-forget)
+    Promise.allSettled([
+      sendAssignmentEmail(officer, report),
+      officer.panchayatName
+        ? db
+            .select({ email: usersTable.email, name: usersTable.name })
+            .from(usersTable)
+            .where(and(eq(usersTable.role, "panchayat_admin"), eq(usersTable.panchayatName, officer.panchayatName)))
+            .then((admins) => sendNewReportToPanchayatAdmins(officer, report, admins.filter((a) => !!a.email) as { email: string; name: string }[]))
+        : Promise.resolve(),
+    ]).catch((err) => logger.warn({ err }, "Error in new-report email notifications"));
   }
 
   res.status(201).json({ ...report, assignedOfficer });

@@ -9,8 +9,12 @@ import {
   sendWelcomeEmail,
   sendOtpEmail,
   sendStatusUpdateEmail,
+  sendPanchayatAdminWelcomeEmail,
+  sendNewReportToPanchayatAdmins,
+  sendWeeklyDigest,
   type EmailAnalytics,
 } from "../lib/email";
+import { sendWeeklyDigestToAll } from "../lib/scheduler";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -237,6 +241,10 @@ router.post("/admin/panchayat-admins", requireControlCenter, async (req, res): P
     })
     .returning();
 
+  sendPanchayatAdminWelcomeEmail({ name: created.name, email: created.email, panchayatName: created.panchayatName }).catch(
+    (err) => logger.warn({ err }, "Panchayat admin welcome email failed")
+  );
+
   res.status(201).json({
     id: created.id,
     name: created.name,
@@ -324,6 +332,13 @@ router.delete("/admin/panchayat-admins/:id", requireControlCenter, async (req, r
   res.json({ success: true, message: "Panchayat Admin removed" });
 });
 
+// ── Manual weekly digest trigger (control center only) ──────────────────────────
+
+router.post("/admin/send-weekly-digest", requireControlCenter, async (req, res): Promise<void> => {
+  res.json({ message: "Weekly digest queued — sending in background" });
+  sendWeeklyDigestToAll().catch((err) => logger.error({ err }, "Manual weekly digest failed"));
+});
+
 // ── Test-send endpoint: fires one of every email type to a given address ────────
 
 router.post("/admin/test-emails", requireControlCenter, async (req, res): Promise<void> => {
@@ -399,6 +414,41 @@ router.post("/admin/test-emails", requireControlCenter, async (req, res): Promis
     sendStatusUpdateEmail(to, "Anu Hegde", { ...mockReport, status: "cleaned" } as any, mockOfficer.name, "cleaned", mockAnalytics)
   );
   await tryEmail("5_otp_reset", () => sendOtpEmail(to, "847291"));
+  await tryEmail("6_panchayat_admin_welcome", () =>
+    sendPanchayatAdminWelcomeEmail({ name: "Anu Hegde", email: to, panchayatName: "Saligrama" })
+  );
+  await tryEmail("7_new_report_panchayat_alert", () =>
+    sendNewReportToPanchayatAdmins(mockOfficer as any, mockReport as any, [{ email: to, name: "Anu Hegde" }])
+  );
+  await tryEmail("8_weekly_digest_panchayat", () =>
+    sendWeeklyDigest({
+      to,
+      recipientName: "Anu Hegde",
+      weekLabel: "16 Jun – 22 Jun 2025",
+      stats: { total: 8, open: 3, resolved: 5, avgResponseHours: 6 },
+      officerRows: [
+        { name: "Rajshekhar M", ward: "Ward 1", pending: 1, resolvedThisWeek: 2 },
+        { name: "Pradeep", ward: "Ward 2", pending: 0, resolvedThisWeek: 3 },
+        { name: "Shivaraj Ramesh Naik", ward: "Ward 3", pending: 2, resolvedThisWeek: 0 },
+      ],
+      isControlCenter: false,
+      panchayatName: "Saligrama",
+    })
+  );
+  await tryEmail("9_weekly_digest_control_center", () =>
+    sendWeeklyDigest({
+      to,
+      recipientName: "Control Centre Admin",
+      weekLabel: "16 Jun – 22 Jun 2025",
+      stats: { total: 24, open: 9, resolved: 15, avgResponseHours: 5 },
+      panchayatRows: [
+        { panchayat: "Saligrama", total: 8, open: 3, resolved: 5 },
+        { panchayat: "Kundapur Town", total: 10, open: 4, resolved: 6 },
+        { panchayat: "Karkala", total: 6, open: 2, resolved: 4 },
+      ],
+      isControlCenter: true,
+    })
+  );
 
   const allSent = results.every((r) => r.status === "sent");
   res.status(allSent ? 200 : 207).json({

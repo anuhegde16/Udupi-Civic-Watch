@@ -451,3 +451,281 @@ export async function sendStatusUpdateEmail(
 
   await sendEmail(to, subject, emailShell(`Report #${report.id} Update`, body));
 }
+
+// ── 5. Welcome email — new panchayat admin ────────────────────────────────────
+
+export async function sendPanchayatAdminWelcomeEmail(admin: {
+  name: string;
+  email: string;
+  panchayatName?: string | null;
+}): Promise<void> {
+  if (!admin.email) return;
+
+  const base = appBaseUrl();
+  const loginUrl = `${base}/master/login`;
+  const subject = `Welcome to Udupi Civic Watch — your panchayat admin account is ready`;
+
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Welcome, ${escapeHtml(admin.name)}! 🌿</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      Your <strong>Panchayat Admin</strong> account on <strong>Udupi Civic Watch</strong> has been created.
+      You oversee field officers in your area and receive updates whenever a waste report is submitted or resolved.
+    </p>
+
+    ${quoteBlock(
+      "Good governance is the foundation of a clean nation. Your oversight keeps Udupi's communities thriving.",
+      "Udupi District Administration"
+    )}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:28px;overflow:hidden;">
+      <tr>
+        <td style="background:#0d9488;padding:10px 20px;">
+          <p style="margin:0;font-size:11px;font-weight:700;color:#ccfbf1;letter-spacing:1px;text-transform:uppercase;">Your Account Details</p>
+        </td>
+      </tr>
+      <tr><td style="padding:20px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;width:130px;">Role</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;font-weight:600;">Panchayat Admin</td>
+          </tr>
+          ${admin.panchayatName ? `
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Panchayat</td>
+            <td style="padding:5px 0;font-size:14px;color:#0f172a;font-weight:600;">${escapeHtml(admin.panchayatName)}</td>
+          </tr>` : ""}
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Login Email</td>
+            <td style="padding:5px 0;font-size:14px;color:#0d9488;font-family:monospace;">${escapeHtml(admin.email)}</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Password</td>
+            <td style="padding:5px 0;font-size:14px;color:#334155;">As set by your administrator — change it after your first login</td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td>${ctaButton("🔐 Log In to Portal", loginUrl)}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      If you did not expect this email, please contact the Udupi Civic Watch control centre immediately at
+      <a href="mailto:officer@udupi.gov.in" style="color:#0d9488;">officer@udupi.gov.in</a>.
+    </p>`;
+
+  logger.info({ email: admin.email }, "Sending panchayat admin welcome email");
+  await sendEmail(admin.email, subject, emailShell("Panchayat Admin Account Created", body));
+}
+
+// ── 6. New report alert — panchayat admin(s) ─────────────────────────────────
+
+export async function sendNewReportToPanchayatAdmins(
+  officer: Officer,
+  report: Report,
+  panchayatAdmins: { email: string; name: string }[]
+): Promise<void> {
+  if (panchayatAdmins.length === 0) return;
+
+  const mapsUrl = googleMapsUrl(report.latitude, report.longitude);
+  const base = appBaseUrl();
+  const dashUrl = `${base}/master/reports`;
+  const panchayat = officer.panchayatName ?? "your panchayat";
+  const ward = officer.areaName ?? "an assigned ward";
+  const subject = `[Civic Watch] New waste report in ${panchayat} — #${report.id}`;
+
+  const body = (recipientName: string) => `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Dear ${escapeHtml(recipientName)},</p>
+    <p style="margin:0 0 20px;font-size:15px;color:#475569;line-height:1.7;">
+      A new waste report has been submitted in <strong>${escapeHtml(panchayat)}</strong> and assigned to
+      field officer <strong>${escapeHtml(officer.name)}</strong> (${escapeHtml(ward)}).
+    </p>
+
+    <!-- Urgency badge -->
+    <div style="margin:0 0 24px;">
+      <span style="display:inline-block;background:#fff7ed;color:#c2410c;border:1.5px solid #fed7aa;
+        font-size:13px;font-weight:800;padding:8px 20px;border-radius:999px;letter-spacing:0.5px;">
+        🚨 New Report — Action Required
+      </span>
+    </div>
+
+    ${reportDetailCard(report)}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td style="padding-right:12px;">${ctaButton("📍 View on Map", mapsUrl)}</td>
+        <td>${ctaButton("Open Dashboard", dashUrl, "outline")}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      You will receive another notification when the officer updates the report status.
+      You are receiving this as a panchayat admin for <strong>${escapeHtml(panchayat)}</strong>.
+    </p>`;
+
+  await Promise.all(
+    panchayatAdmins
+      .filter((a) => !!a.email)
+      .map((a) =>
+        sendEmail(a.email, subject, emailShell("New Report in Your Area", body(a.name))).catch((err) =>
+          logger.warn({ err, to: a.email }, "New-report panchayat admin email failed")
+        )
+      )
+  );
+}
+
+// ── 7. Weekly digest ──────────────────────────────────────────────────────────
+
+export type WeeklyOfficerRow = {
+  name: string;
+  ward: string;
+  pending: number;
+  resolvedThisWeek: number;
+};
+
+export type WeeklyPanchayatRow = {
+  panchayat: string;
+  total: number;
+  open: number;
+  resolved: number;
+};
+
+function officerBreakdownTable(rows: WeeklyOfficerRow[]): string {
+  if (rows.length === 0) return "";
+  const rowsHtml = rows
+    .map((r) => {
+      const resolvePct = r.pending + r.resolvedThisWeek > 0
+        ? Math.round((r.resolvedThisWeek / (r.pending + r.resolvedThisWeek)) * 100)
+        : 0;
+      return `
+        <tr>
+          <td style="padding:8px 12px;font-size:13px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${escapeHtml(r.name)}</td>
+          <td style="padding:8px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #f1f5f9;">${escapeHtml(r.ward)}</td>
+          <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#dc2626;text-align:center;border-bottom:1px solid #f1f5f9;">${r.pending}</td>
+          <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#16a34a;text-align:center;border-bottom:1px solid #f1f5f9;">${r.resolvedThisWeek}</td>
+          <td style="padding:8px 12px;font-size:12px;color:#64748b;text-align:center;border-bottom:1px solid #f1f5f9;">${resolvePct}%</td>
+        </tr>`;
+    })
+    .join("");
+
+  return `
+    <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">Officer Breakdown</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+      <tr style="background:#f8fafc;">
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:left;">Officer</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:left;">Ward</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Pending</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Resolved</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Rate</th>
+      </tr>
+      ${rowsHtml}
+    </table>`;
+}
+
+function panchayatBreakdownTable(rows: WeeklyPanchayatRow[]): string {
+  if (rows.length === 0) return "";
+  const rowsHtml = rows
+    .map((r) => `
+      <tr>
+        <td style="padding:8px 12px;font-size:13px;color:#0f172a;border-bottom:1px solid #f1f5f9;">${escapeHtml(r.panchayat)}</td>
+        <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#2563eb;text-align:center;border-bottom:1px solid #f1f5f9;">${r.total}</td>
+        <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#dc2626;text-align:center;border-bottom:1px solid #f1f5f9;">${r.open}</td>
+        <td style="padding:8px 12px;font-size:13px;font-weight:700;color:#16a34a;text-align:center;border-bottom:1px solid #f1f5f9;">${r.resolved}</td>
+      </tr>`)
+    .join("");
+
+  return `
+    <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;">District Overview by Panchayat</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+      style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
+      <tr style="background:#f8fafc;">
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:left;">Panchayat</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">New This Week</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Open</th>
+        <th style="padding:8px 12px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Resolved</th>
+      </tr>
+      ${rowsHtml}
+    </table>`;
+}
+
+export async function sendWeeklyDigest(opts: {
+  to: string;
+  recipientName: string;
+  weekLabel: string;
+  stats: { total: number; open: number; resolved: number; avgResponseHours: number };
+  officerRows?: WeeklyOfficerRow[];
+  panchayatRows?: WeeklyPanchayatRow[];
+  isControlCenter: boolean;
+  panchayatName?: string;
+}): Promise<void> {
+  const { to, recipientName, weekLabel, stats, officerRows, panchayatRows, isControlCenter, panchayatName } = opts;
+  const base = appBaseUrl();
+  const dashUrl = isControlCenter ? `${base}/admin/reports` : `${base}/master/reports`;
+  const scope = isControlCenter ? "Udupi District" : (panchayatName ?? "Your Panchayat");
+  const subject = `[Civic Watch] Weekly Report — ${scope} — ${weekLabel}`;
+
+  const body = `
+    <p style="margin:0 0 6px;font-size:17px;font-weight:700;color:#0f172a;">Dear ${escapeHtml(recipientName)},</p>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569;line-height:1.7;">
+      Here is your weekly waste management summary for <strong>${escapeHtml(scope)}</strong>
+      covering the period <strong>${escapeHtml(weekLabel)}</strong>.
+    </p>
+
+    <!-- Week label badge -->
+    <div style="margin:0 0 24px;">
+      <span style="display:inline-block;background:#eff6ff;color:#1d4ed8;border:1.5px solid #bfdbfe;
+        font-size:13px;font-weight:800;padding:8px 20px;border-radius:999px;letter-spacing:0.5px;">
+        📅 ${escapeHtml(weekLabel)}
+      </span>
+    </div>
+
+    <!-- Stats grid -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td width="24%" style="text-align:center;background:#eff6ff;border-radius:10px;padding:16px 8px;border:1px solid #bfdbfe;">
+          <p style="margin:0;font-size:28px;font-weight:800;color:#2563eb;">${stats.total}</p>
+          <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#1d4ed8;text-transform:uppercase;letter-spacing:0.5px;">New Reports</p>
+        </td>
+        <td width="2%" style="min-width:6px;"></td>
+        <td width="24%" style="text-align:center;background:#fef2f2;border-radius:10px;padding:16px 8px;border:1px solid #fecaca;">
+          <p style="margin:0;font-size:28px;font-weight:800;color:#dc2626;">${stats.open}</p>
+          <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#991b1b;text-transform:uppercase;letter-spacing:0.5px;">Still Open</p>
+        </td>
+        <td width="2%" style="min-width:6px;"></td>
+        <td width="24%" style="text-align:center;background:#f0fdf4;border-radius:10px;padding:16px 8px;border:1px solid #bbf7d0;">
+          <p style="margin:0;font-size:28px;font-weight:800;color:#16a34a;">${stats.resolved}</p>
+          <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#15803d;text-transform:uppercase;letter-spacing:0.5px;">Resolved</p>
+        </td>
+        <td width="2%" style="min-width:6px;"></td>
+        <td width="24%" style="text-align:center;background:#fefce8;border-radius:10px;padding:16px 8px;border:1px solid #fef08a;">
+          <p style="margin:0;font-size:28px;font-weight:800;color:#ca8a04;">${stats.avgResponseHours}</p>
+          <p style="margin:4px 0 0;font-size:10px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;">Avg Hrs (30d)</p>
+        </td>
+      </tr>
+    </table>
+
+    ${officerRows && officerRows.length > 0 ? officerBreakdownTable(officerRows) : ""}
+    ${panchayatRows && panchayatRows.length > 0 ? panchayatBreakdownTable(panchayatRows) : ""}
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+      <tr>
+        <td>${ctaButton("📊 View Full Dashboard", dashUrl)}</td>
+      </tr>
+    </table>
+
+    ${divider()}
+    <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.6;">
+      This digest is sent every Monday morning. You are receiving this as
+      ${isControlCenter ? "a Control Center officer" : `a Panchayat Admin for ${escapeHtml(scope)}`}.
+    </p>`;
+
+  logger.info({ to, scope }, "Sending weekly digest");
+  await sendEmail(to, subject, emailShell(`Weekly Report — ${scope}`, body));
+}

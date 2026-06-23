@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureAdminExists } from "./lib/auth";
+import { startScheduler } from "./lib/scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -158,6 +159,8 @@ async function start() {
   await seedOfficerPanchayatNames();
   await fixImageUrls();
   await relocateDemoReportsToSaligrama();
+
+  startScheduler();
 
   app.listen(port, (err) => {
     if (err) {
