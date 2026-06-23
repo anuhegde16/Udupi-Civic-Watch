@@ -38,9 +38,13 @@ async function sendPushToSubscription(
   } catch (err: any) {
     if (err?.statusCode === 410 || err?.statusCode === 404) {
       await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.endpoint, endpoint));
-      logger.info({ endpoint }, "Removed stale push subscription");
+      logger.info({ statusCode: err.statusCode, endpointPrefix: endpoint.slice(0, 40) }, "Removed stale push subscription (expired)");
     } else {
-      logger.warn({ err, endpoint }, "Push send failed");
+      logger.warn({
+        statusCode: err?.statusCode,
+        message: err?.message,
+        endpointPrefix: endpoint.slice(0, 40),
+      }, "Push delivery failed");
     }
     return false;
   }

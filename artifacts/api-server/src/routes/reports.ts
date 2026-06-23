@@ -212,11 +212,12 @@ router.post("/reports", async (req, res): Promise<void> => {
   // Always notify control center about every new report regardless of assignment
   const ccRowsForNewReport = await db.select({ id: usersTable.id }).from(usersTable).where(inArray(usersTable.role, ["control_center", "admin"]));
   const ccNewReportUserIds = ccRowsForNewReport.map((r) => r.id);
-  const notifBodyBase = `Report #${report.id}${report.address ? ` — ${report.address}` : ""}`;
+  const locationSuffix = report.address ? ` — ${report.address}` : "";
+  const ccNotifBody = `New waste report #${report.id}${officer ? ` → ${officer.name}` : " (unassigned)"}${locationSuffix}`;
   if (ccNewReportUserIds.length > 0) {
     notifyAndPush(ccNewReportUserIds, {
       title: "New Waste Report",
-      body: notifBodyBase,
+      body: ccNotifBody,
       type: "new_report",
       reportId: report.id,
       url: "/admin/dashboard",
@@ -241,7 +242,9 @@ router.post("/reports", async (req, res): Promise<void> => {
       : [];
     const panchayatAdminUserIds = panchayatAdminRows.map((r) => r.id);
 
-    const notifBody = `Report #${report.id} assigned to ${officer.name}${report.address ? ` — ${report.address}` : ""}`;
+    // Separate body text: officer hears "assigned to you", admin hears officer name
+    const officerNotifBody = `New waste report assigned to you${locationSuffix}. Tap to view details. (Report #${report.id})`;
+    const adminNotifBody = `Report #${report.id} assigned to ${officer.name}${locationSuffix}`;
 
     // Notify the field officer and their panchayat admin(s) in parallel (fire-and-forget)
     Promise.allSettled([
@@ -251,14 +254,14 @@ router.post("/reports", async (req, res): Promise<void> => {
         : Promise.resolve(),
       notifyAndPush(officerUserIds, {
         title: "New Report Assigned",
-        body: notifBody,
+        body: officerNotifBody,
         type: "new_report",
         reportId: report.id,
         url: "/officer/dashboard",
       }),
       notifyAndPush(panchayatAdminUserIds, {
         title: "New Waste Report",
-        body: notifBody,
+        body: adminNotifBody,
         type: "new_report",
         reportId: report.id,
         url: "/master/dashboard",

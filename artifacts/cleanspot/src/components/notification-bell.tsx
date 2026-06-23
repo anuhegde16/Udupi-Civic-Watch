@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell, BellOff, BellRing, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,37 +43,91 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function playNotificationSound() {
-  try {
-    const audio = new Audio("/notification.mp3");
-    audio.volume = 0.6;
-    audio.play().catch(() => {});
-  } catch {
-    // Fallback: Web Audio API oscillator if audio file fails
-    try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.4);
-    } catch {
-      // Silent fail
-    }
-  }
-}
 
 export function NotificationBell() {
   const { isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const prevUnreadRef = useRef<number>(0);
+  const alarmStopRef = useRef<(() => void) | null>(null);
+  const dataRef = useRef<NotificationsResponse | undefined>(undefined);
   const { permission, isSubscribed, isLoading, supported, subscribe, unsubscribe } = usePushNotifications();
+
+  // 10-second pulsing alarm + optional text-to-speech announcement
+  const playAlarm = useCallback((speechText?: string) => {
+    // Stop any currently playing alarm first
+    alarmStopRef.current?.();
+
+    let ctx: AudioContext | null = null;
+    let ttsTimeout: ReturnType<typeof setTimeout> | null = null;
+    let autoStopTimeout: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      if (ttsTimeout) clearTimeout(ttsTimeout);
+      if (autoStopTimeout) clearTimeout(autoStopTimeout);
+      if (typeof window !== "undefined" && window.speechSynthesis) window.speechSynthesis.cancel();
+      ctx?.close().catch(() => {});
+      ctx = null;
+      alarmStopRef.current = null;
+    };
+
+    alarmStopRef.current = stop;
+
+    (async () => {
+      try {
+        ctx = new AudioContext();
+        if (ctx.state === "suspended") await ctx.resume();
+        if (stopped) { ctx.close().catch(() => {}); return; }
+
+        const t0 = ctx.currentTime;
+        const PULSE_ON = 0.2;   // 200 ms tone
+        const PULSE_OFF = 0.15; // 150 ms silence
+        const CYCLE = PULSE_ON + PULSE_OFF;
+        const TOTAL_SECS = 10;
+        const cycles = Math.ceil(TOTAL_SECS / CYCLE);
+        const freqs = [880, 784]; // alternate between two pitches
+
+        for (let i = 0; i < cycles; i++) {
+          const t = t0 + i * CYCLE;
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.connect(g);
+          g.connect(ctx.destination);
+          osc.type = "square";
+          osc.frequency.value = freqs[i % 2];
+          g.gain.setValueAtTime(0.001, t);
+          g.gain.linearRampToValueAtTime(0.22, t + 0.02);
+          g.gain.setValueAtTime(0.22, t + PULSE_ON - 0.02);
+          g.gain.linearRampToValueAtTime(0.001, t + PULSE_ON);
+          osc.start(t);
+          osc.stop(t + PULSE_ON);
+        }
+
+        // Speak the notification body after a brief ring (1.5 s in)
+        if (speechText && typeof window !== "undefined" && "speechSynthesis" in window) {
+          ttsTimeout = setTimeout(() => {
+            if (stopped) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(speechText);
+            u.rate = 0.9;
+            u.volume = 1;
+            window.speechSynthesis.speak(u);
+          }, 1500);
+        }
+
+        // Auto-cleanup after alarm finishes
+        autoStopTimeout = setTimeout(stop, (TOTAL_SECS + 2) * 1000);
+      } catch {
+        // Audio API unavailable or suspended — silent fail
+      }
+    })();
+  }, []);
+
+  // Keep dataRef current so effects that don't depend on data can still read it
+  useEffect(() => { dataRef.current = data; });
 
   // Show tooltip on first appearance for authenticated users
   const [showIntroTooltip, setShowIntroTooltip] = useState(false);
@@ -94,7 +148,8 @@ export function NotificationBell() {
   }, [isAuthenticated]);
 
   const handleBellClick = () => {
-    // Dismiss intro tooltip on first click
+    // Stop alarm when user opens the bell — they've acknowledged the alert
+    alarmStopRef.current?.();
     if (showIntroTooltip) {
       setShowIntroTooltip(false);
       localStorage.setItem("bell-tooltip-shown", "1");
@@ -112,28 +167,29 @@ export function NotificationBell() {
 
   const unreadCount = data?.unreadCount ?? 0;
 
-  // Play sound when unread count increases (polling-based foreground detection)
+  // Play 10-second alarm when unread count increases (polling-based foreground detection)
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
-      playNotificationSound();
+      const latestUnread = dataRef.current?.notifications?.find((n) => !n.read);
+      playAlarm(latestUnread?.body);
     }
     prevUnreadRef.current = unreadCount;
-  }, [unreadCount]);
+  }, [unreadCount, playAlarm]);
 
-  // Listen for push-received messages from service worker (fired on background push → foreground)
+  // Listen for push-received messages from service worker (fired when push arrives while app is open)
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
     const handler = (event: MessageEvent) => {
       if (event.data?.type === "push-received") {
-        playNotificationSound();
+        playAlarm(event.data.payload?.body as string | undefined);
         queryClient.invalidateQueries({ queryKey: ["notifications"] });
       }
     };
 
     navigator.serviceWorker.addEventListener("message", handler);
     return () => navigator.serviceWorker.removeEventListener("message", handler);
-  }, [queryClient]);
+  }, [queryClient, playAlarm]);
 
   const markReadMutation = useMutation({
     mutationFn: (id: number) =>

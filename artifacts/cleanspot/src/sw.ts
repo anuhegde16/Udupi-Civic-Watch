@@ -40,14 +40,20 @@ self.addEventListener("push", (event: PushEvent) => {
     payload = { title: "Udupi Civic Watch", body: event.data.text() };
   }
 
-  const options: NotificationOptions = {
+  // Use absolute URLs so mobile browsers and iOS can resolve them from SW context
+  const origin = self.location.origin;
+  const options = {
     body: payload.body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
-    tag: payload.reportId ? `report-${payload.reportId}` : payload.type ?? "notification",
+    icon: origin + "/icon-192.png",
+    badge: origin + "/icon-192.png",
+    // Unique tag per event type + report so repeated events still show (renotify: true)
+    tag: `${payload.type ?? "notification"}-${payload.reportId ?? Date.now()}`,
     data: { url: payload.url ?? "/", reportId: payload.reportId, type: payload.type },
     requireInteraction: false,
-  };
+    renotify: true,
+    vibrate: [200, 100, 200, 100, 200],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any as NotificationOptions;
 
   event.waitUntil(
     self.registration.showNotification(payload.title, options).then(() => {
