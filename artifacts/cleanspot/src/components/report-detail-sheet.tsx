@@ -1,6 +1,7 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Image as ImageIcon, Trash2, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MapPin, Image as ImageIcon, Trash2, Mail, Loader2, CheckCircle2, Clock } from "lucide-react";
 
 export type ReportDetail = {
   id: number;
@@ -36,10 +37,16 @@ interface ReportDetailSheetProps {
   report: ReportDetail | null;
   open: boolean;
   onClose: () => void;
+  onStatusChange?: (reportId: number, newStatus: "cleaning" | "cleaned") => Promise<void>;
+  isUpdating?: boolean;
 }
 
-export function ReportDetailSheet({ report, open, onClose }: ReportDetailSheetProps) {
+export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpdating }: ReportDetailSheetProps) {
   const meta = report ? (STATUS_META[report.status] ?? { label: report.status, cls: "" }) : null;
+
+  const canAdvance = report && onStatusChange && report.status !== "cleaned";
+  const nextStatus: "cleaning" | "cleaned" | null =
+    report?.status === "reported" ? "cleaning" : report?.status === "cleaning" ? "cleaned" : null;
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -123,6 +130,40 @@ export function ReportDetailSheet({ report, open, onClose }: ReportDetailSheetPr
               >
                 <MapPin className="w-3.5 h-3.5" /> Open in Map
               </a>
+
+              {/* Status action for panchayat_admin */}
+              {canAdvance && nextStatus && (
+                <div className="border-t border-border/50 pt-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+                    Update Status
+                  </p>
+                  <Button
+                    className={`w-full rounded-xl h-11 font-black text-sm ${
+                      nextStatus === "cleaning"
+                        ? "bg-orange-500 hover:bg-orange-600 text-white"
+                        : "bg-primary hover:bg-primary/90 text-primary-foreground"
+                    }`}
+                    disabled={isUpdating}
+                    onClick={() => onStatusChange(report.id, nextStatus)}
+                  >
+                    {isUpdating ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : nextStatus === "cleaning" ? (
+                      <Clock className="w-4 h-4 mr-2" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                    )}
+                    {nextStatus === "cleaning" ? "Mark as In Progress" : "Mark as Cleaned"}
+                  </Button>
+                </div>
+              )}
+
+              {report.status === "cleaned" && onStatusChange && (
+                <div className="border-t border-border/50 pt-4 flex items-center gap-2 text-xs text-primary font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>This report has been cleaned.</span>
+                </div>
+              )}
             </div>
           </>
         )}

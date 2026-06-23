@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { customFetch, useCreateOfficer, useUpdateOfficer } from "@workspace/api-client-react";
+import { customFetch, useCreateOfficer, useUpdateOfficer, useUpdateReport } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -172,12 +172,36 @@ export default function MasterDashboard() {
   const createOfficer = useCreateOfficer();
   const deleteOfficer = useDeleteOfficer();
   const updateOfficer = useUpdateOfficer();
+  const updateReport = useUpdateReport();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedWard, setSelectedWard] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+
+  async function handleReportStatusChange(reportId: number, newStatus: "cleaning" | "cleaned") {
+    await new Promise<void>((resolve, reject) => {
+      updateReport.mutate(
+        { id: reportId, data: { status: newStatus } },
+        {
+          onSuccess: (updated) => {
+            setSelectedReport((prev) =>
+              prev && prev.id === reportId ? { ...prev, status: updated.status } : prev
+            );
+            queryClient.invalidateQueries({ queryKey: ["panchayat-reports-map"] });
+            queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
+            toast({ title: newStatus === "cleaning" ? "Marked as In Progress" : "Marked as Cleaned" });
+            resolve();
+          },
+          onError: (err) => {
+            toast({ title: "Failed to update status", description: err.message, variant: "destructive" });
+            reject(err);
+          },
+        }
+      );
+    });
+  }
 
   function openReport(r: PanchayatMapReport, officerName?: string) {
     const officer = officers.find((o) => o.id === r.assignedOfficerId);
@@ -977,6 +1001,8 @@ export default function MasterDashboard() {
         report={selectedReport}
         open={selectedReport !== null}
         onClose={() => setSelectedReport(null)}
+        onStatusChange={handleReportStatusChange}
+        isUpdating={updateReport.isPending}
       />
     </div>
   );
