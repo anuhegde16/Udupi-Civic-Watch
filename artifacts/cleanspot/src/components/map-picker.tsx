@@ -125,19 +125,21 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
     if (markerRef.current) {
       markerRef.current.setLatLng(latlng);
     } else {
-      const m = L.marker(latlng, { draggable: true, icon: buildIcon() }).addTo(mapRef.current);
+      const m = L.marker(latlng, { draggable: !readonly, icon: buildIcon() }).addTo(mapRef.current);
       markerRef.current = m;
-      m.on("dragend", () => {
-        const { lat, lng } = m.getLatLng();
-        onChange({ lat, lng });
-      });
+      if (!readonly) {
+        m.on("dragend", () => {
+          const { lat, lng } = m.getLatLng();
+          onChange({ lat, lng });
+        });
+      }
     }
     // Don't recenter on the pin when it's outside the zone — the outsideFence
     // effect zooms to the boundary so the user can see where the service area is.
     if (!outsideFence) {
       mapRef.current.setView(latlng, Math.max(mapRef.current.getZoom(), 15));
     }
-  }, [value?.lat, value?.lng, outsideFence]);
+  }, [value?.lat, value?.lng, outsideFence, readonly]);
 
   return (
     <div
