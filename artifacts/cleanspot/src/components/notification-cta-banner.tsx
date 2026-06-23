@@ -132,7 +132,6 @@ export function NotificationHomePill() {
   if (!supported || permission === "unsupported") return null;
 
   const enabled = isSubscribed || permission === "granted";
-  const denied = permission === "denied";
 
   const handleEnable = async () => {
     await subscribe();
@@ -143,15 +142,13 @@ export function NotificationHomePill() {
       <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1.5 text-white/80">
         {enabled ? (
           <CheckCircle2 className="w-3.5 h-3.5 text-secondary shrink-0" />
-        ) : denied ? (
-          <BellOff className="w-3.5 h-3.5 text-white/40 shrink-0" />
         ) : (
           <Bell className="w-3.5 h-3.5 text-white/60 shrink-0" />
         )}
         <span className="text-xs font-medium">
           {enabled ? "Notifications enabled" : "Get notified about your reports"}
         </span>
-        {!enabled && !denied && (
+        {!enabled && (
           <button
             onClick={handleEnable}
             disabled={isLoading}
@@ -159,9 +156,6 @@ export function NotificationHomePill() {
           >
             {isLoading ? "…" : "Enable"}
           </button>
-        )}
-        {denied && (
-          <span className="text-xs text-white/40 ml-0.5">Blocked in browser settings</span>
         )}
       </div>
     </div>
