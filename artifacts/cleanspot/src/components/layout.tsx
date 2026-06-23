@@ -1,49 +1,183 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, FlaskConical, Bell, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { LogOut, Menu, Waves, Anchor, Home, Camera, Search, ShieldCheck, Lock, FlaskConical, Bell, BellRing, Download, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { NotificationBell } from "@/components/notification-bell";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 
-function PushPromptBanner() {
+// BeforeInstallPromptEvent is not in standard TS DOM lib
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+// ── Push Permission Modal ─────────────────────────────────────────────────────
+function PushPermissionModal() {
   const { isAuthenticated } = useAuth();
   const { supported, permission, isSubscribed, isLoading, subscribe } = usePushNotifications();
-  const [dismissed, setDismissed] = useState(() => sessionStorage.getItem("push-prompt-dismissed") === "1");
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Mark as shown once on mount so we don't re-show after dismissal within the same session
-  }, []);
+    if (!isAuthenticated || !supported || permission === "denied" || isSubscribed) return;
+    const decided = localStorage.getItem("push-permission-decided");
+    if (decided) return;
 
-  if (!isAuthenticated || !supported || permission === "denied" || isSubscribed || dismissed) {
-    return null;
-  }
-
-  const handleDismiss = () => {
-    sessionStorage.setItem("push-prompt-dismissed", "1");
-    setDismissed(true);
-  };
+    // Show after a short delay so the page settles first
+    timerRef.current = setTimeout(() => setOpen(true), 1500);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isAuthenticated, supported, permission, isSubscribed]);
 
   const handleEnable = async () => {
     await subscribe();
-    sessionStorage.setItem("push-prompt-dismissed", "1");
+    localStorage.setItem("push-permission-decided", "granted");
+    setOpen(false);
+  };
+
+  const handleSkip = () => {
+    localStorage.setItem("push-permission-decided", "skipped");
+    setOpen(false);
+  };
+
+  if (!isAuthenticated) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent
+        className="max-w-sm rounded-2xl"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="items-center text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+            <BellRing className="h-8 w-8 text-primary" />
+          </div>
+          <DialogTitle className="text-xl font-bold">Stay in the loop</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground mt-1 leading-relaxed">
+            Enable push notifications to receive instant alerts when new waste reports are assigned to your area — even when this tab is closed.
+          </DialogDescription>
+        </DialogHeader>
+
+        <ul className="text-sm text-muted-foreground space-y-2 mt-1">
+          <li className="flex items-start gap-2">
+            <span className="text-primary font-bold mt-0.5">✓</span>
+            New report assigned to your area
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary font-bold mt-0.5">✓</span>
+            Status update alerts
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary font-bold mt-0.5">✓</span>
+            Works even when the browser is closed
+          </li>
+        </ul>
+
+        <DialogFooter className="flex-col gap-2 mt-2 sm:flex-col">
+          <Button
+            className="w-full rounded-xl h-11"
+            onClick={handleEnable}
+            disabled={isLoading}
+          >
+            <Bell className="h-4 w-4 mr-2" />
+            Enable Notifications
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full rounded-xl text-muted-foreground text-sm"
+            onClick={handleSkip}
+            disabled={isLoading}
+          >
+            Not now
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── PWA Install Banner ────────────────────────────────────────────────────────
+function PwaInstallBanner() {
+  const { isAuthenticated } = useAuth();
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem("pwa-install-dismissed") === "1");
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    // Already running as installed PWA
+    if (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
+    ) {
+      setIsStandalone(true);
+      return;
+    }
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  // Only show on mobile-ish viewports
+  const isMobile =
+    typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+
+  if (!isAuthenticated || isStandalone || dismissed || !deferredPrompt || !isMobile) return null;
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      localStorage.setItem("pwa-install-dismissed", "1");
+    }
+    setDismissed(true);
+    setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
+    localStorage.setItem("pwa-install-dismissed", "1");
     setDismissed(true);
   };
 
   return (
-    <div className="bg-primary/10 border-b border-primary/20 px-4 py-2.5 flex items-center gap-3">
-      <Bell className="h-4 w-4 text-primary shrink-0" />
-      <p className="text-sm text-foreground flex-1">
-        <span className="font-semibold">Stay updated</span> — enable push notifications to get instant alerts for new reports and status changes.
+    <div className="bg-primary text-primary-foreground px-4 py-2.5 flex items-center gap-3">
+      <Download className="h-4 w-4 shrink-0" />
+      <p className="text-sm flex-1 font-medium">
+        Install the app for faster access and offline support.
       </p>
       <div className="flex items-center gap-2 shrink-0">
-        <Button size="sm" className="h-7 text-xs px-3" onClick={handleEnable} disabled={isLoading}>
-          Enable
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-7 text-xs px-3 bg-white/20 hover:bg-white/30 text-primary-foreground border-0"
+          onClick={handleInstall}
+        >
+          Install
         </Button>
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={handleDismiss}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0 text-primary-foreground hover:bg-white/20"
+          onClick={handleDismiss}
+        >
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -51,6 +185,7 @@ function PushPromptBanner() {
   );
 }
 
+// ── Main Layout ───────────────────────────────────────────────────────────────
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isAdmin, isOfficer, isPanchayatAdmin, logout } = useAuth();
   const [location] = useLocation();
@@ -212,8 +347,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* One-time push notification permission prompt for logged-in users */}
-      <PushPromptBanner />
+      {/* PWA install prompt — mobile only, authenticated users */}
+      <PwaInstallBanner />
 
       {testModeActive && (
         <div className="bg-amber-400 text-amber-950 text-sm font-bold text-center py-2 px-4 flex items-center justify-center gap-2 z-40">
@@ -234,6 +369,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
           Powered by Trip Nirvigna
         </p>
       </footer>
+
+      {/* One-time push notification permission modal */}
+      <PushPermissionModal />
     </div>
   );
 }
