@@ -298,6 +298,8 @@ export const UpdateOfficerParams = zod.object({
 
 export const UpdateOfficerBody = zod.object({
   name: zod.string().optional(),
+  email: zod.string().email().nullish(),
+  password: zod.string().nullish(),
   phone: zod.string().nullish(),
   areaName: zod.string().nullish(),
   centerLat: zod.number().nullish(),

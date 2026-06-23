@@ -195,6 +195,8 @@ export interface CreatePanchayatAdminBody {
 
 export interface UpdateOfficerBody {
   name?: string;
+  email?: string | null;
+  password?: string | null;
   phone?: string | null;
   areaName?: string | null;
   centerLat?: number | null;

@@ -106,6 +106,8 @@ type CreateOfficerValues = z.infer<typeof createOfficerSchema>;
 const editOfficerSchema = z.object({
   name: z.string().min(2, "Name is required"),
   phone: z.string().optional(),
+  email: z.string().email("Valid email required"),
+  password: z.string().optional(),
 });
 type EditOfficerValues = z.infer<typeof editOfficerSchema>;
 
@@ -163,7 +165,7 @@ export default function MasterDashboard() {
 
   const editForm = useForm<EditOfficerValues>({
     resolver: zodResolver(editOfficerSchema),
-    defaultValues: { name: "", phone: "" },
+    defaultValues: { name: "", phone: "", email: "", password: "" },
   });
 
   const officers = officersData?.officers ?? [];
@@ -215,14 +217,17 @@ export default function MasterDashboard() {
 
   function openEdit(officer: PanchayatOfficer) {
     setEditingOfficer(officer);
-    editForm.reset({ name: officer.name, phone: officer.phone ?? "" });
+    editForm.reset({ name: officer.name, phone: officer.phone ?? "", email: officer.email, password: "" });
     setEditOpen(true);
   }
 
   function handleUpdate(data: EditOfficerValues) {
     if (!editingOfficer) return;
+    const payload: Record<string, any> = { name: data.name, phone: data.phone || null };
+    if (data.email && data.email !== editingOfficer.email) payload.email = data.email;
+    if (data.password) payload.password = data.password;
     updateOfficer.mutate(
-      { id: editingOfficer.id, data: { name: data.name, phone: data.phone || null } },
+      { id: editingOfficer.id, data: payload },
       {
         onSuccess: () => {
           toast({ title: "Officer updated" });
@@ -663,6 +668,34 @@ export default function MasterDashboard() {
                     </FormLabel>
                     <FormControl>
                       <Input placeholder="+91 98765 43210" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">
+                      New Password <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="Leave blank to keep current" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -175,10 +175,21 @@ router.patch("/officers/:id", requirePanchayatOrControlCenter, async (req, res):
     return;
   }
 
+  // Fetch existing officer — needed for old email lookup when updating users table
+  const [existing] = await db
+    .select()
+    .from(officersTable)
+    .where(and(eq(officersTable.id, id), isNull(officersTable.deletedAt)))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Officer not found" });
+    return;
+  }
+
   // Panchayat admin can only edit officers in their own panchayat
   if (user.role === "panchayat_admin" && user.panchayatName) {
-    const [target] = await db.select().from(officersTable).where(and(eq(officersTable.id, id), isNull(officersTable.deletedAt))).limit(1);
-    if (!target || target.panchayatName !== user.panchayatName) {
+    if (existing.panchayatName !== user.panchayatName) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
@@ -191,6 +202,35 @@ router.patch("/officers/:id", requirePanchayatOrControlCenter, async (req, res):
   if (parsed.data.centerLat !== undefined) updates.centerLat = parsed.data.centerLat;
   if (parsed.data.centerLng !== undefined) updates.centerLng = parsed.data.centerLng;
   if ((parsed.data as any).panchayatName !== undefined) updates.panchayatName = (parsed.data as any).panchayatName;
+
+  // Handle email change: uniqueness check + sync users table
+  if (parsed.data.email !== undefined && parsed.data.email !== null && parsed.data.email !== existing.email) {
+    const [clash] = await db
+      .select()
+      .from(officersTable)
+      .where(and(eq(officersTable.email, parsed.data.email), isNull(officersTable.deletedAt), sql`${officersTable.id} != ${id}`))
+      .limit(1);
+    if (clash) {
+      res.status(409).json({ error: "Email already in use by another officer" });
+      return;
+    }
+    updates.email = parsed.data.email;
+    await db
+      .update(usersTable)
+      .set({ email: parsed.data.email })
+      .where(and(eq(usersTable.email, existing.email), sql`${usersTable.role} IN ('officer', 'field_officer')`));
+  }
+
+  // Handle password change: hash + sync users table
+  if (parsed.data.password) {
+    const newHash = await hashPassword(parsed.data.password);
+    const lookupEmail = updates.email ?? existing.email;
+    await db
+      .update(usersTable)
+      .set({ passwordHash: newHash })
+      .where(and(eq(usersTable.email, lookupEmail), sql`${usersTable.role} IN ('officer', 'field_officer')`));
+    updates.passwordHash = newHash;
+  }
 
   const [officer] = await db
     .update(officersTable)

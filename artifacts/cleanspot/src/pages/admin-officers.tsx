@@ -64,6 +64,7 @@ import {
   Shield,
   Map,
   Save,
+  Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OfficerZonesMap } from "@/components/officer-zones-map";
@@ -100,6 +101,15 @@ const createOfficerSchema = z.object({
 
 type CreateOfficerValues = z.infer<typeof createOfficerSchema>;
 
+const editDetailsSchema = z.object({
+  name: z.string().min(2, "Name is required"),
+  phone: z.string().optional(),
+  email: z.string().email("Valid email required"),
+  password: z.string().optional(),
+});
+
+type EditDetailsValues = z.infer<typeof editDetailsSchema>;
+
 interface OfficerZoneDraft {
   officerId: number;
   name: string;
@@ -121,6 +131,13 @@ export default function AdminOfficers() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingZone, setEditingZone] = useState<OfficerZoneDraft | null>(null);
   const [pendingSubmitData, setPendingSubmitData] = useState<CreateOfficerValues | null>(null);
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
+  const [editDetailsOfficer, setEditDetailsOfficer] = useState<(typeof officers)[0] | null>(null);
+
+  const editDetailsForm = useForm<EditDetailsValues>({
+    resolver: zodResolver(editDetailsSchema),
+    defaultValues: { name: "", phone: "", email: "", password: "" },
+  });
 
   // Local string state for coordinate inputs — updated on blur, not every keystroke
   const [latStr, setLatStr] = useState("");
@@ -170,6 +187,33 @@ export default function AdminOfficers() {
       lng: officer.centerLng ?? UDUPI_CENTER.lng,
       colorIdx: idx,
     });
+  }
+
+  function openEditDetails(officer: (typeof officers)[0]) {
+    setEditDetailsOfficer(officer);
+    editDetailsForm.reset({ name: officer.name, phone: officer.phone ?? "", email: officer.email, password: "" });
+    setEditDetailsOpen(true);
+  }
+
+  function handleSaveDetails(data: EditDetailsValues) {
+    if (!editDetailsOfficer) return;
+    const payload: Record<string, any> = { name: data.name, phone: data.phone || null };
+    if (data.email && data.email !== editDetailsOfficer.email) payload.email = data.email;
+    if (data.password) payload.password = data.password;
+    updateOfficer.mutate(
+      { id: editDetailsOfficer.id, data: payload },
+      {
+        onSuccess: () => {
+          toast({ title: "Officer updated" });
+          setEditDetailsOpen(false);
+          setEditDetailsOfficer(null);
+          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
+        },
+        onError: (err) => {
+          toast({ title: "Failed to update officer", description: err.message, variant: "destructive" });
+        },
+      }
+    );
   }
 
   const doCreateOfficer = (data: CreateOfficerValues) => {
@@ -720,19 +764,116 @@ export default function AdminOfficers() {
                   </div>
                 </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5 relative z-10"
-                  onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
-                >
-                  <Map className="w-3.5 h-3.5 mr-1.5" style={{ color }} />
-                  Edit Zone
-                </Button>
+                <div className="grid grid-cols-2 gap-2 relative z-10">
+                  <Button
+                    variant="outline"
+                    className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                    onClick={(e) => { e.stopPropagation(); openEditDetails(officer); }}
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                    Edit Details
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                    onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
+                  >
+                    <Map className="w-3.5 h-3.5 mr-1.5" style={{ color }} />
+                    Edit Zone
+                  </Button>
+                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      <Dialog open={editDetailsOpen} onOpenChange={(open) => { if (!open) { setEditDetailsOpen(false); setEditDetailsOfficer(null); } }}>
+        <DialogContent className="sm:max-w-sm rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
+          <div className="px-7 pt-7 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <DialogTitle className="text-xl font-black tracking-tight">Edit Officer</DialogTitle>
+              </div>
+              {editDetailsOfficer && (
+                <p className="text-sm text-muted-foreground font-medium mt-0.5 pl-12">{editDetailsOfficer.panchayatName ?? ""}</p>
+              )}
+            </DialogHeader>
+          </div>
+          <Form {...editDetailsForm}>
+            <form onSubmit={editDetailsForm.handleSubmit(handleSaveDetails)} className="px-7 pb-7 space-y-4">
+              <FormField
+                control={editDetailsForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Officer Name" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editDetailsForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">
+                      Phone <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="+91 98765 43210" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editDetailsForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
+                    <FormControl>
+                      <Input type="email" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editDetailsForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-foreground">
+                      New Password <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="text" placeholder="Leave blank to keep current" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex gap-2 pt-2">
+                <Button type="button" variant="outline" className="flex-1 rounded-xl h-11 font-bold" onClick={() => { setEditDetailsOpen(false); setEditDetailsOfficer(null); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1 rounded-xl h-11 font-black" disabled={updateOfficer.isPending}>
+                  {updateOfficer.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
 
       <Sheet
         open={!!editingZone}
