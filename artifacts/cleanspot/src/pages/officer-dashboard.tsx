@@ -121,13 +121,15 @@ export default function OfficerDashboard() {
 
   const hasGeo = officerData?.areaName != null;
 
-  const statCards = [
+  const statCards: { label: string; value: number; icon: React.ReactNode; color: string; bg: string; activeBg: string; filter: StatusFilter }[] = [
     {
       label: "Total",
       value: stats.total,
       icon: <LayoutList className="w-5 h-5" />,
       color: "text-foreground",
       bg: "bg-muted/60",
+      activeBg: "bg-muted ring-2 ring-foreground/30",
+      filter: "all",
     },
     {
       label: "New",
@@ -135,6 +137,8 @@ export default function OfficerDashboard() {
       icon: <AlertCircle className="w-5 h-5" />,
       color: "text-destructive",
       bg: "bg-destructive/8",
+      activeBg: "bg-destructive/20 ring-2 ring-destructive/40",
+      filter: "reported",
     },
     {
       label: "In Progress",
@@ -142,6 +146,8 @@ export default function OfficerDashboard() {
       icon: <Wrench className="w-5 h-5" />,
       color: "text-orange-500",
       bg: "bg-orange-50",
+      activeBg: "bg-orange-100 ring-2 ring-orange-400/40",
+      filter: "cleaning",
     },
     {
       label: "Cleaned",
@@ -149,6 +155,8 @@ export default function OfficerDashboard() {
       icon: <CheckCircle2 className="w-5 h-5" />,
       color: "text-primary",
       bg: "bg-primary/8",
+      activeBg: "bg-primary/20 ring-2 ring-primary/40",
+      filter: "cleaned",
     },
   ];
 
@@ -179,20 +187,26 @@ export default function OfficerDashboard() {
         ) : (
           <>
             <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
-              {statCards.map((s) => (
-                <div
-                  key={s.label}
-                  className={`${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}
-                >
-                  <div className={`${s.color} shrink-0`}>{s.icon}</div>
-                  <div>
-                    <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
-                    <div className="text-xs text-muted-foreground font-semibold leading-tight">
-                      {s.label}
+              {statCards.map((s) => {
+                const isActive = statusFilter === s.filter;
+                return (
+                  <button
+                    key={s.label}
+                    type="button"
+                    onClick={() => setStatusFilter(isActive ? "all" : s.filter)}
+                    className={`${isActive ? s.activeBg : s.bg} rounded-2xl px-4 py-3 flex items-center gap-3 transition-all duration-150 hover:brightness-95 active:scale-95 cursor-pointer text-left w-full`}
+                    title={isActive ? "Show all reports" : `Filter by: ${s.label}`}
+                  >
+                    <div className={`${s.color} shrink-0`}>{s.icon}</div>
+                    <div>
+                      <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
+                      <div className="text-xs text-muted-foreground font-semibold leading-tight">
+                        {s.label}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              ))}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Completion progress bar */}
