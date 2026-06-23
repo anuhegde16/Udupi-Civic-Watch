@@ -76,6 +76,16 @@ function emailShell(title: string, body: string): string {
       </td>
     </tr>
 
+    <!-- Logo row -->
+    <tr>
+      <td style="background:#ffffff;padding:14px 24px 10px;text-align:center;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+        <img src="https://udupicivicwatch.in/ucw-logo.png"
+          width="180" height="auto"
+          alt="Udupi Civic Watch"
+          style="display:block;margin:0 auto;max-width:180px;width:100%;height:auto;border:0;" />
+      </td>
+    </tr>
+
     <!-- Teal header -->
     <tr>
       <td style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:28px 32px 24px;">
@@ -111,6 +121,9 @@ function emailShell(title: string, body: string): string {
         </p>
         <p style="margin:8px 0 0;font-size:10px;color:#94a3b8;text-align:center;">
           © 2025 Udupi District Administration, Karnataka, India
+        </p>
+        <p style="margin:10px 0 0;font-size:10px;color:#cbd5e1;text-align:center;letter-spacing:0.3px;">
+          Powered by <a href="https://tripnirvigna.com" style="color:#cbd5e1;text-decoration:none;">Trip Nirvigna</a>
         </p>
       </td>
     </tr>

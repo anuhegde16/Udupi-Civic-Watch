@@ -42,19 +42,32 @@ function shell(title: string, body: string): string {
         Government of Karnataka &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Swachh Bharat Mission
       </p>
     </td></tr>
+    <tr><td style="background:#ffffff;padding:14px 24px 10px;text-align:center;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+      <img src="https://udupicivicwatch.in/ucw-logo.png"
+        width="180" height="auto"
+        alt="Udupi Civic Watch"
+        style="display:block;margin:0 auto;max-width:180px;width:100%;height:auto;border:0;" />
+    </td></tr>
     <tr><td style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:28px 32px 24px;">
       <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:2px;color:#99f6e4;text-transform:uppercase;">Udupi Civic Watch</p>
       <p style="margin:0;font-size:24px;font-weight:800;color:#fff;line-height:1.2;">${title}</p>
     </td></tr>
     <tr><td style="background:#fff;padding:32px;">
       <p style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:10px 14px;font-size:12px;font-weight:700;color:#713f12;margin:0 0 24px;">
-        🔔 This is a <strong>TEST EMAIL</strong> sent from CleanSpot to verify SMTP delivery. No action required.
+        🔔 This is a <strong>TEST EMAIL</strong> sent from <strong>Udupi Civic Watch</strong> to verify SMTP delivery. No action required.
       </p>
       ${body}
     </td></tr>
     <tr><td style="background:#f1f5f9;border-top:3px solid #0d9488;padding:20px 32px;border-radius:0 0 8px 8px;">
-      <p style="margin:0;font-size:11px;color:#64748b;text-align:center;line-height:1.6;">
-        <strong style="color:#0d9488;">Udupi Civic Watch</strong> &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Swachh Bharat Mission
+      <p style="margin:0 0 6px;font-size:11px;color:#64748b;text-align:center;line-height:1.6;">
+        <strong style="color:#0d9488;">Udupi Civic Watch</strong> &nbsp;·&nbsp; Udupi District Administration &nbsp;·&nbsp; Swachh Bharat Mission<br>
+        This is an automated notification. Please do not reply to this email.
+      </p>
+      <p style="margin:8px 0 0;font-size:10px;color:#94a3b8;text-align:center;">
+        © 2025 Udupi District Administration, Karnataka, India
+      </p>
+      <p style="margin:10px 0 0;font-size:10px;color:#cbd5e1;text-align:center;letter-spacing:0.3px;">
+        Powered by <a href="https://tripnirvigna.com" style="color:#cbd5e1;text-decoration:none;">Trip Nirvigna</a>
       </p>
     </td></tr>
   </table>

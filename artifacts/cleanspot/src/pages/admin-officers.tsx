@@ -399,7 +399,7 @@ export default function AdminOfficers() {
                           <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
                           <FormControl>
                             <Input
-                              placeholder="jane@cleanspot.city"
+                              placeholder="officer@udupicivicwatch.in"
                               type="email"
                               {...field}
                               className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
