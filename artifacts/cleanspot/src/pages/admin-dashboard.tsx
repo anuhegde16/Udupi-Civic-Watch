@@ -3,9 +3,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import {
   useGetReportsSummary,
+  getGetReportsSummaryQueryKey,
   useListOfficers,
+  getListOfficersQueryKey,
   useAdminListReports,
+  getAdminListReportsQueryKey,
   useHealthCheck,
+  getHealthCheckQueryKey,
   customFetch,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -123,6 +127,7 @@ function useAnalytics() {
         officers: { name: string; pending: number; resolved: number }[];
       }>("/api/admin/reports/analytics"),
     retry: false,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -140,6 +145,7 @@ function usePanchayatAdmins() {
     queryKey: ["panchayat-admins"],
     queryFn: () => customFetch("/api/admin/panchayat-admins"),
     retry: false,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -190,19 +196,20 @@ export default function AdminDashboard() {
   const [paEditOpen, setPaEditOpen] = useState(false);
   const [editingPa, setEditingPa] = useState<PanchayatAdminItem | null>(null);
 
-  const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary();
-  const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers();
+  const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary({ query: { queryKey: getGetReportsSummaryQueryKey(), staleTime: 2 * 60_000 } });
+  const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers({ query: { queryKey: getListOfficersQueryKey(), staleTime: 5 * 60_000 } });
   const { data: analytics, isLoading: isLoadingAnalytics } = useAnalytics();
-  const { data: allReportsData, isLoading: isLoadingReports } = useAdminListReports({ limit: 500 });
+  const { data: allReportsData, isLoading: isLoadingReports } = useAdminListReports({ limit: 200 }, { query: { queryKey: getAdminListReportsQueryKey({ limit: 200 }), staleTime: 60_000 } });
   const { data: panchayatAdminsData } = usePanchayatAdmins();
 
   const { data: testModeData } = useQuery<{ testMode: boolean }>({
     queryKey: ["test-mode"],
     queryFn: () => customFetch("/api/admin/test-mode"),
+    staleTime: 60_000,
   });
   const testModeActive = testModeData?.testMode ?? false;
 
-  const { data: healthData } = useHealthCheck();
+  const { data: healthData } = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey(), staleTime: 60_000 } });
   const smtpConfigured = healthData?.smtpConfigured ?? null;
 
   const setTestModeMutation = useMutation({

@@ -5,6 +5,12 @@ import { NetworkFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope;
 
+self.skipWaiting();
+
+self.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil(self.clients.claim());
+});
+
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 

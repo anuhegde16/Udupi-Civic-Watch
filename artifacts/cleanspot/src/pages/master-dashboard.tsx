@@ -119,6 +119,7 @@ function usePanchayatOfficers() {
     queryKey: ["panchayat-officers"],
     queryFn: () => customFetch("/api/panchayat/officers"),
     retry: false,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -127,6 +128,7 @@ function usePanchayatStats() {
     queryKey: ["panchayat-stats"],
     queryFn: () => customFetch("/api/panchayat/stats"),
     retry: false,
+    staleTime: 2 * 60_000,
   });
 }
 
@@ -135,7 +137,8 @@ function usePanchayatReports() {
     queryKey: ["panchayat-reports-map"],
     queryFn: () => customFetch("/api/panchayat/reports"),
     retry: false,
-    refetchInterval: 60_000,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
   });
 }
 
