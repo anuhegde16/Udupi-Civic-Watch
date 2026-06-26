@@ -2,6 +2,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Image as ImageIcon, Trash2, Mail, Loader2, CheckCircle2, Clock } from "lucide-react";
+import { format } from "date-fns";
 
 export type ReportDetail = {
   id: number;
@@ -14,6 +15,7 @@ export type ReportDetail = {
   imageUrl?: string | null;
   cleanupImageUrl?: string | null;
   reporterEmail?: string | null;
+  createdAt?: string | null;
 };
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -91,6 +93,12 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                     <a href={`mailto:${report.reporterEmail}`} className="text-primary hover:underline truncate text-sm">
                       {report.reporterEmail}
                     </a>
+                  </div>
+                )}
+                {report.createdAt && (
+                  <div className="flex items-center gap-2 text-muted-foreground font-medium">
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span><span className="font-black text-foreground">Reported:</span> {format(new Date(report.createdAt), "MMM d, h:mm a")}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-muted-foreground font-medium">

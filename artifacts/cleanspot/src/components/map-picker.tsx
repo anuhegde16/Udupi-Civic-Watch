@@ -4,6 +4,20 @@ import "leaflet/dist/leaflet.css";
 
 const UDUPI_CENTER: [number, number] = [13.3409, 74.7421];
 
+function ensureYouAreHereStyle() {
+  if (document.getElementById("ck-you-here-style")) return;
+  const style = document.createElement("style");
+  style.id = "ck-you-here-style";
+  style.textContent = `
+    @keyframes ck-you-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.55; }
+      50% { transform: scale(1.9); opacity: 0; }
+    }
+    .ck-you-pulse { animation: ck-you-pulse 2.2s ease-out infinite; }
+  `;
+  document.head.appendChild(style);
+}
+
 function buildIcon() {
   return L.divIcon({
     className: "",
@@ -23,6 +37,19 @@ function buildIcon() {
   });
 }
 
+function buildYouAreHereIcon() {
+  return L.divIcon({
+    className: "",
+    html: `<div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
+      <div class="ck-you-pulse" style="position:absolute;inset:-5px;background:rgba(37,99,235,0.28);border-radius:50%;"></div>
+      <div style="position:relative;z-index:1;width:14px;height:14px;background:#2563eb;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
+    </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    tooltipAnchor: [0, -13],
+  });
+}
+
 interface MapPickerProps {
   value: { lat: number; lng: number } | null;
   onChange: (loc: { lat: number; lng: number }) => void;
@@ -30,13 +57,15 @@ interface MapPickerProps {
   geofenceRing?: [number, number][]; // GeoJSON [lon, lat] pairs
   outsideFence?: boolean;
   readonly?: boolean;
+  userLocation?: { lat: number; lng: number } | null;
 }
 
-export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence, readonly = false }: MapPickerProps) {
+export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence, readonly = false, userLocation }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const fenceLayerRef = useRef<L.Polygon | null>(null);
+  const youAreHereRef = useRef<L.Marker | null>(null);
   const readonlyRef = useRef(readonly);
   const onChangeRef = useRef(onChange);
 
@@ -45,6 +74,8 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+
+    ensureYouAreHereStyle();
 
     const center: [number, number] = value ? [value.lat, value.lng] : UDUPI_CENTER;
     const zoom = value ? 15 : 13;
@@ -83,6 +114,16 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       }
     }
 
+    if (userLocation) {
+      const um = L.marker([userLocation.lat, userLocation.lng], {
+        icon: buildYouAreHereIcon(),
+        interactive: false,
+        zIndexOffset: -100,
+      }).addTo(map);
+      um.bindTooltip("You are here", { permanent: false, direction: "top", className: "text-xs font-bold" });
+      youAreHereRef.current = um;
+    }
+
     // Always register click handler — gate on readonlyRef so it respects
     // runtime changes (e.g. switching from GPS to Manual in test mode)
     map.on("click", (e: L.LeafletMouseEvent) => {
@@ -108,6 +149,7 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       mapRef.current = null;
       markerRef.current = null;
       fenceLayerRef.current = null;
+      youAreHereRef.current = null;
     };
   }, []);
 
@@ -163,6 +205,24 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       mapRef.current.setView(latlng, Math.max(mapRef.current.getZoom(), 15));
     }
   }, [value?.lat, value?.lng, outsideFence, readonly]);
+
+  // Update "You Are Here" marker position when userLocation changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (!userLocation) return;
+    const latlng: [number, number] = [userLocation.lat, userLocation.lng];
+    if (youAreHereRef.current) {
+      youAreHereRef.current.setLatLng(latlng);
+    } else {
+      const um = L.marker(latlng, {
+        icon: buildYouAreHereIcon(),
+        interactive: false,
+        zIndexOffset: -100,
+      }).addTo(mapRef.current);
+      um.bindTooltip("You are here", { permanent: false, direction: "top", className: "text-xs font-bold" });
+      youAreHereRef.current = um;
+    }
+  }, [userLocation?.lat, userLocation?.lng]);
 
   return (
     <div

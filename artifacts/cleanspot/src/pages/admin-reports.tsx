@@ -343,7 +343,7 @@ export default function AdminReports() {
                         <StatusBadge status={report.status} />
                       </div>
                       <span className="text-[11px] text-muted-foreground font-medium shrink-0">
-                        {format(new Date(report.createdAt), "MMM d")}
+                        {format(new Date(report.createdAt), "MMM d, h:mm a")}
                       </span>
                     </div>
 
@@ -437,6 +437,12 @@ export default function AdminReports() {
                     {mapReport.assignedOfficer.areaName && (
                       <span className="bg-muted px-1.5 py-0.5 rounded-md">Ward: {mapReport.assignedOfficer.areaName}</span>
                     )}
+                  </p>
+                )}
+                {mapReport?.createdAt && (
+                  <p className="text-xs text-muted-foreground font-medium mt-1 flex items-center gap-1">
+                    <Anchor className="w-3 h-3" />
+                    Reported: {format(new Date(mapReport.createdAt), "MMM d, h:mm a")}
                   </p>
                 )}
               </div>

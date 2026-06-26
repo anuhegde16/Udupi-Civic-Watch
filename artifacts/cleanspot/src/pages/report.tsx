@@ -60,6 +60,7 @@ export default function Report() {
   const [isUploading, setIsUploading] = useState(false);
 
   const [location, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [locationMode, setLocationMode] = useState<"auto" | "manual">("auto");
 
@@ -120,7 +121,9 @@ export default function Report() {
         if (resolved) return;
         resolved = true;
         clearTimeout(fallbackTimer);
-        setGeoLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setGeoLocation(coords);
+        setGpsCoords(coords);
         setIsLocating(false);
       },
       (err) => {
@@ -420,6 +423,7 @@ export default function Report() {
                 geofenceRing={geofenceRing}
                 outsideFence={outsideFence}
                 readonly={!testMode || locationMode === "auto"}
+                userLocation={gpsCoords}
               />
             )}
           </div>

@@ -217,6 +217,7 @@ export default function MasterDashboard() {
       imageUrl: r.imageUrl ?? null,
       cleanupImageUrl: r.cleanupImageUrl ?? null,
       reporterEmail: r.reporterEmail ?? null,
+      createdAt: r.createdAt ?? null,
     });
   }
 
@@ -510,6 +511,11 @@ export default function MasterDashboard() {
                           {officer && (
                             <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
                               {officer.name} · <span className="font-semibold">Ward:</span> {officer.areaName}
+                            </p>
+                          )}
+                          {r.createdAt && (
+                            <p className="text-[10px] text-muted-foreground/70 font-medium mt-0.5">
+                              {format(new Date(r.createdAt), "MMM d, h:mm a")}
                             </p>
                           )}
                         </div>
