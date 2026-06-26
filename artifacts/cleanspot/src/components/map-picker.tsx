@@ -170,7 +170,9 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
     }
   }, [readonly]);
 
-  // Update fence colour and zoom when outside state changes
+  // Update fence colour and zoom when outside state changes.
+  // When outside, fit bounds to include BOTH the geofence and the user's GPS location
+  // so the "You Are Here" marker is always visible alongside the service boundary.
   useEffect(() => {
     if (!fenceLayerRef.current) return;
     fenceLayerRef.current.setStyle({
@@ -178,11 +180,14 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       fillColor: outsideFence ? "#dc2626" : "#0e6b7c",
       fillOpacity: outsideFence ? 0.08 : 0.06,
     });
-    // When pin lands outside, zoom out to show the service zone so user knows where to go
     if (outsideFence && mapRef.current) {
-      mapRef.current.fitBounds(fenceLayerRef.current.getBounds(), { padding: [24, 24], animate: true });
+      const bounds = fenceLayerRef.current.getBounds();
+      if (userLocation) {
+        bounds.extend([userLocation.lat, userLocation.lng] as [number, number]);
+      }
+      mapRef.current.fitBounds(bounds, { padding: [32, 32], animate: true });
     }
-  }, [outsideFence]);
+  }, [outsideFence, userLocation?.lat, userLocation?.lng]);
 
   useEffect(() => {
     if (!mapRef.current || !value) return;
