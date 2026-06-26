@@ -64,6 +64,32 @@ export async function sendPushToUsers(userIds: number[], payload: PushPayload): 
   );
 }
 
+export async function sendTestPushToUser(
+  userId: number,
+  payload: PushPayload
+): Promise<{ attempted: number; succeeded: number; failed: number }> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    return { attempted: 0, succeeded: 0, failed: 0 };
+  }
+
+  const subs = await db
+    .select()
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.userId, userId));
+
+  if (subs.length === 0) return { attempted: 0, succeeded: 0, failed: 0 };
+
+  const results = await Promise.allSettled(
+    subs.map((s) => sendPushToSubscription(s.endpoint, s.p256dh, s.auth, payload))
+  );
+
+  const succeeded = results.filter(
+    (r) => r.status === "fulfilled" && r.value === true
+  ).length;
+
+  return { attempted: subs.length, succeeded, failed: subs.length - succeeded };
+}
+
 export async function sendPushToReportSubscriptions(reportId: number, payload: PushPayload): Promise<void> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Bell, BellOff, BellRing, Check, X } from "lucide-react";
+import { Bell, BellOff, BellRing, Check, X, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -13,9 +13,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { customFetch } from "@workspace/api-client-react";
+import { customFetch, ApiError } from "@workspace/api-client-react";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 interface NotificationItem {
   id: number;
@@ -44,8 +45,41 @@ function timeAgo(dateStr: string): string {
 }
 
 
+function PushStatusChip({ permission, isSubscribed, supported }: {
+  permission: string;
+  isSubscribed: boolean;
+  supported: boolean;
+}) {
+  if (!supported || permission === "unsupported") {
+    return null;
+  }
+  if (permission === "denied") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+        Blocked
+      </span>
+    );
+  }
+  if (isSubscribed && permission === "granted") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+        Push active
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
+      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 shrink-0" />
+      Not enabled
+    </span>
+  );
+}
+
 export function NotificationBell() {
   const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const prevUnreadRef = useRef<number>(0);
@@ -203,6 +237,29 @@ export function NotificationBell() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
+  const testPushMutation = useMutation({
+    mutationFn: () =>
+      customFetch<{ success: boolean; sent?: number }>(
+        "/api/notifications/test",
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      toast({
+        title: "Test notification sent",
+        description: "Check your device — a push notification should arrive shortly.",
+      });
+    },
+    onError: (err: unknown) => {
+      const serverMessage =
+        err instanceof ApiError && (err.data as { error?: string } | null)?.error;
+      toast({
+        title: "Test failed",
+        description: serverMessage || "Could not reach the server. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   if (!isAuthenticated) return null;
 
   const notifications = data?.notifications ?? [];
@@ -247,8 +304,31 @@ export function NotificationBell() {
 
         <PopoverContent align="end" className="w-[340px] p-0 shadow-xl" sideOffset={8}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-            <span className="font-bold text-sm text-foreground">Notifications</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-foreground">Notifications</span>
+              <PushStatusChip
+                permission={permission}
+                isSubscribed={isSubscribed}
+                supported={supported}
+              />
+            </div>
             <div className="flex items-center gap-1">
+              {supported && isSubscribed && permission === "granted" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  title="Send test notification"
+                  onClick={() => testPushMutation.mutate()}
+                  disabled={testPushMutation.isPending}
+                >
+                  {testPushMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
               {supported && (
                 <Button
                   variant="ghost"

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, pushSubscriptionsTable, notificationsTable } from "@workspace/db";
 import { eq, and, desc, count as dbCount } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
-import { VAPID_PUBLIC_KEY } from "../lib/push";
+import { VAPID_PUBLIC_KEY, sendTestPushToUser } from "../lib/push";
 import { logger } from "../lib/logger";
 import { z } from "zod/v4";
 
@@ -152,6 +152,43 @@ router.post("/notifications/read-all", requireAuth, async (req, res): Promise<vo
     .set({ read: true })
     .where(and(eq(notificationsTable.userId, user.id), eq(notificationsTable.read, false)));
   res.json({ success: true });
+});
+
+router.post("/notifications/test", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as any).user;
+
+  if (!VAPID_PUBLIC_KEY) {
+    res.status(503).json({ success: false, error: "Push notifications not configured on the server" });
+    return;
+  }
+
+  try {
+    const stats = await sendTestPushToUser(user.id, {
+      title: "Push notifications are working",
+      body: "You will receive alerts when new reports are assigned to you.",
+      type: "test",
+    });
+
+    if (stats.attempted === 0) {
+      res.status(400).json({ success: false, error: "No active push subscription found for this device" });
+      return;
+    }
+
+    if (stats.succeeded === 0) {
+      logger.warn({ userId: user.id, stats }, "Test push: all deliveries failed");
+      res.status(502).json({
+        success: false,
+        error: "Notification could not be delivered. Your subscription may be stale — try disabling and re-enabling push notifications.",
+      });
+      return;
+    }
+
+    logger.info({ userId: user.id, stats }, "Test push notification sent");
+    res.json({ success: true, sent: stats.succeeded });
+  } catch (err) {
+    logger.warn({ err, userId: user.id }, "Test push notification failed");
+    res.status(500).json({ success: false, error: "Failed to send test notification" });
+  }
 });
 
 export default router;

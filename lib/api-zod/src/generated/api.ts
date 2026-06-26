@@ -799,6 +799,15 @@ export const MarkAllNotificationsReadResponse = zod.object({
 });
 
 /**
+ * @summary Send a test push notification to the current user's active subscriptions
+ */
+export const SendTestPushNotificationResponse = zod.object({
+  success: zod.boolean(),
+  sent: zod.number().optional(),
+  error: zod.string().optional(),
+});
+
+/**
  * @summary Save an anonymous push subscription linked to a report (no auth required)
  */
 export const SaveAnonymousPushSubscriptionBody = zod.object({

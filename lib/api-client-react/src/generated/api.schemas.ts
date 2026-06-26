@@ -26,6 +26,12 @@ export interface SuccessResponse {
   message?: string;
 }
 
+export interface TestPushResponse {
+  success: boolean;
+  sent?: number;
+  error?: string;
+}
+
 export interface LoginBody {
   email: string;
   password: string;

@@ -498,6 +498,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /notifications/test:
+    post:
+      operationId: sendTestPushNotification
+      tags: [notifications]
+      summary: Send a test push notification to the current user's active subscriptions
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Test notification sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestPushResponse"
+        "400":
+          description: No active subscription found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Push not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /notifications/anonymous-subscription:
     post:
       operationId: saveAnonymousPushSubscription
@@ -579,6 +606,17 @@ components:
         success:
           type: boolean
         message:
+          type: string
+      required: [success]
+
+    TestPushResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sent:
+          type: integer
+        error:
           type: string
       required: [success]
 
