@@ -544,6 +544,17 @@ paths:
 
 components:
   schemas:
+    PhotoItem:
+      type: object
+      properties:
+        url:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+          description: Server-recorded timestamp of when this photo was uploaded
+      required: [url, uploadedAt]
+
     HealthStatus:
       type: object
       properties:
@@ -623,9 +634,21 @@ components:
           format: date-time
           nullable: true
           description: Server-recorded timestamp of when the photo was uploaded
+        imageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
+          description: All uploaded report photos with timestamps (max 2)
         cleanupImageUrl:
           type: string
           nullable: true
+        cleanupImageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
+          description: All cleanup photos uploaded by officer (max 5)
         latitude:
           type: number
         longitude:
@@ -688,6 +711,11 @@ components:
         cleanupImageUrl:
           type: string
           nullable: true
+        cleanupImageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
         wardName:
           type: string
           nullable: true
@@ -717,6 +745,13 @@ components:
         imageUrl:
           type: string
           nullable: true
+          description: Legacy single image URL (use imageUrls instead)
+        imageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
+          description: Up to 2 photos with timestamps
         latitude:
           type: number
         longitude:
@@ -742,6 +777,13 @@ components:
         cleanupImageUrl:
           type: string
           nullable: true
+          description: Legacy single cleanup image URL (use cleanupImageUrls instead)
+        cleanupImageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
+          description: Up to 5 cleanup photos with timestamps
 
     ReassignReportBody:
       type: object

@@ -19,7 +19,9 @@ type Report = {
   createdAt: string;
   imageUrl?: string | null;
   imageUploadedAt?: string | null;
+  imageUrls?: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl?: string | null;
+  cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
   reporterEmail?: string | null;
   assignedOfficer?: { name: string; areaName?: string | null } | null;
   assignedOfficerId?: number | null;

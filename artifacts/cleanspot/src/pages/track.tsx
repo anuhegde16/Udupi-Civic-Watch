@@ -147,25 +147,36 @@ export default function Track() {
         </div>
       </div>
 
-      {report.status === 'cleaned' && report.cleanupImageUrl && (
-        <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-700">
-          <div className="p-5 border-b border-border/50 bg-green-500/5">
-            <h3 className="font-black text-foreground flex items-center gap-2 text-xl">
-              <div className="w-8 h-8 rounded-full bg-green-500/20 text-green-600 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5" />
-              </div>
-              Cleanup Photo
-            </h3>
+      {report.status === 'cleaned' && (report.cleanupImageUrls?.length || report.cleanupImageUrl) && (() => {
+        const cleanupPhotos: { url: string; uploadedAt?: string | null }[] =
+          (report.cleanupImageUrls && report.cleanupImageUrls.length > 0)
+            ? report.cleanupImageUrls
+            : report.cleanupImageUrl ? [{ url: report.cleanupImageUrl, uploadedAt: null }] : [];
+        if (cleanupPhotos.length === 0) return null;
+        return (
+          <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-700">
+            <div className="p-5 border-b border-border/50 bg-green-500/5">
+              <h3 className="font-black text-foreground flex items-center gap-2 text-xl">
+                <div className="w-8 h-8 rounded-full bg-green-500/20 text-green-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                Cleanup Photo{cleanupPhotos.length > 1 ? `s (${cleanupPhotos.length})` : ""}
+              </h3>
+            </div>
+            <div className={`grid gap-1 ${cleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {cleanupPhotos.map((photo, idx) => (
+                <div key={idx} className="aspect-video w-full bg-muted relative group">
+                  <img 
+                    src={photo.url} 
+                    alt={`Cleanup photo ${idx + 1}`}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="aspect-video w-full bg-muted relative group">
-            <img 
-              src={report.cleanupImageUrl} 
-              alt="Cleanup result" 
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-            />
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

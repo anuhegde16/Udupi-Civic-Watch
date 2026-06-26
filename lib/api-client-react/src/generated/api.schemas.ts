@@ -5,6 +5,12 @@
  * CleanSpot API - Waste reporting platform
  * OpenAPI spec version: 0.1.0
  */
+export interface PhotoItem {
+  url: string;
+  /** Server-recorded timestamp of when this photo was uploaded */
+  uploadedAt: string;
+}
+
 export interface HealthStatus {
   status: string;
   smtpConfigured: boolean;
@@ -73,7 +79,11 @@ export interface Report {
   imageUrl?: string | null;
   /** Server-recorded timestamp of when the photo was uploaded */
   imageUploadedAt?: string | null;
+  /** All uploaded report photos with timestamps (max 2) */
+  imageUrls?: PhotoItem[] | null;
   cleanupImageUrl?: string | null;
+  /** All cleanup photos uploaded by officer (max 5) */
+  cleanupImageUrls?: PhotoItem[] | null;
   latitude: number;
   longitude: number;
   address?: string | null;
@@ -108,6 +118,7 @@ export interface ReportStatus {
   createdAt: string;
   updatedAt: string;
   cleanupImageUrl?: string | null;
+  cleanupImageUrls?: PhotoItem[] | null;
   /** Ward handling this report (from assigned officer) */
   wardName?: string | null;
 }
@@ -122,7 +133,10 @@ export interface ReportsSummary {
 }
 
 export interface CreateReportBody {
+  /** Legacy single image URL (use imageUrls instead) */
   imageUrl?: string | null;
+  /** Up to 2 photos with timestamps */
+  imageUrls?: PhotoItem[] | null;
   latitude: number;
   longitude: number;
   address?: string | null;
@@ -141,7 +155,10 @@ export const UpdateReportBodyStatus = {
 
 export interface UpdateReportBody {
   status?: UpdateReportBodyStatus;
+  /** Legacy single cleanup image URL (use cleanupImageUrls instead) */
   cleanupImageUrl?: string | null;
+  /** Up to 5 cleanup photos with timestamps */
+  cleanupImageUrls?: PhotoItem[] | null;
 }
 
 export interface ReassignReportBody {

@@ -133,7 +133,7 @@ router.post("/reports", async (req, res): Promise<void> => {
     return;
   }
 
-  const { latitude, longitude, imageUrl, address, description, reporterEmail } = parsed.data;
+  const { latitude, longitude, imageUrl, imageUrls: rawImageUrls, address, description, reporterEmail } = parsed.data;
   const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "";
 
   // Duplicate check within ~50m radius
@@ -179,23 +179,33 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   const officer = await findOfficerForLocation(latitude, longitude);
 
-  // Extract the server-assigned upload timestamp from the filename (format: TIMESTAMP-random.ext)
+  // Resolve image data — prefer imageUrls array, fall back to legacy imageUrl string
+  const resolvedImageUrls = (rawImageUrls && rawImageUrls.length > 0)
+    ? rawImageUrls
+    : (imageUrl ? [{ url: imageUrl, uploadedAt: new Date().toISOString() }] : null);
+  const primaryImage = resolvedImageUrls?.[0] ?? null;
+  const resolvedImageUrl = primaryImage?.url ?? null;
+
+  // Derive timestamp from uploadedAt field; fall back to filename-encoded timestamp
   let imageUploadedAt: Date | null = null;
-  if (imageUrl) {
-    const filenameMatch = imageUrl.match(/\/uploads\/files\/(\d+)-[^/]+$/);
-    if (filenameMatch && filenameMatch[1]) {
+  if (primaryImage?.uploadedAt) {
+    const d = new Date(primaryImage.uploadedAt);
+    if (!isNaN(d.getTime())) imageUploadedAt = d;
+  }
+  if (!imageUploadedAt && resolvedImageUrl) {
+    const filenameMatch = resolvedImageUrl.match(/\/uploads\/files\/(\d+)-[^/]+$/);
+    if (filenameMatch?.[1]) {
       const ts = parseInt(filenameMatch[1], 10);
-      if (!isNaN(ts) && ts > 0) {
-        imageUploadedAt = new Date(ts);
-      }
+      if (!isNaN(ts) && ts > 0) imageUploadedAt = new Date(ts);
     }
   }
 
   const [report] = await db
     .insert(reportsTable)
     .values({
-      imageUrl: imageUrl ?? null,
+      imageUrl: resolvedImageUrl,
       imageUploadedAt,
+      imageUrls: resolvedImageUrls ?? null,
       latitude,
       longitude,
       address: address ?? null,
@@ -306,6 +316,7 @@ router.get("/reports/:id/track", async (req, res): Promise<void> => {
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
     cleanupImageUrl: report.cleanupImageUrl,
+    cleanupImageUrls: report.cleanupImageUrls ?? null,
     wardName: officer?.areaName ?? null,
   });
 });
@@ -410,7 +421,12 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
 
   const updates: Record<string, any> = {};
   if (parsed.data.status !== undefined) updates.status = parsed.data.status;
-  if (parsed.data.cleanupImageUrl !== undefined) updates.cleanupImageUrl = parsed.data.cleanupImageUrl;
+  if (parsed.data.cleanupImageUrls && parsed.data.cleanupImageUrls.length > 0) {
+    updates.cleanupImageUrls = parsed.data.cleanupImageUrls;
+    updates.cleanupImageUrl = parsed.data.cleanupImageUrls[0].url;
+  } else if (parsed.data.cleanupImageUrl !== undefined) {
+    updates.cleanupImageUrl = parsed.data.cleanupImageUrl;
+  }
 
   const [report] = await db
     .update(reportsTable)

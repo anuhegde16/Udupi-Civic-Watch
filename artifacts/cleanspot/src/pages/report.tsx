@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus } from "lucide-react";
 import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +19,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
+import { compressImage } from "@/lib/compress-image";
+import { format } from "date-fns";
 
 // Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
 function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
@@ -43,6 +45,9 @@ function isWithinServiceArea(lat: number, lng: number): boolean {
   return false;
 }
 
+type PhotoEntry = { id: string; preview: string; url: string; uploadedAt: string };
+const MAX_CITIZEN_PHOTOS = 2;
+
 export default function Report() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -51,8 +56,7 @@ export default function Report() {
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [assignedWardName, setAssignedWardName] = useState<string | null>(null);
 
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
   const [location, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -61,7 +65,6 @@ export default function Report() {
 
   const [description, setDescription] = useState("");
 
-  // Email dialog state
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [reporterEmail, setReporterEmail] = useState("");
 
@@ -77,7 +80,6 @@ export default function Report() {
   });
   const testMode = testModeData?.testMode ?? false;
 
-  // Extract the first geofence ring for the map overlay
   const geofenceRing = useMemo<[number, number][] | undefined>(() => {
     const first = geofencesData.features[0];
     if (first?.geometry.type === "Polygon") {
@@ -143,40 +145,52 @@ export default function Report() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => setImagePreview(event.target?.result as string);
-    reader.readAsDataURL(file);
+    e.target.value = "";
+    if (photos.length >= MAX_CITIZEN_PHOTOS) return;
+
+    const photoId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       setIsUploading(true);
-      const dr = new FileReader();
-      dr.readAsDataURL(file);
-      dr.onload = () => {
-        uploadImage.mutate(
-          { data: { dataUrl: dr.result as string } },
-          {
-            onSuccess: (data) => { setImageUrl(data.url); setIsUploading(false); },
-            onError: (err) => {
-              toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-              setIsUploading(false);
-              setImagePreview(null);
-            },
-          }
-        );
-      };
+      const compressed = await compressImage(file);
+      setPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "" }]);
+
+      uploadImage.mutate(
+        { data: { dataUrl: compressed } },
+        {
+          onSuccess: (data) => {
+            setPhotos(prev => prev.map(p =>
+              p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt } : p
+            ));
+            setIsUploading(false);
+          },
+          onError: (err) => {
+            setPhotos(prev => prev.filter(p => p.id !== photoId));
+            toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+            setIsUploading(false);
+          },
+        }
+      );
     } catch {
       setIsUploading(false);
+      toast({ title: "Error", description: "Failed to process image. Please try again.", variant: "destructive" });
     }
+  };
+
+  const removePhoto = (id: string) => {
+    setPhotos(prev => prev.filter(p => p.id !== id));
   };
 
   const doSubmit = (email?: string) => {
     setEmailDialogOpen(false);
     if (!location) return;
+    const imageUrls = photos.filter(p => p.url).map(p => ({ url: p.url, uploadedAt: p.uploadedAt }));
     createReport.mutate(
       {
         data: {
           latitude: location.lat,
           longitude: location.lng,
-          imageUrl,
+          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           description: description || undefined,
           reporterEmail: email || undefined,
         },
@@ -193,10 +207,16 @@ export default function Report() {
     );
   };
 
+  const allPhotosUploaded = photos.length > 0 && photos.every(p => p.url !== "");
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageUrl) {
+    if (photos.length === 0) {
       toast({ title: "Photo required", description: "Please take a photo of the waste before submitting.", variant: "destructive" });
+      return;
+    }
+    if (!allPhotosUploaded) {
+      toast({ title: "Upload in progress", description: "Please wait for all photos to finish uploading.", variant: "destructive" });
       return;
     }
     if (!location) {
@@ -262,11 +282,22 @@ export default function Report() {
         <div className="bg-card rounded-3xl p-6 border border-border/50 shadow-sm space-y-4">
           <Label className="text-lg font-black text-foreground flex items-center gap-2">
             <span className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">1</span>
-            Take a Photo
+            Take Photos
             {isUploading && <Loader2 className="w-4 h-4 animate-spin text-primary ml-auto" />}
           </Label>
-          <input type="file" capture="environment" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-          {!imagePreview ? (
+
+          {/* Camera-only file input — no gallery access for citizens */}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+          />
+
+          {/* Empty state */}
+          {photos.length === 0 && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -278,16 +309,62 @@ export default function Report() {
               <span className="font-bold text-foreground">Tap to open camera</span>
               <span className="text-sm mt-1">Clear photos help dispatch the right equipment</span>
             </button>
-          ) : (
-            <div className="relative w-full h-64 rounded-2xl overflow-hidden shadow-sm border border-border group">
-              <img src={imagePreview} alt="Preview" className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-700" />
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} className="font-bold rounded-xl">
-                  <Camera className="w-4 h-4 mr-2" /> Retake Photo
-                </Button>
-              </div>
+          )}
+
+          {/* Photo thumbnails grid */}
+          {photos.length > 0 && (
+            <div className={`grid gap-3 ${photos.length === MAX_CITIZEN_PHOTOS ? "grid-cols-2" : "grid-cols-2"}`}>
+              {photos.map((photo) => (
+                <div key={photo.id} className="relative rounded-2xl overflow-hidden bg-muted aspect-[4/3] group border border-border/50">
+                  <img src={photo.preview} alt="Waste photo" className="w-full h-full object-cover" />
+                  {/* Uploading overlay */}
+                  {!photo.url && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                      <Loader2 className="w-6 h-6 animate-spin text-white" />
+                    </div>
+                  )}
+                  {/* Timestamp badge */}
+                  {photo.uploadedAt && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+                      <p className="text-white text-[10px] font-medium text-center">
+                        {format(new Date(photo.uploadedAt), "h:mm a, MMM d")}
+                      </p>
+                    </div>
+                  )}
+                  {/* Remove button */}
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(photo.id)}
+                    className="absolute top-2 right-2 w-7 h-7 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-500/90 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    aria-label="Remove photo"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {/* Add another photo slot */}
+              {photos.length < MAX_CITIZEN_PHOTOS && !isUploading && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="aspect-[4/3] border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:bg-primary/5 transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                >
+                  <Plus className="w-6 h-6 mb-1" />
+                  <span className="text-xs font-bold">Add Photo</span>
+                  <span className="text-[10px] text-muted-foreground/70 mt-0.5">{photos.length}/{MAX_CITIZEN_PHOTOS}</span>
+                </button>
+              )}
             </div>
           )}
+
+          {/* Tip */}
+          <div className="flex items-start gap-2.5 bg-primary/5 border border-primary/10 rounded-xl px-4 py-3">
+            <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+              <span className="font-bold text-foreground">Tip:</span> You can upload a maximum of 2 photos. For larger waste areas, try one wide shot and one close-up for better clarity.
+            </p>
+          </div>
         </div>
 
         {/* Location */}
@@ -317,7 +394,6 @@ export default function Report() {
             )}
           </div>
 
-          {/* GPS / manual status hint */}
           {(!testMode || locationMode === "auto") ? (
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Navigation className="w-4 h-4 text-primary shrink-0" />
@@ -330,7 +406,6 @@ export default function Report() {
             </div>
           )}
 
-          {/* Map container */}
           <div className="rounded-2xl overflow-hidden border border-border shadow-inner bg-muted" style={{ height: "300px" }}>
             {isLocating ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
@@ -349,7 +424,6 @@ export default function Report() {
             )}
           </div>
 
-          {/* Out-of-bounds warning (suppressed in test mode) */}
           {outsideFence && location && !testMode && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -396,10 +470,12 @@ export default function Report() {
             type="submit"
             size="lg"
             className="w-full h-16 text-xl font-black rounded-2xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 transition-all hover:-translate-y-1 disabled:opacity-70 disabled:shadow-none disabled:transform-none disabled:cursor-not-allowed"
-            disabled={!imageUrl || !location || isLocating || isUploading || createReport.isPending || (outsideFence && !testMode)}
+            disabled={photos.length === 0 || !allPhotosUploaded || !location || isLocating || isUploading || createReport.isPending || (outsideFence && !testMode)}
           >
             {createReport.isPending ? (
               <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+            ) : isUploading ? (
+              <span className="flex items-center"><Loader2 className="ml-2 w-5 h-5 mr-2 animate-spin" /> Uploading...</span>
             ) : outsideFence && !testMode ? (
               <span className="flex items-center"><AlertTriangle className="ml-2 w-5 h-5 mr-2" /> Outside Service Area</span>
             ) : (

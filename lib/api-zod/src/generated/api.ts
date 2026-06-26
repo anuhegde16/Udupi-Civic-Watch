@@ -88,7 +88,33 @@ export const ListReportsResponse = zod.object({
         .date()
         .nullish()
         .describe("Server-recorded timestamp of when the photo was uploaded"),
+      imageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All uploaded report photos with timestamps (max 2)"),
       cleanupImageUrl: zod.string().nullish(),
+      cleanupImageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All cleanup photos uploaded by officer (max 5)"),
       latitude: zod.number(),
       longitude: zod.number(),
       address: zod.string().nullish(),
@@ -124,7 +150,23 @@ export const ListReportsResponse = zod.object({
  * @summary Submit a new waste report (citizen)
  */
 export const CreateReportBody = zod.object({
-  imageUrl: zod.string().nullish(),
+  imageUrl: zod
+    .string()
+    .nullish()
+    .describe("Legacy single image URL (use imageUrls instead)"),
+  imageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("Up to 2 photos with timestamps"),
   latitude: zod.number(),
   longitude: zod.number(),
   address: zod.string().nullish(),
@@ -146,7 +188,33 @@ export const GetReportResponse = zod.object({
     .date()
     .nullish()
     .describe("Server-recorded timestamp of when the photo was uploaded"),
+  imageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All uploaded report photos with timestamps (max 2)"),
   cleanupImageUrl: zod.string().nullish(),
+  cleanupImageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All cleanup photos uploaded by officer (max 5)"),
   latitude: zod.number(),
   longitude: zod.number(),
   address: zod.string().nullish(),
@@ -184,7 +252,23 @@ export const UpdateReportParams = zod.object({
 
 export const UpdateReportBody = zod.object({
   status: zod.enum(["reported", "cleaning", "cleaned"]).optional(),
-  cleanupImageUrl: zod.string().nullish(),
+  cleanupImageUrl: zod
+    .string()
+    .nullish()
+    .describe("Legacy single cleanup image URL (use cleanupImageUrls instead)"),
+  cleanupImageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("Up to 5 cleanup photos with timestamps"),
 });
 
 export const UpdateReportResponse = zod.object({
@@ -194,7 +278,33 @@ export const UpdateReportResponse = zod.object({
     .date()
     .nullish()
     .describe("Server-recorded timestamp of when the photo was uploaded"),
+  imageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All uploaded report photos with timestamps (max 2)"),
   cleanupImageUrl: zod.string().nullish(),
+  cleanupImageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All cleanup photos uploaded by officer (max 5)"),
   latitude: zod.number(),
   longitude: zod.number(),
   address: zod.string().nullish(),
@@ -236,6 +346,18 @@ export const TrackReportResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
   cleanupImageUrl: zod.string().nullish(),
+  cleanupImageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish(),
   wardName: zod
     .string()
     .nullish()
@@ -386,7 +508,33 @@ export const GetOfficerReportsResponse = zod.object({
         .date()
         .nullish()
         .describe("Server-recorded timestamp of when the photo was uploaded"),
+      imageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All uploaded report photos with timestamps (max 2)"),
       cleanupImageUrl: zod.string().nullish(),
+      cleanupImageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All cleanup photos uploaded by officer (max 5)"),
       latitude: zod.number(),
       longitude: zod.number(),
       address: zod.string().nullish(),
@@ -440,7 +588,33 @@ export const AdminListReportsResponse = zod.object({
         .date()
         .nullish()
         .describe("Server-recorded timestamp of when the photo was uploaded"),
+      imageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All uploaded report photos with timestamps (max 2)"),
       cleanupImageUrl: zod.string().nullish(),
+      cleanupImageUrls: zod
+        .array(
+          zod.object({
+            url: zod.string(),
+            uploadedAt: zod.coerce
+              .date()
+              .describe(
+                "Server-recorded timestamp of when this photo was uploaded",
+              ),
+          }),
+        )
+        .nullish()
+        .describe("All cleanup photos uploaded by officer (max 5)"),
       latitude: zod.number(),
       longitude: zod.number(),
       address: zod.string().nullish(),
@@ -490,7 +664,33 @@ export const ReassignReportResponse = zod.object({
     .date()
     .nullish()
     .describe("Server-recorded timestamp of when the photo was uploaded"),
+  imageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All uploaded report photos with timestamps (max 2)"),
   cleanupImageUrl: zod.string().nullish(),
+  cleanupImageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod.coerce
+          .date()
+          .describe(
+            "Server-recorded timestamp of when this photo was uploaded",
+          ),
+      }),
+    )
+    .nullish()
+    .describe("All cleanup photos uploaded by officer (max 5)"),
   latitude: zod.number(),
   longitude: zod.number(),
   address: zod.string().nullish(),

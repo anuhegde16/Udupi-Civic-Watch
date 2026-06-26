@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight } from "lucide-react";
+import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight, X, Plus, Images } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ReportLocationMap } from "@/components/report-location-map";
+import { compressImage } from "@/lib/compress-image";
+
+type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string };
+const MAX_CLEANUP_PHOTOS = 5;
 
 export default function OfficerReportDetail() {
   const [, params] = useRoute("/officer/report/:id");
@@ -23,6 +27,7 @@ export default function OfficerReportDetail() {
   const uploadImage = useUploadImage();
   
   const [isUploading, setIsUploading] = useState(false);
+  const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading || !report) {
@@ -34,13 +39,16 @@ export default function OfficerReportDetail() {
     );
   }
 
-  const handleStatusChange = (status: "reported" | "cleaning" | "cleaned", cleanupImageUrl?: string) => {
+  const handleStatusChange = (
+    status: "reported" | "cleaning" | "cleaned",
+    cleanupImageUrl?: string,
+    cleanupImageUrls?: { url: string; uploadedAt: string }[]
+  ) => {
     updateReport.mutate(
-      { id, data: { status, cleanupImageUrl } },
+      { id, data: { status, cleanupImageUrl, cleanupImageUrls } },
       {
         onSuccess: (updatedReport) => {
           toast({ title: "Status Updated", description: `Report is now marked as ${status}` });
-          // Patch local cache
           queryClient.setQueryData(getGetReportQueryKey(id), updatedReport);
           if (user?.officerId) {
             queryClient.invalidateQueries({ queryKey: getGetOfficerReportsQueryKey(user.officerId) });
@@ -56,33 +64,47 @@ export default function OfficerReportDetail() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+    e.target.value = "";
+    if (cleanupPhotos.length >= MAX_CLEANUP_PHOTOS) return;
+
+    const photoId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     try {
       setIsUploading(true);
-      const dataUrlReader = new FileReader();
-      dataUrlReader.readAsDataURL(file);
-      dataUrlReader.onload = async () => {
-        const dataUrl = dataUrlReader.result as string;
-        uploadImage.mutate(
-          { data: { dataUrl } },
-          {
-            onSuccess: (data) => {
-              setIsUploading(false);
-              // Auto-mark as cleaned when photo is uploaded
-              handleStatusChange("cleaned", data.url);
-            },
-            onError: (err) => {
-              toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-              setIsUploading(false);
-            }
+      const compressed = await compressImage(file);
+      setCleanupPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "" }]);
+
+      uploadImage.mutate(
+        { data: { dataUrl: compressed } },
+        {
+          onSuccess: (data) => {
+            setCleanupPhotos(prev => prev.map(p =>
+              p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt } : p
+            ));
+            setIsUploading(false);
+          },
+          onError: (err) => {
+            setCleanupPhotos(prev => prev.filter(p => p.id !== photoId));
+            toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+            setIsUploading(false);
           }
-        );
-      };
-    } catch (err) {
-      console.error(err);
+        }
+      );
+    } catch {
       setIsUploading(false);
-      toast({ title: "Error", description: "Failed to read file", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to process image. Please try again.", variant: "destructive" });
     }
+  };
+
+  const removeCleanupPhoto = (id: string) => {
+    setCleanupPhotos(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSubmitCleanup = () => {
+    const allUploaded = cleanupPhotos.every(p => p.url);
+    if (!allUploaded || cleanupPhotos.length === 0) return;
+    const urls = cleanupPhotos.map(p => ({ url: p.url, uploadedAt: p.uploadedAt }));
+    handleStatusChange("cleaned", urls[0].url, urls);
   };
 
   const getStatusBadge = () => {
@@ -94,7 +116,19 @@ export default function OfficerReportDetail() {
     }
   };
 
+  // Build display arrays — prefer imageUrls array, fall back to legacy single field
+  const reportPhotos: { url: string; uploadedAt?: string | null }[] =
+    (report.imageUrls && report.imageUrls.length > 0)
+      ? report.imageUrls
+      : report.imageUrl ? [{ url: report.imageUrl, uploadedAt: report.imageUploadedAt ?? null }] : [];
+
+  const resolvedCleanupPhotos: { url: string; uploadedAt?: string | null }[] =
+    (report.cleanupImageUrls && report.cleanupImageUrls.length > 0)
+      ? report.cleanupImageUrls
+      : report.cleanupImageUrl ? [{ url: report.cleanupImageUrl, uploadedAt: null }] : [];
+
   const osmUrl = `https://www.google.com/maps?q=${report.latitude},${report.longitude}`;
+  const allCleanupUploaded = cleanupPhotos.length > 0 && cleanupPhotos.every(p => p.url);
 
   return (
     <div className="max-w-3xl mx-auto w-full pb-10 animate-in fade-in duration-500">
@@ -116,31 +150,65 @@ export default function OfficerReportDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Left Col - Images */}
         <div className="space-y-6">
-          <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden group relative">
-            <div className="absolute top-4 left-4 z-10">
-              <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-xs">Original Photo</Badge>
+          {/* Original report photos */}
+          <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border/30">
+              <Badge className="bg-background text-foreground border border-border font-bold uppercase tracking-wider text-xs">
+                Original {reportPhotos.length > 1 ? `Photos (${reportPhotos.length})` : "Photo"}
+              </Badge>
             </div>
-            <div className="aspect-[4/3] bg-muted w-full relative">
-              {report.imageUrl ? (
-                <img src={report.imageUrl} alt="Waste report" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
-                  <Camera className="w-12 h-12 mb-3 opacity-50" />
-                  <p className="font-medium">No photo provided</p>
-                </div>
-              )}
-            </div>
+            {reportPhotos.length > 0 ? (
+              <div className={`grid gap-1 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                {reportPhotos.map((photo, idx) => (
+                  <div key={idx} className="aspect-[4/3] bg-muted relative group">
+                    <img
+                      src={photo.url}
+                      alt={`Report photo ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    {photo.uploadedAt && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+                        <p className="text-white text-[10px] font-medium text-center">
+                          {format(new Date(photo.uploadedAt), "h:mm a, MMM d")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="aspect-[4/3] bg-muted flex flex-col items-center justify-center text-muted-foreground">
+                <Camera className="w-12 h-12 mb-3 opacity-50" />
+                <p className="font-medium">No photo provided</p>
+              </div>
+            )}
           </div>
 
-          {report.status === 'cleaned' && report.cleanupImageUrl && (
-            <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden group relative animate-in fade-in slide-in-from-top-4 duration-500">
-              <div className="absolute top-4 left-4 z-10">
+          {/* Resolved cleanup photos */}
+          {report.status === 'cleaned' && resolvedCleanupPhotos.length > 0 && (
+            <div className="bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center gap-2 px-5 py-3 border-b border-border/30">
                 <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-xs shadow-lg shadow-green-500/20 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Cleaned Up
+                  <CheckCircle2 className="w-3 h-3" /> Cleaned Up {resolvedCleanupPhotos.length > 1 ? `(${resolvedCleanupPhotos.length})` : ""}
                 </Badge>
               </div>
-              <div className="aspect-[4/3] bg-muted w-full relative">
-                <img src={report.cleanupImageUrl} alt="Cleaned up" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div className={`grid gap-1 ${resolvedCleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                {resolvedCleanupPhotos.map((photo, idx) => (
+                  <div key={idx} className="aspect-[4/3] bg-muted relative group">
+                    <img
+                      src={photo.url}
+                      alt={`Cleanup photo ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    {photo.uploadedAt && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+                        <p className="text-white text-[10px] font-medium text-center">
+                          {format(new Date(photo.uploadedAt), "h:mm a, MMM d")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -169,20 +237,13 @@ export default function OfficerReportDetail() {
                 </div>
               </div>
 
-              {report.imageUrl && (
+              {reportPhotos.length > 0 && reportPhotos[0].uploadedAt && (
                 <div className="flex flex-col gap-1 mb-6">
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Photo Uploaded At</p>
-                  {report.imageUploadedAt ? (
-                    <div className="flex items-center gap-2 text-foreground font-medium bg-muted/50 p-3 rounded-xl">
-                      <Camera className="w-5 h-5 text-primary shrink-0" />
-                      <p>{format(new Date(report.imageUploadedAt), "MMM d, yyyy 'at' h:mm a")}</p>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground font-medium bg-muted/50 p-3 rounded-xl">
-                      <Camera className="w-5 h-5 shrink-0" />
-                      <p className="text-sm">Upload time not recorded</p>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-foreground font-medium bg-muted/50 p-3 rounded-xl">
+                    <Camera className="w-5 h-5 text-primary shrink-0" />
+                    <p>{format(new Date(reportPhotos[0].uploadedAt), "MMM d, yyyy 'at' h:mm a")}</p>
+                  </div>
                 </div>
               )}
 
@@ -225,29 +286,98 @@ export default function OfficerReportDetail() {
             )}
 
             {(report.status === 'reported' || report.status === 'cleaning') && (
-              <div className="pt-2">
+              <div className="pt-2 space-y-3">
+                {/* Hidden file input — no capture attr so gallery + camera both work for officers */}
                 <input 
                   type="file" 
-                  accept="image/*" 
-                  capture="environment"
+                  accept="image/*"
                   className="hidden" 
                   ref={fileInputRef}
                   onChange={handleFileChange}
                 />
-                <Button 
-                  size="lg" 
-                  className="w-full h-14 text-lg font-black rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:-translate-y-1"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || updateReport.isPending}
-                >
-                  {isUploading ? (
-                    <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Uploading Photo...</>
-                  ) : (
-                    <><Camera className="w-5 h-5 mr-2" /> Snap Cleanup Photo & Resolve</>
-                  )}
-                </Button>
-                <p className="text-center text-xs text-muted-foreground font-medium mt-3">
-                  Taking a photo of the cleaned area will automatically resolve this report.
+
+                {/* Staged cleanup photos */}
+                {cleanupPhotos.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      Cleanup Photos ({cleanupPhotos.length}/{MAX_CLEANUP_PHOTOS})
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {cleanupPhotos.map((photo) => (
+                        <div key={photo.id} className="relative rounded-xl overflow-hidden bg-muted aspect-square group">
+                          <img src={photo.preview} alt="Cleanup" className="w-full h-full object-cover" />
+                          {!photo.url && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <Loader2 className="w-5 h-5 animate-spin text-white" />
+                            </div>
+                          )}
+                          {photo.uploadedAt && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-0.5">
+                              <p className="text-white text-[9px] font-medium text-center">
+                                {format(new Date(photo.uploadedAt), "h:mm a")}
+                              </p>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeCleanupPhoto(photo.id)}
+                            className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-500/90 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Add more slot */}
+                      {cleanupPhotos.length < MAX_CLEANUP_PHOTOS && !isUploading && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="aspect-square border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:bg-primary/5 transition-all"
+                        >
+                          <Plus className="w-5 h-5" />
+                          <span className="text-[10px] font-bold mt-0.5">Add</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add first photo button */}
+                {cleanupPhotos.length === 0 && (
+                  <Button 
+                    size="lg" 
+                    variant="outline"
+                    className="w-full h-14 text-base font-bold rounded-xl border-primary/30 text-primary hover:bg-primary/5"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Uploading...</>
+                    ) : (
+                      <><Images className="w-5 h-5 mr-2" /> Add Cleanup Photos</>
+                    )}
+                  </Button>
+                )}
+
+                {/* Submit cleanup */}
+                {cleanupPhotos.length > 0 && (
+                  <Button 
+                    size="lg" 
+                    className="w-full h-14 text-lg font-black rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:-translate-y-1"
+                    onClick={handleSubmitCleanup}
+                    disabled={!allCleanupUploaded || isUploading || updateReport.isPending}
+                  >
+                    {updateReport.isPending || isUploading ? (
+                      <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> {isUploading ? "Uploading..." : "Saving..."}</>
+                    ) : (
+                      <><CheckCircle2 className="w-5 h-5 mr-2" /> Mark as Cleaned</>
+                    )}
+                  </Button>
+                )}
+
+                <p className="text-center text-xs text-muted-foreground font-medium">
+                  You can upload up to {MAX_CLEANUP_PHOTOS} photos from your camera or gallery. Submitting will resolve this report.
                 </p>
               </div>
             )}

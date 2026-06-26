@@ -1,13 +1,20 @@
-import { pgTable, text, serial, timestamp, real, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, real, integer, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officersTable } from "./officers";
+
+export interface PhotoItem {
+  url: string;
+  uploadedAt: string;
+}
 
 export const reportsTable = pgTable("reports", {
   id: serial("id").primaryKey(),
   imageUrl: text("image_url"),
   imageUploadedAt: timestamp("image_uploaded_at", { withTimezone: true }),
+  imageUrls: jsonb("image_urls").$type<PhotoItem[]>(),
   cleanupImageUrl: text("cleanup_image_url"),
+  cleanupImageUrls: jsonb("cleanup_image_urls").$type<PhotoItem[]>(),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   address: text("address"),
