@@ -171,6 +171,13 @@ export default function Track() {
                     alt={`Cleanup photo ${idx + 1}`}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
+                  {photo.uploadedAt && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+                      <p className="text-white text-xs font-medium text-center">
+                        Uploaded {format(new Date(photo.uploadedAt), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

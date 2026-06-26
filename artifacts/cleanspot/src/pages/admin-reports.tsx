@@ -443,31 +443,66 @@ export default function AdminReports() {
             </div>
           </DialogHeader>
 
-          {/* Photos side by side if both exist, else full width */}
-          {(mapReport?.imageUrl || mapReport?.cleanupImageUrl) && (
-            <div className={`px-6 sm:px-8 pb-4 grid gap-3 ${mapReport.imageUrl && mapReport.cleanupImageUrl ? "grid-cols-2" : "grid-cols-1"}`}>
-              {mapReport?.imageUrl && (
-                <div className="rounded-xl overflow-hidden border border-border/50 relative">
-                  <div className="absolute top-2 left-2 z-10">
-                    <Badge className="bg-background/80 backdrop-blur-md text-foreground border-border/50 font-bold uppercase tracking-wider text-[10px] px-2 py-1">
-                      Photo
-                    </Badge>
+          {/* Photos — prefer imageUrls/cleanupImageUrls arrays, fall back to legacy single fields */}
+          {mapReport && (() => {
+            const reportPhotos: { url: string; uploadedAt?: string | null }[] =
+              (mapReport.imageUrls && mapReport.imageUrls.length > 0)
+                ? mapReport.imageUrls
+                : mapReport.imageUrl ? [{ url: mapReport.imageUrl, uploadedAt: mapReport.imageUploadedAt }] : [];
+            const cleanupPhotos: { url: string; uploadedAt?: string | null }[] =
+              (mapReport.cleanupImageUrls && mapReport.cleanupImageUrls.length > 0)
+                ? mapReport.cleanupImageUrls
+                : mapReport.cleanupImageUrl ? [{ url: mapReport.cleanupImageUrl, uploadedAt: null }] : [];
+            const hasPhotos = reportPhotos.length > 0 || cleanupPhotos.length > 0;
+            if (!hasPhotos) return null;
+            return (
+              <div className="px-6 sm:px-8 pb-4 space-y-3">
+                {reportPhotos.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      Report Photo{reportPhotos.length > 1 ? `s (${reportPhotos.length})` : ""}
+                    </p>
+                    <div className={`grid gap-2 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                      {reportPhotos.map((photo, idx) => (
+                        <div key={idx} className="rounded-xl overflow-hidden border border-border/50 relative">
+                          <img src={photo.url} alt={`Report photo ${idx + 1}`} className="w-full h-36 object-cover" />
+                          {photo.uploadedAt && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                              <p className="text-white text-[9px] font-medium text-center">
+                                {format(new Date(photo.uploadedAt), "MMM d, h:mm a")}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <img src={mapReport.imageUrl} alt="Waste report photo" className="w-full h-40 object-cover" />
-                </div>
-              )}
-              {mapReport?.cleanupImageUrl && (
-                <div className="rounded-xl overflow-hidden border border-border/50 relative">
-                  <div className="absolute top-2 left-2 z-10">
-                    <Badge className="bg-green-500 text-white border-transparent font-bold uppercase tracking-wider text-[10px] px-2 py-1 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> After
-                    </Badge>
+                )}
+                {cleanupPhotos.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-green-500" />
+                      Cleanup Photo{cleanupPhotos.length > 1 ? `s (${cleanupPhotos.length})` : ""}
+                    </p>
+                    <div className={`grid gap-2 ${cleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                      {cleanupPhotos.map((photo, idx) => (
+                        <div key={idx} className="rounded-xl overflow-hidden border border-green-200 relative">
+                          <img src={photo.url} alt={`Cleanup photo ${idx + 1}`} className="w-full h-36 object-cover" />
+                          {photo.uploadedAt && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
+                              <p className="text-white text-[9px] font-medium text-center">
+                                {format(new Date(photo.uploadedAt), "MMM d, h:mm a")}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <img src={mapReport.cleanupImageUrl} alt="Cleanup photo" className="w-full h-40 object-cover" />
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
           <div className="h-[260px] sm:h-[300px] w-full relative">
             {mapReport && (
