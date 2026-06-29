@@ -733,14 +733,14 @@ export default function AdminOfficers() {
                   />
                 </button>
 
-                {/* Delete button — always visible, outside the toggle button */}
-                <div className="absolute top-1.5 right-1.5 z-20">
+                {/* Delete button — always visible */}
+                <div className="absolute top-1.5 right-8 z-20">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 rounded-full text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-6 w-6 rounded-full text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10"
                         onClick={(e) => e.stopPropagation()}
                         title="Remove officer"
                       >
