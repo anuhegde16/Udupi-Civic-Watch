@@ -2,6 +2,33 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
 
+function ensureYouAreHereStyle() {
+  if (document.getElementById("ck-you-here-style")) return;
+  const style = document.createElement("style");
+  style.id = "ck-you-here-style";
+  style.textContent = `
+    @keyframes ck-you-pulse {
+      0%, 100% { transform: scale(1); opacity: 0.55; }
+      50% { transform: scale(1.9); opacity: 0; }
+    }
+    .ck-you-pulse { animation: ck-you-pulse 2.2s ease-out infinite; }
+  `;
+  document.head.appendChild(style);
+}
+
+function buildYouAreHereIcon(L: any) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="position:relative;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">
+      <div class="ck-you-pulse" style="position:absolute;inset:-5px;background:rgba(37,99,235,0.28);border-radius:50%;"></div>
+      <div style="position:relative;z-index:1;width:14px;height:14px;background:#2563eb;border-radius:50%;border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>
+    </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    tooltipAnchor: [0, -13],
+  });
+}
+
 function pointInPolygon(lon: number, lat: number, ring: [number, number][]): boolean {
   let inside = false;
   const n = ring.length;
@@ -75,15 +102,51 @@ export function LiveWasteMap() {
   const markersRef = useRef<any[]>([]);
   const spotsRef = useRef<WasteSpot[]>([]);
   const activeZoneRef = useRef<string | null>(null);
+  const youAreHereRef = useRef<any>(null);
   const [count, setCount] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [activeZone, setActiveZone] = useState<string | null>(zones[0]?.name ?? null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   // Recompute count from cached spots whenever the active zone changes
   useEffect(() => {
     activeZoneRef.current = activeZone;
     setCount(countForZone(spotsRef.current, activeZone));
   }, [activeZone]);
+
+  // Softly request geolocation — no forced prompt, silently skipped on denial
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => { /* permission denied or unavailable — map works as before */ },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  }, []);
+
+  // Place or update the "You Are Here" marker whenever location arrives or map becomes ready
+  useEffect(() => {
+    if (!userLocation || !mapReady) return;
+    async function placeYouAreHere() {
+      if (!leafletMapRef.current) return;
+      const L = (await import("leaflet")).default;
+      ensureYouAreHereStyle();
+      const latlng: [number, number] = [userLocation!.lat, userLocation!.lng];
+      if (youAreHereRef.current) {
+        youAreHereRef.current.setLatLng(latlng);
+      } else {
+        const um = L.marker(latlng, {
+          icon: buildYouAreHereIcon(L),
+          interactive: false,
+          zIndexOffset: 500,
+        }).addTo(leafletMapRef.current);
+        um.bindTooltip("You are here", { permanent: false, direction: "top", className: "text-xs font-bold" });
+        youAreHereRef.current = um;
+      }
+    }
+    placeYouAreHere();
+  }, [userLocation, mapReady]);
 
   const loadSpots = async () => {
     const data = await fetchSpots();
@@ -142,6 +205,7 @@ export function LiveWasteMap() {
       }
 
       leafletMapRef.current = map;
+      setMapReady(true);
 
       const data = await loadSpots();
       placeMarkers(L, map, data);
@@ -162,6 +226,7 @@ export function LiveWasteMap() {
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
+        youAreHereRef.current = null;
       }
     };
   }, []);
@@ -381,6 +446,15 @@ export function LiveWasteMap() {
             </svg>
             <span className="text-xs text-muted-foreground font-medium">Service zone</span>
           </div>
+          {userLocation && (
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-60"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 border border-white"></span>
+              </span>
+              <span className="text-xs text-muted-foreground font-medium">You are here</span>
+            </div>
+          )}
           <div className="ml-auto text-xs text-muted-foreground">
             Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
           </div>
