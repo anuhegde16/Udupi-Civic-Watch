@@ -538,14 +538,17 @@ export default function AdminReports() {
                 <span className="font-bold uppercase tracking-wider text-muted-foreground">Reported At</span>
                 <span className="font-medium text-foreground">{format(new Date(mapReport.createdAt), "MMM d, yyyy 'at' h:mm a")}</span>
               </div>
-              {mapReport.imageUrl && (
+              {(mapReport.imageUrl || (mapReport.imageUrls && mapReport.imageUrls.length > 0)) && (
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-bold uppercase tracking-wider text-muted-foreground">Photo Uploaded At</span>
-                  {mapReport.imageUploadedAt ? (
-                    <span className="font-medium text-foreground">{format(new Date(mapReport.imageUploadedAt), "MMM d, yyyy 'at' h:mm a")}</span>
-                  ) : (
-                    <span className="font-medium text-muted-foreground italic">Not recorded</span>
-                  )}
+                  <span className="font-bold uppercase tracking-wider text-muted-foreground">First Photo At</span>
+                  {(() => {
+                    const ts = mapReport.imageUploadedAt ?? mapReport.imageUrls?.[0]?.uploadedAt ?? null;
+                    return ts ? (
+                      <span className="font-medium text-foreground">{format(new Date(ts), "MMM d, yyyy 'at' h:mm a")}</span>
+                    ) : (
+                      <span className="font-medium text-muted-foreground italic">Not recorded</span>
+                    );
+                  })()}
                 </div>
               )}
               {mapReport.reporterEmail && (
