@@ -66,6 +66,7 @@ import {
   Save,
   Pencil,
   KeyRound,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { OfficerZonesMap } from "@/components/officer-zones-map";
@@ -141,6 +142,16 @@ export default function AdminOfficers() {
   const [pendingSubmitData, setPendingSubmitData] = useState<CreateOfficerValues | null>(null);
   const [editDetailsOpen, setEditDetailsOpen] = useState(false);
   const [editDetailsOfficer, setEditDetailsOfficer] = useState<(typeof officers)[0] | null>(null);
+  const [expandedOfficers, setExpandedOfficers] = useState<Set<number>>(new Set());
+
+  function toggleExpanded(id: number) {
+    setExpandedOfficers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const editDetailsForm = useForm<EditDetailsValues>({
     resolver: zodResolver(editDetailsSchema),
@@ -658,45 +669,82 @@ export default function AdminOfficers() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {officers.map((officer, i) => {
             const color = ZONE_COLORS[i % ZONE_COLORS.length];
+            const isExpanded = expandedOfficers.has(officer.id);
+            const hasZone = officer.centerLat != null;
+            const resolved = officer.reportCount - officer.pendingCount;
             return (
               <div
                 key={officer.id}
-                className="bg-card rounded-2xl shadow-sm border border-border/50 p-4 flex flex-col hover:border-primary/30 transition-all hover:shadow-md group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 cursor-pointer"
+                className="bg-card rounded-2xl shadow-sm border border-border/50 hover:border-primary/30 transition-all hover:shadow-md group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
                 style={{ animationDelay: `${i * 50}ms` }}
-                onClick={() => openZoneEditor(officer.id)}
               >
+                {/* Decorative corner */}
                 <div
-                  className="absolute top-0 right-0 w-16 h-16 rounded-bl-[60px] transition-transform duration-500 group-hover:scale-125"
-                  style={{ background: `${color}10` }}
+                  className="absolute top-0 right-0 w-14 h-14 rounded-bl-[50px] transition-transform duration-500 group-hover:scale-125 pointer-events-none"
+                  style={{ background: `${color}12` }}
                 />
 
-                <div className="flex items-start justify-between mb-3 relative z-10">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-base font-black shrink-0 text-white"
-                      style={{ background: color }}
-                    >
-                      {officer.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="font-black text-foreground text-sm leading-tight mb-0.5 group-hover:text-primary transition-colors">
-                        {officer.name}
-                      </h3>
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        Joined {format(new Date(officer.createdAt), "MMM yyyy")}
-                      </p>
-                    </div>
+                {/* Collapsed header — always visible, click toggles expand */}
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 relative z-10 text-left"
+                  onClick={() => toggleExpanded(officer.id)}
+                >
+                  {/* Avatar */}
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shrink-0 text-white"
+                    style={{ background: color }}
+                  >
+                    {officer.name.charAt(0)}
                   </div>
 
+                  {/* Name + subtitle */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-foreground text-sm leading-tight truncate group-hover:text-primary transition-colors">
+                      {officer.name}
+                    </p>
+                    {officer.areaName ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 bg-primary/8 px-1.5 py-0.5 rounded-md mt-0.5">
+                        <MapPin className="w-2.5 h-2.5 shrink-0" />
+                        {officer.areaName}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md mt-0.5 border border-amber-200">
+                        No zone
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Stats pills */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="flex flex-col items-center px-1.5 py-0.5 rounded-lg bg-muted/60 border border-border/40 min-w-[32px]">
+                      <span className="text-sm font-black text-foreground leading-none">{officer.pendingCount}</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">pend</span>
+                    </span>
+                    <span className="flex flex-col items-center px-1.5 py-0.5 rounded-lg min-w-[32px]" style={{ background: `${color}12`, border: `1px solid ${color}30` }}>
+                      <span className="text-sm font-black leading-none" style={{ color }}>{resolved}</span>
+                      <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color }}>done</span>
+                    </span>
+                  </div>
+
+                  {/* Chevron */}
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {/* Delete button — always visible, outside the toggle button */}
+                <div className="absolute top-1.5 right-1.5 z-20">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-1 h-7 w-7 rounded-full"
+                        className="h-6 w-6 rounded-full text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => e.stopPropagation()}
+                        title="Remove officer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3 h-3" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
@@ -726,71 +774,59 @@ export default function AdminOfficers() {
                   </AlertDialog>
                 </div>
 
-                <div className="space-y-1.5 mb-3 flex-1 relative z-10">
-                  <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                    <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate">{officer.email}</span>
+                {/* Expandable body */}
+                <div
+                  className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
+                    isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/30 mt-0">
+                      <div className="pt-2 space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
+                          <Mail className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span className="truncate">{officer.email}</span>
+                        </div>
+                        {officer.phone && (
+                          <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
+                            <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span>{officer.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <MapPin className="w-3 h-3 shrink-0" />
+                          {hasZone ? (
+                            <span className="font-mono text-[11px]">
+                              {officer.centerLat!.toFixed(4)}, {officer.centerLng?.toFixed(4)}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 font-medium text-[11px]">No zone set</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/50">
+                          Joined {format(new Date(officer.createdAt), "MMM yyyy")}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                          onClick={(e) => { e.stopPropagation(); openEditDetails(officer); }}
+                        >
+                          <Pencil className="w-3 h-3 mr-1.5" />
+                          Edit Details
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                          onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
+                        >
+                          <Map className="w-3 h-3 mr-1.5" style={{ color }} />
+                          Edit Zone
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  {officer.phone && (
-                    <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                      <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span>{officer.phone}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-xs text-foreground font-bold bg-muted/30 px-2 py-1.5 rounded-lg">
-                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="truncate">{officer.areaName || "Unassigned"}</span>
-                  </div>
-                  {officer.centerLat != null ? (
-                    <div className="text-[10px] font-mono text-muted-foreground bg-muted/20 rounded-md px-2 py-1">
-                      {officer.centerLat.toFixed(4)}, {officer.centerLng?.toFixed(4)}
-                    </div>
-                  ) : (
-                    <div className="text-[10px] text-amber-600 font-medium bg-amber-50 rounded-md px-2 py-1 border border-amber-100">
-                      No zone set — click Edit Zone.
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 relative z-10 mb-3">
-                  <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
-                    <div className="text-lg font-black text-foreground leading-none mb-0.5">
-                      {officer.pendingCount}
-                    </div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Pending
-                    </div>
-                  </div>
-                  <div
-                    className="rounded-xl p-2.5 text-center border"
-                    style={{ background: `${color}10`, borderColor: `${color}30` }}
-                  >
-                    <div className="text-lg font-black leading-none mb-0.5" style={{ color }}>
-                      {officer.reportCount - officer.pendingCount}
-                    </div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
-                      Resolved
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 relative z-10">
-                  <Button
-                    variant="outline"
-                    className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                    onClick={(e) => { e.stopPropagation(); openEditDetails(officer); }}
-                  >
-                    <Pencil className="w-3.5 h-3.5 mr-1.5" />
-                    Edit Details
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                    onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
-                  >
-                    <Map className="w-3.5 h-3.5 mr-1.5" style={{ color }} />
-                    Edit Zone
-                  </Button>
                 </div>
               </div>
             );
