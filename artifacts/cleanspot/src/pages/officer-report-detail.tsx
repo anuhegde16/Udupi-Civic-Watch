@@ -116,10 +116,13 @@ export default function OfficerReportDetail() {
     }
   };
 
-  // Build display arrays — prefer imageUrls array, fall back to legacy single field
+  // Build display arrays — prefer imageUrls array (filter out null/sparse entries), fall back to legacy single field
+  const validImageUrls = (report.imageUrls ?? []).filter(
+    (p) => !!p && typeof p.url === "string" && p.url.length > 0
+  );
   const reportPhotos: { url: string; uploadedAt?: string | null }[] =
-    (report.imageUrls && report.imageUrls.length > 0)
-      ? report.imageUrls
+    validImageUrls.length > 0
+      ? validImageUrls
       : report.imageUrl ? [{ url: report.imageUrl, uploadedAt: report.imageUploadedAt ?? null }] : [];
 
   const resolvedCleanupPhotos: { url: string; uploadedAt?: string | null }[] =
@@ -163,9 +166,16 @@ export default function OfficerReportDetail() {
                   <div key={idx} className="aspect-[4/3] bg-muted relative group">
                     <img
                       src={photo.url}
-                      alt={`Report photo ${idx + 1}`}
+                      alt={`Report photo ${idx + 1} of ${reportPhotos.length}`}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     />
+                    {reportPhotos.length > 1 && (
+                      <div className="absolute top-0 left-0 bg-black/60 px-2 py-1 rounded-br-lg">
+                        <p className="text-white text-[10px] font-bold tracking-wide">
+                          Photo {idx + 1} of {reportPhotos.length}
+                        </p>
+                      </div>
+                    )}
                     {photo.uploadedAt && (
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
                         <p className="text-white text-[10px] font-medium text-center">
