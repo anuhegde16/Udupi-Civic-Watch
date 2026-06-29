@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -198,6 +198,12 @@ export default function MasterDashboard() {
   const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
 
+  const [deepLinkedReportId] = useState<number | null>(() => {
+    const id = new URLSearchParams(window.location.search).get("report");
+    return id ? parseInt(id, 10) : null;
+  });
+  const deepLinkedConsumedRef = useRef(false);
+
   async function handleReportStatusChange(reportId: number, newStatus: "cleaning" | "cleaned") {
     await new Promise<void>((resolve, reject) => {
       updateReport.mutate(
@@ -246,6 +252,17 @@ export default function MasterDashboard() {
   });
 
   const officers = officersData?.officers ?? [];
+
+  useEffect(() => {
+    if (deepLinkedConsumedRef.current || !deepLinkedReportId || !reportsData) return;
+    const found = reportsData.reports.find((r) => r.id === deepLinkedReportId);
+    if (found) {
+      openReport(found);
+      deepLinkedConsumedRef.current = true;
+    }
+  // openReport reads `officers` — include it so the call sees the latest officer list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkedReportId, reportsData, officers]);
 
   const form = useForm<CreateOfficerValues>({
     resolver: zodResolver(createOfficerSchema),

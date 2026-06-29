@@ -73,7 +73,11 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
 
   const data = event.notification.data as { url?: string };
-  const targetUrl = data?.url ?? "/";
+  const notifPath = data?.url ?? "/";
+  // self.registration.scope is the full base URL e.g. "https://origin/cleanspot/"
+  // Stripping the trailing slash and prepending gives the correct absolute URL.
+  const base = self.registration.scope.replace(/\/$/, "");
+  const targetUrl = base + notifPath;
 
   event.waitUntil(
     self.clients

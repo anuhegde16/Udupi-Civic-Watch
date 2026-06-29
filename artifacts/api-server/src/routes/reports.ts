@@ -230,7 +230,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       body: ccNotifBody,
       type: "new_report",
       reportId: report.id,
-      url: "/admin/reports",
+      url: `/admin/reports?report=${report.id}`,
     }).catch((err) => logger.warn({ err }, "CC new-report notify failed"));
   }
 
@@ -274,7 +274,7 @@ router.post("/reports", async (req, res): Promise<void> => {
         body: adminNotifBody,
         type: "new_report",
         reportId: report.id,
-        url: "/master/dashboard",
+        url: `/master/dashboard?report=${report.id}`,
       }),
     ]).catch((err) => logger.warn({ err }, "Error in new-report notifications"));
   }
@@ -518,14 +518,14 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
-            url: "/master/dashboard",
+            url: `/master/dashboard?report=${report.id}`,
           }) : Promise.resolve(),
           ccUserIds.length > 0 ? notifyAndPush(ccUserIds, {
             title: statusLabel,
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
-            url: "/admin/reports",
+            url: `/admin/reports?report=${report.id}`,
           }) : Promise.resolve(),
         ]);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAdminListReports, useListOfficers, useReassignReport, getAdminListReportsQueryKey, customFetch } from "@workspace/api-client-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -82,6 +82,20 @@ export default function AdminReports() {
 
   const [mapReport, setMapReport] = useState<Report | null>(null);
   const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
+
+  const [deepLinkedReportId] = useState<number | null>(() => {
+    const id = new URLSearchParams(window.location.search).get("report");
+    return id ? parseInt(id, 10) : null;
+  });
+  const deepLinkedConsumedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedConsumedRef.current || !deepLinkedReportId || !reportsData) return;
+    const found = (reportsData.reports as Report[]).find((r) => r.id === deepLinkedReportId);
+    if (found) {
+      setMapReport(found);
+      deepLinkedConsumedRef.current = true;
+    }
+  }, [deepLinkedReportId, reportsData]);
 
   const reassignMutation = useReassignReport();
   const queryClient = useQueryClient();
