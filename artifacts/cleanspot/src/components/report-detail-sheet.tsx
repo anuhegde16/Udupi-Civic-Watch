@@ -15,6 +15,7 @@ export type ReportDetail = {
   imageUrl?: string | null;
   imageUrls?: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl?: string | null;
+  cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
   reporterEmail?: string | null;
   createdAt?: string | null;
 };
@@ -134,11 +135,23 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                 );
               })()}
 
-              {report.cleanupImageUrl && (
-                <PhotoBlock src={report.cleanupImageUrl} label="Cleanup Confirmation Photo" />
-              )}
+              {(() => {
+                const cleanupPhotos =
+                  report.cleanupImageUrls && report.cleanupImageUrls.length > 0
+                    ? report.cleanupImageUrls.map((p) => p.url)
+                    : report.cleanupImageUrl
+                    ? [report.cleanupImageUrl]
+                    : [];
+                return cleanupPhotos.map((src, i) => (
+                  <PhotoBlock
+                    key={src}
+                    src={src}
+                    label={cleanupPhotos.length > 1 ? `Cleanup Confirmation Photo ${i + 1}` : "Cleanup Confirmation Photo"}
+                  />
+                ));
+              })()}
 
-              {!(report.imageUrls?.length || report.imageUrl) && !report.cleanupImageUrl && (
+              {!(report.imageUrls?.length || report.imageUrl) && !(report.cleanupImageUrls?.length || report.cleanupImageUrl) && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-1">
                   <ImageIcon className="w-3.5 h-3.5 shrink-0" />
                   <span>No photos attached to this report.</span>

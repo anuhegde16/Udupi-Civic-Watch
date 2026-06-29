@@ -79,6 +79,7 @@ export type PanchayatMapReport = {
   imageUrl?: string | null;
   imageUrls?: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl?: string | null;
+  cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
   reporterEmail?: string | null;
   createdAt?: string | null;
 };

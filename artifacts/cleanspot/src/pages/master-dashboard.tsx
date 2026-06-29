@@ -234,6 +234,7 @@ export default function MasterDashboard() {
       imageUrl: r.imageUrls?.[0]?.url ?? r.imageUrl ?? null,
       imageUrls: r.imageUrls ?? null,
       cleanupImageUrl: r.cleanupImageUrl ?? null,
+      cleanupImageUrls: r.cleanupImageUrls ?? null,
       reporterEmail: r.reporterEmail ?? null,
       createdAt: r.createdAt ?? null,
     });
