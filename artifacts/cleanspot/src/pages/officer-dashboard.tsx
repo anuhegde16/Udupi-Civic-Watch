@@ -327,9 +327,9 @@ export default function OfficerDashboard() {
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="aspect-[4/3] w-full bg-muted relative overflow-hidden">
-                  {report.imageUrl ? (
+                  {(report.imageUrls?.[0]?.url ?? report.imageUrl) ? (
                     <img
-                      src={report.imageUrl}
+                      src={report.imageUrls?.[0]?.url ?? report.imageUrl!}
                       alt="Waste report"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />

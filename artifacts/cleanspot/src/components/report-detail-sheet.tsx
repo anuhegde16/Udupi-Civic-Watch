@@ -13,6 +13,7 @@ export type ReportDetail = {
   wardName?: string | null;
   officerName?: string | null;
   imageUrl?: string | null;
+  imageUrls?: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl?: string | null;
   reporterEmail?: string | null;
   createdAt?: string | null;
@@ -110,20 +111,34 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
 
             {/* Photos */}
             <div className="flex-1 p-5 space-y-5">
-              {report.imageUrl ? (
-                <PhotoBlock src={report.imageUrl} label="Waste Report Photo" />
-              ) : (
-                <div className="w-full aspect-[4/3] rounded-2xl bg-muted/60 flex flex-col items-center justify-center gap-2 border border-dashed border-border/60">
-                  <Trash2 className="w-8 h-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground font-medium">No photo submitted</p>
-                </div>
-              )}
+              {(() => {
+                const reportPhotos =
+                  report.imageUrls && report.imageUrls.length > 0
+                    ? report.imageUrls.map((p) => p.url)
+                    : report.imageUrl
+                    ? [report.imageUrl]
+                    : [];
+                return reportPhotos.length > 0 ? (
+                  reportPhotos.map((src, i) => (
+                    <PhotoBlock
+                      key={src}
+                      src={src}
+                      label={reportPhotos.length > 1 ? `Waste Report Photo ${i + 1}` : "Waste Report Photo"}
+                    />
+                  ))
+                ) : (
+                  <div className="w-full aspect-[4/3] rounded-2xl bg-muted/60 flex flex-col items-center justify-center gap-2 border border-dashed border-border/60">
+                    <Trash2 className="w-8 h-8 text-muted-foreground/40" />
+                    <p className="text-xs text-muted-foreground font-medium">No photo submitted</p>
+                  </div>
+                );
+              })()}
 
               {report.cleanupImageUrl && (
                 <PhotoBlock src={report.cleanupImageUrl} label="Cleanup Confirmation Photo" />
               )}
 
-              {!report.imageUrl && !report.cleanupImageUrl && (
+              {!(report.imageUrls?.length || report.imageUrl) && !report.cleanupImageUrl && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium mt-1">
                   <ImageIcon className="w-3.5 h-3.5 shrink-0" />
                   <span>No photos attached to this report.</span>
