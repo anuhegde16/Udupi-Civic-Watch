@@ -589,8 +589,7 @@ components:
           type: string
         uploadedAt:
           type: string
-          format: date-time
-          description: Server-recorded timestamp of when this photo was uploaded
+          description: ISO-8601 timestamp of when this photo was uploaded
       required: [url, uploadedAt]
 
     HealthStatus:
@@ -1094,6 +1093,5 @@ components:
           type: string
         uploadedAt:
           type: string
-          format: date-time
-          description: Server-recorded timestamp of when this image was uploaded
+          description: ISO-8601 timestamp of when this image was uploaded
       required: [url, uploadedAt]

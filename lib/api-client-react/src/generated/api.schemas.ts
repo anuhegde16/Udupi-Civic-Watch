@@ -7,7 +7,7 @@
  */
 export interface PhotoItem {
   url: string;
-  /** Server-recorded timestamp of when this photo was uploaded */
+  /** ISO-8601 timestamp of when this photo was uploaded */
   uploadedAt: string;
 }
 
@@ -281,7 +281,7 @@ export interface UploadImageBody {
 
 export interface UploadImageResponse {
   url: string;
-  /** Server-recorded timestamp of when this image was uploaded */
+  /** ISO-8601 timestamp of when this image was uploaded */
   uploadedAt: string;
 }
 

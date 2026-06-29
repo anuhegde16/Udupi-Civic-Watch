@@ -92,11 +92,9 @@ export const ListReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -106,11 +104,9 @@ export const ListReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -158,11 +154,9 @@ export const CreateReportBody = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -192,11 +186,9 @@ export const GetReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -206,11 +198,9 @@ export const GetReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -260,11 +250,9 @@ export const UpdateReportBody = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -282,11 +270,9 @@ export const UpdateReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -296,11 +282,9 @@ export const UpdateReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -350,11 +334,9 @@ export const TrackReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish(),
@@ -516,11 +498,9 @@ export const GetOfficerReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -530,11 +510,9 @@ export const GetOfficerReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -596,11 +574,9 @@ export const AdminListReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -610,11 +586,9 @@ export const AdminListReportsResponse = zod.object({
         .array(
           zod.object({
             url: zod.string(),
-            uploadedAt: zod.coerce
-              .date()
-              .describe(
-                "Server-recorded timestamp of when this photo was uploaded",
-              ),
+            uploadedAt: zod
+              .string()
+              .describe("ISO-8601 timestamp of when this photo was uploaded"),
           }),
         )
         .nullish()
@@ -672,11 +646,9 @@ export const ReassignReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -686,11 +658,9 @@ export const ReassignReportResponse = zod.object({
     .array(
       zod.object({
         url: zod.string(),
-        uploadedAt: zod.coerce
-          .date()
-          .describe(
-            "Server-recorded timestamp of when this photo was uploaded",
-          ),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
       }),
     )
     .nullish()
@@ -837,7 +807,7 @@ export const UploadImageBody = zod.object({
 
 export const UploadImageResponse = zod.object({
   url: zod.string(),
-  uploadedAt: zod.coerce
-    .date()
-    .describe("Server-recorded timestamp of when this image was uploaded"),
+  uploadedAt: zod
+    .string()
+    .describe("ISO-8601 timestamp of when this image was uploaded"),
 });
