@@ -495,8 +495,12 @@ export const GetOfficerReportsParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getOfficerReportsQueryLimitDefault = 500;
+
 export const GetOfficerReportsQueryParams = zod.object({
   status: zod.enum(["reported", "cleaning", "cleaned"]).optional(),
+  limit: zod.coerce.number().default(getOfficerReportsQueryLimitDefault),
+  days: zod.coerce.number().optional(),
 });
 
 export const GetOfficerReportsResponse = zod.object({

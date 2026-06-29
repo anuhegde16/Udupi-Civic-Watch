@@ -328,6 +328,17 @@ paths:
           schema:
             type: string
             enum: [reported, cleaning, cleaned]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            description: Maximum number of reports to return
+        - name: days
+          in: query
+          schema:
+            type: integer
+            description: Only return reports from the last N days (e.g. 90)
       responses:
         "200":
           description: Officer's reports

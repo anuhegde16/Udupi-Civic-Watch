@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
-import { eq, sql, and, isNull } from "drizzle-orm";
+import { eq, sql, and, isNull, gte } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
 import { requireAuth, requireAdmin, requirePanchayatOrControlCenter, hashPassword } from "../lib/auth";
 import { sendWelcomeEmail } from "../lib/email";
@@ -323,18 +323,26 @@ router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void>
 
   const queryParsed = GetOfficerReportsQueryParams.safeParse(req.query);
   const status = queryParsed.success ? queryParsed.data.status : undefined;
+  const limit = queryParsed.success && queryParsed.data.limit ? queryParsed.data.limit : 500;
+  const days = queryParsed.success ? queryParsed.data.days : undefined;
 
   let conditions: any[] = [eq(reportsTable.assignedOfficerId, id)];
   if (status) conditions.push(eq(reportsTable.status, status));
+  if (days && days > 0) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    conditions.push(gte(reportsTable.createdAt, cutoff));
+  }
+
+  const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(...conditions));
 
   const reports = await db
     .select({ report: reportsTable, officer: officersTable })
     .from(reportsTable)
     .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
     .where(and(...conditions))
-    .orderBy(sql`${reportsTable.createdAt} DESC`);
-
-  const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(...conditions));
+    .orderBy(sql`${reportsTable.createdAt} DESC`)
+    .limit(limit);
 
   const formatted = reports.map(({ report, officer }) => ({
     ...report,

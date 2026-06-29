@@ -302,6 +302,14 @@ export const ListReportsStatus = {
 
 export type GetOfficerReportsParams = {
   status?: GetOfficerReportsStatus;
+  /**
+   * Maximum number of reports to return
+   */
+  limit?: number;
+  /**
+   * Only return reports from the last N days (e.g. 90)
+   */
+  days?: number;
 };
 
 export type GetOfficerReportsStatus =

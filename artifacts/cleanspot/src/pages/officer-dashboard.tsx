@@ -43,8 +43,8 @@ export default function OfficerDashboard() {
 
   const { data: allData, isLoading } = useGetOfficerReports(
     officerId,
-    {},
-    { query: { queryKey: getGetOfficerReportsQueryKey(officerId), enabled: !!officerId, staleTime: 60_000 } },
+    { days: 90, limit: 500 },
+    { query: { queryKey: getGetOfficerReportsQueryKey(officerId, { days: 90, limit: 500 }), enabled: !!officerId, staleTime: 60_000 } },
   );
 
   const { data: officerData } = useGetOfficer(officerId, {
