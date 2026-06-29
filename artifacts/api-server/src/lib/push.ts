@@ -90,13 +90,29 @@ export async function sendTestPushToUser(
   return { attempted: subs.length, succeeded, failed: subs.length - succeeded };
 }
 
-export async function sendPushToReportSubscriptions(reportId: number, payload: PushPayload): Promise<void> {
+export async function sendPushToReportSubscriptions(
+  reportId: number,
+  payload: PushPayload,
+  event: "cleaning" | "cleaned"
+): Promise<void> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+
+  // For the "cleaning" event, only send to subscriptions that haven't already
+  // received a "cleaning" notification (idempotency guard on retry).
+  // For the "cleaned" event, send to all remaining subscriptions.
+  const conditions =
+    event === "cleaning"
+      ? and(
+          eq(pushSubscriptionsTable.reportId, reportId),
+          isNull(pushSubscriptionsTable.userId),
+          eq(pushSubscriptionsTable.sentCleaning, false)
+        )
+      : and(eq(pushSubscriptionsTable.reportId, reportId), isNull(pushSubscriptionsTable.userId));
 
   const subs = await db
     .select()
     .from(pushSubscriptionsTable)
-    .where(and(eq(pushSubscriptionsTable.reportId, reportId), isNull(pushSubscriptionsTable.userId)));
+    .where(conditions);
 
   if (subs.length === 0) return;
 
@@ -104,14 +120,26 @@ export async function sendPushToReportSubscriptions(reportId: number, payload: P
     subs.map((s) => sendPushToSubscription(s.endpoint, s.p256dh, s.auth, payload))
   );
 
-  // One-shot: remove only subscriptions that were successfully delivered.
-  // Transient failures (network, etc.) are kept so the citizen still has a
-  // chance to receive the notification on a retry or the next status change.
   const successfulEndpoints = subs
     .filter((_, i) => results[i]?.status === "fulfilled" && (results[i] as PromiseFulfilledResult<boolean>).value === true)
     .map((s) => s.endpoint);
 
-  if (successfulEndpoints.length > 0) {
+  if (successfulEndpoints.length === 0) return;
+
+  if (event === "cleaning") {
+    // Mark as sent but keep the subscription alive for the "cleaned" event
+    await db
+      .update(pushSubscriptionsTable)
+      .set({ sentCleaning: true })
+      .where(
+        and(
+          eq(pushSubscriptionsTable.reportId, reportId),
+          isNull(pushSubscriptionsTable.userId),
+          inArray(pushSubscriptionsTable.endpoint, successfulEndpoints)
+        )
+      );
+  } else {
+    // "cleaned" — final notification; remove the subscription entirely
     await db
       .delete(pushSubscriptionsTable)
       .where(

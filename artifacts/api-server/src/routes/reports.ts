@@ -456,7 +456,17 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     );
   }
 
-  // Notify citizen push subscribers (anonymous, linked to this report) when cleaned
+  // Notify citizen push subscribers (anonymous, linked to this report) on cleaning and cleaned
+  if (newStatus === "cleaning" && newStatus !== oldStatus) {
+    sendPushToReportSubscriptions(report.id, {
+      title: "Cleanup Has Started 🧹",
+      body: `A crew has started cleaning the waste you reported (#${report.id}). We'll let you know when it's done.`,
+      type: "report_cleaning",
+      reportId: report.id,
+      url: `/track/${report.id}`,
+    }, "cleaning").catch((err) => logger.warn({ err, reportId: report.id }, "Citizen cleaning push notification failed"));
+  }
+
   if (newStatus === "cleaned" && newStatus !== oldStatus) {
     sendPushToReportSubscriptions(report.id, {
       title: "Your Report Has Been Cleaned! ✓",
@@ -464,7 +474,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
       type: "report_cleaned",
       reportId: report.id,
       url: `/track/${report.id}`,
-    }).catch((err) => logger.warn({ err, reportId: report.id }, "Citizen push notification failed"));
+    }, "cleaned").catch((err) => logger.warn({ err, reportId: report.id }, "Citizen cleaned push notification failed"));
   }
 
   // Fire-and-forget status-change notifications
