@@ -25,6 +25,7 @@ import {
   FileWarning,
   X,
   KeyRound,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,6 +168,22 @@ export default function MasterDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] }),
+        queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["panchayat-reports-map"] }),
+      ]);
+      setLastRefreshed(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
   const { data: officersData, isLoading: isLoadingOfficers } = usePanchayatOfficers();
   const { data: stats, isLoading: isLoadingStats } = usePanchayatStats();
   const { data: reportsData } = usePanchayatReports();
@@ -345,6 +362,18 @@ export default function MasterDashboard() {
             </p>
           </div>
 
+          <div className="flex flex-col items-start md:items-end gap-3">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh data"
+              className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span>Updated {format(lastRefreshed, "HH:mm")}</span>
+            </button>
+
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button
@@ -429,6 +458,7 @@ export default function MasterDashboard() {
               </Form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Stats */}

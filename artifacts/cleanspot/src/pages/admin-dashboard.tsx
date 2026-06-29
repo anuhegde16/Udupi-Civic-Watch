@@ -38,6 +38,7 @@ import {
   Building2,
   Pencil,
   FlaskConical,
+  RefreshCw,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -193,6 +194,19 @@ export default function AdminDashboard() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      await queryClient.invalidateQueries();
+      setLastRefreshed(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
   const [paCreateOpen, setPaCreateOpen] = useState(false);
   const [paEditOpen, setPaEditOpen] = useState(false);
   const [editingPa, setEditingPa] = useState<PanchayatAdminItem | null>(null);
@@ -471,6 +485,16 @@ export default function AdminDashboard() {
             </p>
           </div>
 
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh data"
+            className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl shrink-0 self-start"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Updated {format(lastRefreshed, "HH:mm")}</span>
+          </button>
         </div>
       </div>
 

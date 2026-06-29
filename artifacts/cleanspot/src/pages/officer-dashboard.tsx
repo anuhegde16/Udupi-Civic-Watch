@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
@@ -25,6 +26,7 @@ import {
   Wrench,
   LayoutList,
   ArrowUpDown,
+  RefreshCw,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfficerZoneMap } from "@/components/officer-zone-map";
@@ -40,6 +42,22 @@ export default function OfficerDashboard() {
   const [sort, setSort] = useState<SortOption>("newest");
 
   const officerId = user?.officerId || 0;
+  const queryClient = useQueryClient();
+  const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getGetOfficerReportsQueryKey(officerId) }),
+        queryClient.invalidateQueries({ queryKey: getGetOfficerQueryKey(officerId) }),
+      ]);
+      setLastRefreshed(new Date());
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   const { data: allData, isLoading } = useGetOfficerReports(
     officerId,
@@ -167,17 +185,31 @@ export default function OfficerDashboard() {
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-bl-[100px] pointer-events-none" />
-        <p className="text-sm font-medium text-muted-foreground mb-1">
-          {getGreeting(user?.name)}
-        </p>
-        <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
-          My Zone
-        </h1>
-        <p className="text-muted-foreground font-medium">
-          {officerData?.areaName
-            ? `Ward: ${officerData.areaName}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
-            : "Your assigned area"}
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-1">
+              {getGreeting(user?.name)}
+            </p>
+            <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
+              My Zone
+            </h1>
+            <p className="text-muted-foreground font-medium">
+              {officerData?.areaName
+                ? `Ward: ${officerData.areaName}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
+                : "Your assigned area"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh data"
+            className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl shrink-0"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Updated {format(lastRefreshed, "HH:mm")}</span>
+          </button>
+        </div>
 
         {/* Stats strip */}
         {isLoading ? (
