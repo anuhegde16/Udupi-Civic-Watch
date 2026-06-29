@@ -18,6 +18,7 @@ import AdminOfficers from "@/pages/admin-officers";
 import AdminReports from "@/pages/admin-reports";
 import MasterDashboard from "@/pages/master-dashboard";
 import MasterAnalytics from "@/pages/master-analytics";
+import NotificationsPage from "@/pages/notifications";
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,12 @@ function Router() {
         <Route path="/admin/reports">
           <AuthGuard roles={["admin", "control_center"]}>
             <AdminReports />
+          </AuthGuard>
+        </Route>
+
+        <Route path="/notifications">
+          <AuthGuard roles={["officer", "field_officer", "admin", "control_center", "panchayat_admin"]}>
+            <NotificationsPage />
           </AuthGuard>
         </Route>
 

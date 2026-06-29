@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Bell, BellOff, BellRing, Check, X, Loader2, Send } from "lucide-react";
+import { Bell, BellOff, BellRing, Check, X, Loader2, Send, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -17,6 +17,7 @@ import { customFetch, ApiError } from "@workspace/api-client-react";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 interface NotificationItem {
   id: number;
@@ -42,6 +43,13 @@ function timeAgo(dateStr: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function notificationIcon(type: string): string {
+  if (type === "new_report") return "🗑️";
+  if (type === "status_cleaning") return "🧹";
+  if (type === "status_cleaned") return "✅";
+  return "🔔";
 }
 
 
@@ -77,6 +85,8 @@ function PushStatusChip({ permission, isSubscribed, supported }: {
   );
 }
 
+const PREVIEW_LIMIT = 5;
+
 export function NotificationBell() {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
@@ -86,10 +96,10 @@ export function NotificationBell() {
   const alarmStopRef = useRef<(() => void) | null>(null);
   const dataRef = useRef<NotificationsResponse | undefined>(undefined);
   const { permission, isSubscribed, isLoading, supported, subscribe, unsubscribe } = usePushNotifications();
+  const [, navigate] = useLocation();
 
   // 10-second pulsing alarm + optional text-to-speech announcement
   const playAlarm = useCallback((speechText?: string) => {
-    // Stop any currently playing alarm first
     alarmStopRef.current?.();
 
     let ctx: AudioContext | null = null;
@@ -117,12 +127,12 @@ export function NotificationBell() {
         if (stopped) { ctx.close().catch(() => {}); return; }
 
         const t0 = ctx.currentTime;
-        const PULSE_ON = 0.2;   // 200 ms tone
-        const PULSE_OFF = 0.15; // 150 ms silence
+        const PULSE_ON = 0.2;
+        const PULSE_OFF = 0.15;
         const CYCLE = PULSE_ON + PULSE_OFF;
         const TOTAL_SECS = 10;
         const cycles = Math.ceil(TOTAL_SECS / CYCLE);
-        const freqs = [880, 784]; // alternate between two pitches
+        const freqs = [880, 784];
 
         for (let i = 0; i < cycles; i++) {
           const t = t0 + i * CYCLE;
@@ -140,7 +150,6 @@ export function NotificationBell() {
           osc.stop(t + PULSE_ON);
         }
 
-        // Speak the notification body after a brief ring (1.5 s in)
         if (speechText && typeof window !== "undefined" && "speechSynthesis" in window) {
           ttsTimeout = setTimeout(() => {
             if (stopped) return;
@@ -152,7 +161,6 @@ export function NotificationBell() {
           }, 1500);
         }
 
-        // Auto-cleanup after alarm finishes
         autoStopTimeout = setTimeout(stop, (TOTAL_SECS + 2) * 1000);
       } catch {
         // Audio API unavailable or suspended — silent fail
@@ -160,18 +168,14 @@ export function NotificationBell() {
     })();
   }, []);
 
-  // Keep dataRef current so effects that don't depend on data can still read it
   useEffect(() => { dataRef.current = data; });
 
-  // Show tooltip on first appearance for authenticated users
   const [showIntroTooltip, setShowIntroTooltip] = useState(false);
   useEffect(() => {
     if (!isAuthenticated) return;
     if (localStorage.getItem("bell-tooltip-shown") === "1") return;
-    // Small delay so it appears after the page settles
     const timer = setTimeout(() => {
       setShowIntroTooltip(true);
-      // Auto-hide after 5 seconds and mark as shown
       const hideTimer = setTimeout(() => {
         setShowIntroTooltip(false);
         localStorage.setItem("bell-tooltip-shown", "1");
@@ -182,7 +186,6 @@ export function NotificationBell() {
   }, [isAuthenticated]);
 
   const handleBellClick = () => {
-    // Stop alarm when user opens the bell — they've acknowledged the alert
     alarmStopRef.current?.();
     if (showIntroTooltip) {
       setShowIntroTooltip(false);
@@ -201,7 +204,6 @@ export function NotificationBell() {
 
   const unreadCount = data?.unreadCount ?? 0;
 
-  // Play 10-second alarm when unread count increases (polling-based foreground detection)
   useEffect(() => {
     if (unreadCount > prevUnreadRef.current && prevUnreadRef.current !== 0) {
       const latestUnread = dataRef.current?.notifications?.find((n) => !n.read);
@@ -210,7 +212,6 @@ export function NotificationBell() {
     prevUnreadRef.current = unreadCount;
   }, [unreadCount, playAlarm]);
 
-  // Listen for push-received messages from service worker (fired when push arrives while app is open)
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
@@ -260,9 +261,22 @@ export function NotificationBell() {
     },
   });
 
+  const handleNotificationClick = (n: NotificationItem) => {
+    if (!n.read) markReadMutation.mutate(n.id);
+    setOpen(false);
+    if (n.url) navigate(n.url);
+  };
+
+  const handleSeeAll = () => {
+    setOpen(false);
+    navigate("/notifications");
+  };
+
   if (!isAuthenticated) return null;
 
   const notifications = data?.notifications ?? [];
+  const preview = notifications.slice(0, PREVIEW_LIMIT);
+  const hasMore = notifications.length > PREVIEW_LIMIT || (data?.unreadCount ?? 0) > PREVIEW_LIMIT;
 
   const bellButton = (
     <Button
@@ -362,7 +376,7 @@ export function NotificationBell() {
             </div>
           )}
 
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="max-h-[360px] overflow-y-auto">
             {notifications.length === 0 ? (
               <div className="py-10 text-center text-muted-foreground text-sm">
                 <Bell className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
@@ -381,36 +395,61 @@ export function NotificationBell() {
               </div>
             ) : (
               <ul>
-                {notifications.map((n) => (
-                  <li
-                    key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 border-b border-border/30 last:border-0 transition-colors ${
-                      n.read ? "bg-background" : "bg-primary/5"
-                    }`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm leading-snug ${n.read ? "text-foreground/70" : "text-foreground font-semibold"}`}>
-                        {n.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.body}</p>
-                      <p className="text-[10px] text-muted-foreground/60 mt-1">{timeAgo(n.createdAt)}</p>
-                    </div>
-                    {!n.read && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground mt-0.5"
-                        onClick={() => markReadMutation.mutate(n.id)}
-                        title="Mark as read"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
+                {preview.map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-left flex items-start gap-3 px-4 py-3 border-b border-border/30 last:border-0 transition-colors hover:bg-muted/50 active:bg-muted ${
+                        n.read ? "bg-background" : "bg-primary/5"
+                      } ${n.url ? "cursor-pointer" : "cursor-default"}`}
+                    >
+                      <span className="text-base mt-0.5 shrink-0">{notificationIcon(n.type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm leading-snug ${n.read ? "text-foreground/70" : "text-foreground font-semibold"}`}>
+                          {n.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.body}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-muted-foreground/60">{timeAgo(n.createdAt)}</span>
+                          {n.url && (
+                            <span className="text-[10px] text-primary/60 flex items-center gap-0.5">
+                              <ExternalLink className="h-2.5 w-2.5" />
+                              tap to open
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {!n.read && (
+                        <span
+                          className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5"
+                          aria-label="Unread"
+                        />
+                      )}
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
+
+          {notifications.length > 0 && (
+            <div className="border-t border-border/50 px-4 py-2.5">
+              <button
+                type="button"
+                onClick={handleSeeAll}
+                className="w-full text-center text-xs text-primary hover:text-primary/80 font-medium flex items-center justify-center gap-1.5 py-0.5"
+              >
+                <ExternalLink className="h-3 w-3" />
+                See all notifications
+                {hasMore && (
+                  <span className="text-muted-foreground font-normal">
+                    ({unreadCount > 0 ? `${unreadCount} unread` : notifications.length + "+"})
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
         </PopoverContent>
       </Popover>
     </TooltipProvider>

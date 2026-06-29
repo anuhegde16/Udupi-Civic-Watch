@@ -230,7 +230,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       body: ccNotifBody,
       type: "new_report",
       reportId: report.id,
-      url: "/admin/dashboard",
+      url: "/admin/reports",
     }).catch((err) => logger.warn({ err }, "CC new-report notify failed"));
   }
 
@@ -267,7 +267,7 @@ router.post("/reports", async (req, res): Promise<void> => {
         body: officerNotifBody,
         type: "new_report",
         reportId: report.id,
-        url: "/officer/dashboard",
+        url: `/officer/report/${report.id}`,
       }),
       notifyAndPush(panchayatAdminUserIds, {
         title: "New Waste Report",
@@ -525,7 +525,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
-            url: "/admin/dashboard",
+            url: "/admin/reports",
           }) : Promise.resolve(),
         ]);
 
@@ -540,7 +540,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
             body: pushBody,
             type: `status_${newStatus}`,
             reportId: report.id,
-            url: "/officer/dashboard",
+            url: `/officer/report/${report.id}`,
           }).catch((err) => logger.warn({ err }, "Officer self-notify push failed"));
         }
 
