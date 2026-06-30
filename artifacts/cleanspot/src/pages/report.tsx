@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus } from "lucide-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus, Lock } from "lucide-react";
 import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -69,6 +69,10 @@ export default function Report() {
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [reporterEmail, setReporterEmail] = useState("");
 
+  type PermState = "unknown" | "granted" | "denied" | "prompt";
+  const [cameraPermState, setCameraPermState] = useState<PermState>("unknown");
+  const [locationPermState, setLocationPermState] = useState<PermState>("unknown");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createReport = useCreateReport();
@@ -95,6 +99,17 @@ export default function Report() {
   }, [location?.lat, location?.lng]);
 
   useEffect(() => {
+    // Check & watch camera + location permission states
+    if ("permissions" in navigator) {
+      navigator.permissions.query({ name: "camera" as PermissionName }).then((s) => {
+        setCameraPermState(s.state as PermState);
+        s.addEventListener("change", () => setCameraPermState(s.state as PermState));
+      }).catch(() => {});
+      navigator.permissions.query({ name: "geolocation" }).then((s) => {
+        setLocationPermState(s.state as PermState);
+        s.addEventListener("change", () => setLocationPermState(s.state as PermState));
+      }).catch(() => {});
+    }
     getLocation();
   }, []);
 
@@ -135,10 +150,11 @@ export default function Report() {
           setLocationMode("manual");
           toast({ title: "GPS unavailable — using manual placement", description: "Test mode active: drag the pin to set the report location." });
         } else {
-          const msg = err.code === 1
-            ? "Location permission denied. Please allow location access and tap Refresh to try again."
-            : "Could not get your GPS location. Please ensure location permission is granted and try again.";
-          toast({ title: "Location unavailable", description: msg, variant: "destructive" });
+          if (err.code === 1) {
+            setLocationPermState("denied");
+          } else {
+            toast({ title: "Location unavailable", description: "Could not get your GPS location. Please ensure location permission is granted and try again.", variant: "destructive" });
+          }
         }
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
@@ -182,6 +198,21 @@ export default function Report() {
 
   const removePhoto = (id: string) => {
     setPhotos(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleEnableCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      fileInputRef.current?.click();
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(t => t.stop());
+      setCameraPermState("granted");
+      fileInputRef.current?.click();
+    } catch {
+      setCameraPermState("denied");
+    }
   };
 
   const doSubmit = (email?: string) => {
@@ -299,8 +330,33 @@ export default function Report() {
             onChange={handleFileChange}
           />
 
-          {/* Empty state */}
-          {photos.length === 0 && (
+          {/* Empty state — permission denied */}
+          {photos.length === 0 && cameraPermState === "denied" && (
+            <div className="w-full border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 rounded-2xl p-5 flex flex-col items-center gap-3 text-center animate-in fade-in duration-200">
+              <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-800 dark:text-amber-300">Camera access blocked</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+                  Tap the button below to request camera access from your browser
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleEnableCamera}
+                className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold h-10 px-6 shadow-sm"
+              >
+                <Camera className="w-4 h-4 mr-2" /> Enable Camera
+              </Button>
+              <p className="text-[11px] text-amber-600/80 dark:text-amber-500">
+                If still blocked, tap the lock icon in your browser's address bar and allow Camera access
+              </p>
+            </div>
+          )}
+
+          {/* Empty state — normal */}
+          {photos.length === 0 && cameraPermState !== "denied" && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -406,6 +462,29 @@ export default function Report() {
             <div className="flex items-center gap-2 text-sm font-medium text-amber-700">
               <Hand className="w-4 h-4 shrink-0" />
               <span>Drag the pin or tap the map to set the exact waste location</span>
+            </div>
+          )}
+
+          {/* Location permission blocked card */}
+          {locationPermState === "denied" && !location && !isLocating && (
+            <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
+              <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Location access blocked</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  GPS is required to submit a report. Tap "Enable Location" to request access, or check the lock icon in your browser's address bar.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={getLocation}
+                disabled={isLocating}
+                className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-bold rounded-lg text-xs h-9 px-3 whitespace-nowrap"
+              >
+                {isLocating ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Navigation className="w-3 h-3 mr-1" />Enable Location</>}
+              </Button>
             </div>
           )}
 
