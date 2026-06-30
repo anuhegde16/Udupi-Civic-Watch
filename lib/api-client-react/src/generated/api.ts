@@ -25,6 +25,7 @@ import type {
   CreateOfficerBody,
   CreateReportBody,
   DeletePushSubscriptionBody,
+  DuplicateReportResponse,
   ErrorResponse,
   GetBulkArchivePreviewParams,
   GetOfficerReportsParams,
@@ -481,7 +482,7 @@ export const createReport = async (
 };
 
 export const getCreateReportMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<DuplicateReportResponse | ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -522,13 +523,15 @@ export type CreateReportMutationResult = NonNullable<
   Awaited<ReturnType<typeof createReport>>
 >;
 export type CreateReportMutationBody = BodyType<CreateReportBody>;
-export type CreateReportMutationError = ErrorType<ErrorResponse>;
+export type CreateReportMutationError = ErrorType<
+  DuplicateReportResponse | ErrorResponse
+>;
 
 /**
  * @summary Submit a new waste report (citizen)
  */
 export const useCreateReport = <
-  TError = ErrorType<ErrorResponse>,
+  TError = ErrorType<DuplicateReportResponse | ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

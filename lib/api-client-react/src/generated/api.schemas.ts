@@ -140,6 +140,15 @@ export interface ReportsSummary {
   last7d: number;
 }
 
+export interface DuplicateReportResponse {
+  error: string;
+  message: string;
+  /** ID of the nearby report that triggered the duplicate check */
+  existingReportId: number;
+  /** When the existing nearby report was submitted */
+  existingReportCreatedAt: string;
+}
+
 export interface CreateReportBody {
   /** Legacy single image URL (use imageUrls instead) */
   imageUrl?: string | null;
@@ -150,6 +159,8 @@ export interface CreateReportBody {
   address?: string | null;
   description?: string | null;
   reporterEmail?: string | null;
+  /** If true, bypass the duplicate-proximity check and always create the report */
+  force?: boolean | null;
 }
 
 export type UpdateReportBodyStatus =

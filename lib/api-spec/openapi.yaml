@@ -137,7 +137,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/DuplicateReportResponse"
         "429":
           description: Rate limit exceeded
           content:
@@ -879,6 +879,22 @@ components:
           type: integer
       required: [total, reported, cleaning, cleaned, last24h, last7d]
 
+    DuplicateReportResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        existingReportId:
+          type: integer
+          description: ID of the nearby report that triggered the duplicate check
+        existingReportCreatedAt:
+          type: string
+          format: date-time
+          description: When the existing nearby report was submitted
+      required: [error, message, existingReportId, existingReportCreatedAt]
+
     CreateReportBody:
       type: object
       properties:
@@ -906,6 +922,10 @@ components:
           type: string
           format: email
           nullable: true
+        force:
+          type: boolean
+          nullable: true
+          description: If true, bypass the duplicate-proximity check and always create the report
       required: [latitude, longitude]
 
     UpdateReportBody:

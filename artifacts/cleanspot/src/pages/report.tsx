@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus, Lock } from "lucide-react";
-import { useCreateReport, useUploadImage, customFetch } from "@workspace/api-client-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus, Lock, MapPinned } from "lucide-react";
+import { useCreateReport, useUploadImage, customFetch, ApiError } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
@@ -68,6 +68,11 @@ export default function Report() {
 
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [reporterEmail, setReporterEmail] = useState("");
+
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateReportId, setDuplicateReportId] = useState<number | null>(null);
+  const [duplicateReportCreatedAt, setDuplicateReportCreatedAt] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | undefined>(undefined);
 
   type PermState = "unknown" | "granted" | "denied" | "prompt";
   const [cameraPermState, setCameraPermState] = useState<PermState>("unknown");
@@ -236,7 +241,7 @@ export default function Report() {
     }
   };
 
-  const doSubmit = (email?: string) => {
+  const doSubmit = (email?: string, force?: boolean) => {
     setEmailDialogOpen(false);
     if (!location) return;
     const imageUrls = photos.filter(p => p.url).map(p => ({ url: p.url, uploadedAt: p.uploadedAt }));
@@ -248,6 +253,7 @@ export default function Report() {
           imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
           description: description || undefined,
           reporterEmail: email || undefined,
+          force: force ?? false,
         },
       },
       {
@@ -257,7 +263,17 @@ export default function Report() {
           setStep("success");
           saveReport(data.id);
         },
-        onError: (err) => toast({ title: "Failed to submit", description: err.message, variant: "destructive" }),
+        onError: (err) => {
+          if (err instanceof ApiError && err.status === 409) {
+            const data = err.data as { existingReportId?: number; existingReportCreatedAt?: string };
+            setDuplicateReportId(data?.existingReportId ?? null);
+            setDuplicateReportCreatedAt(data?.existingReportCreatedAt ?? null);
+            setPendingEmail(email);
+            setDuplicateDialogOpen(true);
+            return;
+          }
+          toast({ title: "Failed to submit", description: err.message, variant: "destructive" });
+        },
       }
     );
   };
@@ -646,6 +662,60 @@ export default function Report() {
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
               Your email is used only for updates on this complaint and is not shared with anyone.
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate report warning dialog */}
+      <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden gap-0">
+          <div className="bg-amber-50 border-b border-amber-100 px-6 pt-6 pb-5">
+            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <MapPinned className="w-6 h-6 text-amber-600" />
+            </div>
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="text-xl font-black">Waste already reported nearby</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground font-medium leading-relaxed">
+                Someone already reported waste within 20 metres of this spot
+                {duplicateReportCreatedAt
+                  ? ` on ${format(new Date(duplicateReportCreatedAt), "d MMM, h:mm a")}.`
+                  : "."}
+                {" "}Would you like to track that report, or submit a new one anyway?
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="px-6 py-5 flex flex-col gap-3">
+            {duplicateReportId != null && (
+              <Button
+                className="w-full h-12 text-base font-bold rounded-xl"
+                onClick={() => {
+                  setDuplicateDialogOpen(false);
+                  window.location.href = `/track/${duplicateReportId}`;
+                }}
+              >
+                Track that report #{duplicateReportId}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="w-full h-12 text-base font-semibold rounded-xl border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={() => {
+                setDuplicateDialogOpen(false);
+                doSubmit(pendingEmail, true);
+              }}
+              disabled={createReport.isPending}
+            >
+              {createReport.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Different pile — submit anyway
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full h-10 text-sm font-medium rounded-xl text-muted-foreground hover:text-foreground"
+              onClick={() => setDuplicateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

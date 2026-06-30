@@ -25,7 +25,7 @@ function sanitizeReport<T extends { reporterEmail?: string | null; reporterIp?: 
   return safe;
 }
 
-const DUPLICATE_RADIUS_DEG = 0.0004;
+const DUPLICATE_RADIUS_DEG = 0.00018; // ~20m at Udupi's latitude (13°N)
 const RATE_LIMIT_HOURS = 1;
 const RATE_LIMIT_MAX = 5;
 
@@ -136,24 +136,32 @@ router.post("/reports", async (req, res): Promise<void> => {
   const { latitude, longitude, imageUrl, imageUrls: rawImageUrls, address, description, reporterEmail } = parsed.data;
   const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "";
 
-  // Duplicate check within ~50m radius (active reports only)
-  const existing = await db
-    .select()
-    .from(reportsTable)
-    .where(
-      and(
-        isNull(reportsTable.deletedAt),
-        sql`${reportsTable.latitude} BETWEEN ${latitude - DUPLICATE_RADIUS_DEG} AND ${latitude + DUPLICATE_RADIUS_DEG}`,
-        sql`${reportsTable.longitude} BETWEEN ${longitude - DUPLICATE_RADIUS_DEG} AND ${longitude + DUPLICATE_RADIUS_DEG}`,
-        sql`${reportsTable.status} != 'cleaned'`,
-        sql`${reportsTable.createdAt} > NOW() - INTERVAL '24 hours'`
+  // Duplicate check within ~20m radius (active reports only), unless force=true
+  const { force } = parsed.data;
+  if (!force) {
+    const existing = await db
+      .select({ id: reportsTable.id, createdAt: reportsTable.createdAt })
+      .from(reportsTable)
+      .where(
+        and(
+          isNull(reportsTable.deletedAt),
+          sql`${reportsTable.latitude} BETWEEN ${latitude - DUPLICATE_RADIUS_DEG} AND ${latitude + DUPLICATE_RADIUS_DEG}`,
+          sql`${reportsTable.longitude} BETWEEN ${longitude - DUPLICATE_RADIUS_DEG} AND ${longitude + DUPLICATE_RADIUS_DEG}`,
+          sql`${reportsTable.status} != 'cleaned'`,
+          sql`${reportsTable.createdAt} > NOW() - INTERVAL '24 hours'`
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existing.length > 0) {
-    res.status(409).json({ error: "Duplicate report", message: "A report already exists nearby. Your report may have already been submitted." });
-    return;
+    if (existing.length > 0) {
+      res.status(409).json({
+        error: "Duplicate report",
+        message: "A report already exists nearby.",
+        existingReportId: existing[0].id,
+        existingReportCreatedAt: existing[0].createdAt,
+      });
+      return;
+    }
   }
 
   // Rate limit: max 5 reports per IP per hour

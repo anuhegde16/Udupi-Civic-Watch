@@ -172,6 +172,12 @@ export const CreateReportBody = zod.object({
   address: zod.string().nullish(),
   description: zod.string().nullish(),
   reporterEmail: zod.string().email().nullish(),
+  force: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "If true, bypass the duplicate-proximity check and always create the report",
+    ),
 });
 
 /**
