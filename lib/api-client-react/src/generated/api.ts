@@ -19,10 +19,14 @@ import type {
 import type {
   AdminListReportsParams,
   AnonymousPushSubscriptionBody,
+  BulkArchiveBody,
+  BulkArchivePreviewResponse,
+  BulkArchiveResponse,
   CreateOfficerBody,
   CreateReportBody,
   DeletePushSubscriptionBody,
   ErrorResponse,
+  GetBulkArchivePreviewParams,
   GetOfficerReportsParams,
   HealthStatus,
   ListNotificationsParams,
@@ -32,6 +36,7 @@ import type {
   NotificationList,
   Officer,
   OfficerList,
+  PurgeArchivedResponse,
   PushSubscriptionBody,
   ReassignReportBody,
   Report,
@@ -1501,6 +1506,363 @@ export function useAdminListReports<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Preview how many active reports would be archived by an age cutoff
+ */
+export const getGetBulkArchivePreviewUrl = (
+  params: GetBulkArchivePreviewParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/reports/bulk-archive-preview?${stringifiedParams}`
+    : `/api/admin/reports/bulk-archive-preview`;
+};
+
+export const getBulkArchivePreview = async (
+  params: GetBulkArchivePreviewParams,
+  options?: RequestInit,
+): Promise<BulkArchivePreviewResponse> => {
+  return customFetch<BulkArchivePreviewResponse>(
+    getGetBulkArchivePreviewUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetBulkArchivePreviewQueryKey = (
+  params?: GetBulkArchivePreviewParams,
+) => {
+  return [
+    `/api/admin/reports/bulk-archive-preview`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetBulkArchivePreviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBulkArchivePreview>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetBulkArchivePreviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBulkArchivePreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBulkArchivePreviewQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBulkArchivePreview>>
+  > = ({ signal }) =>
+    getBulkArchivePreview(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBulkArchivePreview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBulkArchivePreviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBulkArchivePreview>>
+>;
+export type GetBulkArchivePreviewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Preview how many active reports would be archived by an age cutoff
+ */
+
+export function useGetBulkArchivePreview<
+  TData = Awaited<ReturnType<typeof getBulkArchivePreview>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetBulkArchivePreviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBulkArchivePreview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBulkArchivePreviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Archive all active reports older than N days (soft delete, any status)
+ */
+export const getBulkArchiveReportsUrl = () => {
+  return `/api/admin/reports/bulk-archive`;
+};
+
+export const bulkArchiveReports = async (
+  bulkArchiveBody: BulkArchiveBody,
+  options?: RequestInit,
+): Promise<BulkArchiveResponse> => {
+  return customFetch<BulkArchiveResponse>(getBulkArchiveReportsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bulkArchiveBody),
+  });
+};
+
+export const getBulkArchiveReportsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkArchiveReports>>,
+    TError,
+    { data: BodyType<BulkArchiveBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof bulkArchiveReports>>,
+  TError,
+  { data: BodyType<BulkArchiveBody> },
+  TContext
+> => {
+  const mutationKey = ["bulkArchiveReports"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof bulkArchiveReports>>,
+    { data: BodyType<BulkArchiveBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return bulkArchiveReports(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BulkArchiveReportsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof bulkArchiveReports>>
+>;
+export type BulkArchiveReportsMutationBody = BodyType<BulkArchiveBody>;
+export type BulkArchiveReportsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive all active reports older than N days (soft delete, any status)
+ */
+export const useBulkArchiveReports = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof bulkArchiveReports>>,
+    TError,
+    { data: BodyType<BulkArchiveBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof bulkArchiveReports>>,
+  TError,
+  { data: BodyType<BulkArchiveBody> },
+  TContext
+> => {
+  return useMutation(getBulkArchiveReportsMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete all archived reports (hard delete, irreversible)
+ */
+export const getPurgeAllArchivedReportsUrl = () => {
+  return `/api/admin/reports/archived/purge-all`;
+};
+
+export const purgeAllArchivedReports = async (
+  options?: RequestInit,
+): Promise<PurgeArchivedResponse> => {
+  return customFetch<PurgeArchivedResponse>(getPurgeAllArchivedReportsUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getPurgeAllArchivedReportsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof purgeAllArchivedReports>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof purgeAllArchivedReports>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["purgeAllArchivedReports"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof purgeAllArchivedReports>>,
+    void
+  > = () => {
+    return purgeAllArchivedReports(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PurgeAllArchivedReportsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof purgeAllArchivedReports>>
+>;
+
+export type PurgeAllArchivedReportsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Permanently delete all archived reports (hard delete, irreversible)
+ */
+export const usePurgeAllArchivedReports = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof purgeAllArchivedReports>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof purgeAllArchivedReports>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getPurgeAllArchivedReportsMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete a single archived report (hard delete, irreversible)
+ */
+export const getPermanentDeleteReportUrl = (id: number) => {
+  return `/api/admin/reports/${id}/permanent`;
+};
+
+export const permanentDeleteReport = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getPermanentDeleteReportUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getPermanentDeleteReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentDeleteReport>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof permanentDeleteReport>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["permanentDeleteReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof permanentDeleteReport>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return permanentDeleteReport(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PermanentDeleteReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof permanentDeleteReport>>
+>;
+
+export type PermanentDeleteReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Permanently delete a single archived report (hard delete, irreversible)
+ */
+export const usePermanentDeleteReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentDeleteReport>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof permanentDeleteReport>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getPermanentDeleteReportMutationOptions(options));
+};
 
 /**
  * @summary Reassign report to a different officer

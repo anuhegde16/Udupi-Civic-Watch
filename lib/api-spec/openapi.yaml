@@ -372,6 +372,11 @@ paths:
           schema:
             type: integer
             default: 0
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+          description: If true, return archived (soft-deleted) reports instead of active ones
       responses:
         "200":
           description: All reports
@@ -379,6 +384,88 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReportList"
+
+  /admin/reports/bulk-archive-preview:
+    get:
+      operationId: getBulkArchivePreview
+      tags: [admin]
+      summary: Preview how many active reports would be archived by an age cutoff
+      parameters:
+        - name: olderThanDays
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Count of reports that would be archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkArchivePreviewResponse"
+
+  /admin/reports/bulk-archive:
+    post:
+      operationId: bulkArchiveReports
+      tags: [admin]
+      summary: Archive all active reports older than N days (soft delete, any status)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkArchiveBody"
+      responses:
+        "200":
+          description: Number of reports archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkArchiveResponse"
+
+  /admin/reports/archived/purge-all:
+    delete:
+      operationId: purgeAllArchivedReports
+      tags: [admin]
+      summary: Permanently delete all archived reports (hard delete, irreversible)
+      responses:
+        "200":
+          description: Number of reports permanently deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurgeArchivedResponse"
+
+  /admin/reports/{id}/permanent:
+    delete:
+      operationId: permanentDeleteReport
+      tags: [admin]
+      summary: Permanently delete a single archived report (hard delete, irreversible)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Report permanently deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Report is not archived yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /admin/reports/{id}/reassign:
     post:
@@ -729,6 +816,11 @@ components:
         updatedAt:
           type: string
           format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the report is archived (soft-deleted). Null means the report is active.
       required: [id, latitude, longitude, status, createdAt, updatedAt]
 
     ReportList:
@@ -1095,3 +1187,35 @@ components:
           type: string
           description: ISO-8601 timestamp of when this image was uploaded
       required: [url, uploadedAt]
+
+    BulkArchiveBody:
+      type: object
+      properties:
+        olderThanDays:
+          type: integer
+          minimum: 1
+          description: Archive all active reports older than this many days (any status)
+      required: [olderThanDays]
+
+    BulkArchiveResponse:
+      type: object
+      properties:
+        archivedCount:
+          type: integer
+      required: [archivedCount]
+
+    BulkArchivePreviewResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          description: Number of active reports that would be archived
+      required: [count]
+
+    PurgeArchivedResponse:
+      type: object
+      properties:
+        deletedCount:
+          type: integer
+          description: Number of archived reports permanently deleted
+      required: [deletedCount]

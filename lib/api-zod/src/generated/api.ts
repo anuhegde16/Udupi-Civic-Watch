@@ -137,6 +137,12 @@ export const ListReportsResponse = zod.object({
         .nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Set when the report is archived (soft-deleted). Null means the report is active.",
+        ),
     }),
   ),
   total: zod.number(),
@@ -231,6 +237,12 @@ export const GetReportResponse = zod.object({
     .nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Set when the report is archived (soft-deleted). Null means the report is active.",
+    ),
 });
 
 /**
@@ -315,6 +327,12 @@ export const UpdateReportResponse = zod.object({
     .nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Set when the report is archived (soft-deleted). Null means the report is active.",
+    ),
 });
 
 /**
@@ -543,6 +561,12 @@ export const GetOfficerReportsResponse = zod.object({
         .nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Set when the report is archived (soft-deleted). Null means the report is active.",
+        ),
     }),
   ),
   total: zod.number(),
@@ -559,6 +583,12 @@ export const AdminListReportsQueryParams = zod.object({
   officerId: zod.coerce.number().optional(),
   limit: zod.coerce.number().default(adminListReportsQueryLimitDefault),
   offset: zod.coerce.number().default(adminListReportsQueryOffsetDefault),
+  archived: zod.coerce
+    .boolean()
+    .optional()
+    .describe(
+      "If true, return archived (soft-deleted) reports instead of active ones",
+    ),
 });
 
 export const AdminListReportsResponse = zod.object({
@@ -619,9 +649,66 @@ export const AdminListReportsResponse = zod.object({
         .nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
+      deletedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe(
+          "Set when the report is archived (soft-deleted). Null means the report is active.",
+        ),
     }),
   ),
   total: zod.number(),
+});
+
+/**
+ * @summary Preview how many active reports would be archived by an age cutoff
+ */
+export const GetBulkArchivePreviewQueryParams = zod.object({
+  olderThanDays: zod.coerce.number(),
+});
+
+export const GetBulkArchivePreviewResponse = zod.object({
+  count: zod
+    .number()
+    .describe("Number of active reports that would be archived"),
+});
+
+/**
+ * @summary Archive all active reports older than N days (soft delete, any status)
+ */
+
+export const BulkArchiveReportsBody = zod.object({
+  olderThanDays: zod
+    .number()
+    .min(1)
+    .describe(
+      "Archive all active reports older than this many days (any status)",
+    ),
+});
+
+export const BulkArchiveReportsResponse = zod.object({
+  archivedCount: zod.number(),
+});
+
+/**
+ * @summary Permanently delete all archived reports (hard delete, irreversible)
+ */
+export const PurgeAllArchivedReportsResponse = zod.object({
+  deletedCount: zod
+    .number()
+    .describe("Number of archived reports permanently deleted"),
+});
+
+/**
+ * @summary Permanently delete a single archived report (hard delete, irreversible)
+ */
+export const PermanentDeleteReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PermanentDeleteReportResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
 });
 
 /**
@@ -691,6 +778,12 @@ export const ReassignReportResponse = zod.object({
     .nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
+  deletedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Set when the report is archived (soft-deleted). Null means the report is active.",
+    ),
 });
 
 /**

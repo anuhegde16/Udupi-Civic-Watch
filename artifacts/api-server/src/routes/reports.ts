@@ -34,12 +34,12 @@ router.get("/reports/stats/summary", async (req, res): Promise<void> => {
   const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable);
-  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "reported"));
-  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaning"));
-  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(eq(reportsTable.status, "cleaned"));
-  const [last24hCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(gte(reportsTable.createdAt, last24h));
-  const [last7dCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(gte(reportsTable.createdAt, last7d));
+  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(isNull(reportsTable.deletedAt));
+  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "reported")));
+  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "cleaning")));
+  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "cleaned")));
+  const [last24hCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), gte(reportsTable.createdAt, last24h)));
+  const [last7dCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), gte(reportsTable.createdAt, last7d)));
 
   res.json({
     total: total.count,
@@ -64,7 +64,7 @@ router.get("/reports/public/map", async (req, res): Promise<void> => {
       imageUrl: reportsTable.imageUrl,
     })
     .from(reportsTable)
-    .where(sql`${reportsTable.status} IN ('reported', 'cleaning', 'cleaned')`)
+    .where(and(isNull(reportsTable.deletedAt), sql`${reportsTable.status} IN ('reported', 'cleaning', 'cleaned')`))
     .orderBy(sql`${reportsTable.createdAt} DESC`);
 
   res.json(spots);
@@ -80,7 +80,7 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
   const isPanchayatAdmin = user.role === "panchayat_admin";
 
-  let conditions: any[] = [];
+  let conditions: any[] = [isNull(reportsTable.deletedAt)];
 
   if (isFieldOfficer && user.officerId) {
     conditions.push(eq(reportsTable.assignedOfficerId, user.officerId));
@@ -111,12 +111,12 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
     })
     .from(reportsTable)
     .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(sql`${reportsTable.createdAt} DESC`)
     .limit(limit)
     .offset(offset);
 
-  const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(conditions.length > 0 ? and(...conditions) : undefined);
+  const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(...conditions));
 
   const formatted = reports.map(({ report, officer }) => ({
     ...sanitizeReport(report),
@@ -136,12 +136,13 @@ router.post("/reports", async (req, res): Promise<void> => {
   const { latitude, longitude, imageUrl, imageUrls: rawImageUrls, address, description, reporterEmail } = parsed.data;
   const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "";
 
-  // Duplicate check within ~50m radius
+  // Duplicate check within ~50m radius (active reports only)
   const existing = await db
     .select()
     .from(reportsTable)
     .where(
       and(
+        isNull(reportsTable.deletedAt),
         sql`${reportsTable.latitude} BETWEEN ${latitude - DUPLICATE_RADIUS_DEG} AND ${latitude + DUPLICATE_RADIUS_DEG}`,
         sql`${reportsTable.longitude} BETWEEN ${longitude - DUPLICATE_RADIUS_DEG} AND ${longitude + DUPLICATE_RADIUS_DEG}`,
         sql`${reportsTable.status} != 'cleaned'`,

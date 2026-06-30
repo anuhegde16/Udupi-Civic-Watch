@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
+import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
 import {
@@ -43,16 +43,22 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const officerId = queryParsed.success ? queryParsed.data.officerId : undefined;
   const limit = queryParsed.success ? (queryParsed.data.limit ?? 100) : 100;
   const offset = queryParsed.success ? (queryParsed.data.offset ?? 0) : 0;
+  const archived = req.query.archived === "true";
 
   let conditions: any[] = [];
-  if (status) conditions.push(eq(reportsTable.status, status));
-  if (officerId) conditions.push(eq(reportsTable.assignedOfficerId, officerId));
+  if (archived) {
+    conditions.push(isNotNull(reportsTable.deletedAt));
+  } else {
+    conditions.push(isNull(reportsTable.deletedAt));
+    if (status) conditions.push(eq(reportsTable.status, status));
+    if (officerId) conditions.push(eq(reportsTable.assignedOfficerId, officerId));
+  }
 
   const reports = await db
     .select({ report: reportsTable, officer: officersTable })
     .from(reportsTable)
     .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(sql`${reportsTable.createdAt} DESC`)
     .limit(limit)
     .offset(offset);
@@ -60,7 +66,7 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const [countRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(reportsTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(and(...conditions));
 
   const formatted = reports.map(({ report, officer }) => {
     const { reporterIp: _ri, ...safeReport } = report;
@@ -71,6 +77,42 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   });
 
   res.json({ reports: formatted, total: countRow.count });
+});
+
+router.get("/admin/reports/bulk-archive-preview", requireControlCenter, async (req, res): Promise<void> => {
+  const olderThanDays = parseInt(req.query.olderThanDays as string, 10);
+  if (isNaN(olderThanDays) || olderThanDays < 1) {
+    res.status(400).json({ error: "olderThanDays must be a positive integer" });
+    return;
+  }
+
+  const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reportsTable)
+    .where(and(isNull(reportsTable.deletedAt), lt(reportsTable.createdAt, cutoff)));
+
+  res.json({ count: row.count });
+});
+
+router.post("/admin/reports/bulk-archive", requireControlCenter, async (req, res): Promise<void> => {
+  const parsed = z.object({ olderThanDays: z.number().int().positive() }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "olderThanDays must be a positive integer" });
+    return;
+  }
+
+  const cutoff = new Date(Date.now() - parsed.data.olderThanDays * 24 * 60 * 60 * 1000);
+  const now = new Date();
+
+  const archived = await db
+    .update(reportsTable)
+    .set({ deletedAt: now })
+    .where(and(isNull(reportsTable.deletedAt), lt(reportsTable.createdAt, cutoff)))
+    .returning({ id: reportsTable.id });
+
+  logger.info({ archivedCount: archived.length, olderThanDays: parsed.data.olderThanDays }, "Bulk archive completed by control center");
+  res.json({ archivedCount: archived.length });
 });
 
 router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promise<void> => {
@@ -115,7 +157,17 @@ router.post("/admin/reports/:id/reassign", requireAdmin, async (req, res): Promi
   });
 });
 
-router.delete("/admin/reports/:id", requireAdmin, async (req, res): Promise<void> => {
+router.delete("/admin/reports/archived/purge-all", requireControlCenter, async (req, res): Promise<void> => {
+  const purged = await db
+    .delete(reportsTable)
+    .where(isNotNull(reportsTable.deletedAt))
+    .returning({ id: reportsTable.id });
+
+  logger.info({ deletedCount: purged.length }, "Purged all archived reports by control center");
+  res.json({ deletedCount: purged.length });
+});
+
+router.delete("/admin/reports/:id", requireControlCenter, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -123,17 +175,47 @@ router.delete("/admin/reports/:id", requireAdmin, async (req, res): Promise<void
     return;
   }
 
-  const [deleted] = await db
-    .delete(reportsTable)
-    .where(eq(reportsTable.id, id))
+  const [archived] = await db
+    .update(reportsTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(reportsTable.id, id), isNull(reportsTable.deletedAt)))
     .returning();
 
-  if (!deleted) {
+  if (!archived) {
+    res.status(404).json({ error: "Report not found or already archived" });
+    return;
+  }
+
+  logger.info({ reportId: id }, "Report archived (soft-deleted) by control center");
+  res.json({ success: true, id });
+});
+
+router.delete("/admin/reports/:id/permanent", requireControlCenter, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [existing] = await db
+    .select({ id: reportsTable.id, deletedAt: reportsTable.deletedAt })
+    .from(reportsTable)
+    .where(eq(reportsTable.id, id))
+    .limit(1);
+
+  if (!existing) {
     res.status(404).json({ error: "Report not found" });
     return;
   }
 
-  logger.info({ reportId: id }, "Report deleted by admin");
+  if (!existing.deletedAt) {
+    res.status(400).json({ error: "Report must be archived before it can be permanently deleted" });
+    return;
+  }
+
+  await db.delete(reportsTable).where(eq(reportsTable.id, id));
+  logger.info({ reportId: id }, "Report permanently deleted by control center");
   res.json({ success: true, id });
 });
 

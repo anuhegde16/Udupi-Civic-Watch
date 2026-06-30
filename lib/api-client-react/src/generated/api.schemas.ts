@@ -102,6 +102,8 @@ export interface Report {
   assignedOfficer?: OfficerBasic | null;
   createdAt: string;
   updatedAt: string;
+  /** Set when the report is archived (soft-deleted). Null means the report is active. */
+  deletedAt?: string | null;
 }
 
 export interface ReportList {
@@ -285,6 +287,28 @@ export interface UploadImageResponse {
   uploadedAt: string;
 }
 
+export interface BulkArchiveBody {
+  /**
+   * Archive all active reports older than this many days (any status)
+   * @minimum 1
+   */
+  olderThanDays: number;
+}
+
+export interface BulkArchiveResponse {
+  archivedCount: number;
+}
+
+export interface BulkArchivePreviewResponse {
+  /** Number of active reports that would be archived */
+  count: number;
+}
+
+export interface PurgeArchivedResponse {
+  /** Number of archived reports permanently deleted */
+  deletedCount: number;
+}
+
 export type ListReportsParams = {
   status?: ListReportsStatus;
   limit?: number;
@@ -326,6 +350,10 @@ export type AdminListReportsParams = {
   officerId?: number;
   limit?: number;
   offset?: number;
+  /**
+   * If true, return archived (soft-deleted) reports instead of active ones
+   */
+  archived?: boolean;
 };
 
 export type AdminListReportsStatus =
@@ -336,6 +364,10 @@ export const AdminListReportsStatus = {
   cleaning: "cleaning",
   cleaned: "cleaned",
 } as const;
+
+export type GetBulkArchivePreviewParams = {
+  olderThanDays: number;
+};
 
 export type DeletePushSubscriptionBody = {
   endpoint: string;
