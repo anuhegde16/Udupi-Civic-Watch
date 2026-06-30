@@ -1,10 +1,12 @@
-import { useRoute } from "wouter";
-import { useTrackReport, getTrackReportQueryKey } from "@workspace/api-client-react";
-import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin } from "lucide-react";
+import { useRoute, useLocation } from "wouter";
+import { useTrackReport, getTrackReportQueryKey, ApiError } from "@workspace/api-client-react";
+import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin, Archive } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 
 export default function Track() {
   const [, params] = useRoute("/track/:id");
+  const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
   
   const { data: report, isLoading, error } = useTrackReport(id, { 
@@ -32,6 +34,30 @@ export default function Track() {
       <div className="max-w-md mx-auto w-full pt-20 flex flex-col items-center justify-center animate-in fade-in duration-500">
         <Loader2 className="w-10 h-10 animate-spin text-primary" />
         <p className="mt-4 font-bold text-foreground">Fetching report status...</p>
+      </div>
+    );
+  }
+
+  if (error instanceof ApiError && error.status === 410) {
+    return (
+      <div className="max-w-md mx-auto w-full pt-12 flex flex-col items-center text-center px-4 animate-in fade-in duration-500">
+        <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+          <Archive className="w-10 h-10 text-amber-600" />
+        </div>
+        <h2 className="text-2xl font-black text-foreground mb-3">This report has been archived</h2>
+        <p className="text-muted-foreground font-medium leading-relaxed mb-6">
+          Older reports are automatically archived over time. If you've already reported this issue and it's still unresolved, please write to us at{" "}
+          <a
+            href="mailto:info@udupicivicwatch.in"
+            className="text-primary underline underline-offset-2 font-semibold"
+          >
+            info@udupicivicwatch.in
+          </a>{" "}
+          and we'll follow up.
+        </p>
+        <Button onClick={() => setLocation("/report")} className="rounded-full px-6">
+          Report Again
+        </Button>
       </div>
     );
   }

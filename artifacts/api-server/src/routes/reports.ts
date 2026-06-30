@@ -319,6 +319,12 @@ router.get("/reports/:id/track", async (req, res): Promise<void> => {
   }
 
   const { report, officer } = row;
+
+  if (report.deletedAt) {
+    res.status(410).json({ error: "archived", message: "This report has been archived." });
+    return;
+  }
+
   res.json({
     id: report.id,
     status: report.status,

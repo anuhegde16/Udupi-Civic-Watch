@@ -32,11 +32,11 @@ router.get("/panchayat/officers", requirePanchayatAdmin, async (req, res): Promi
       const [total] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(eq(reportsTable.assignedOfficerId, officer.id));
+        .where(and(eq(reportsTable.assignedOfficerId, officer.id), isNull(reportsTable.deletedAt)));
       const [pending] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, officer.id), sql`${reportsTable.status} != 'cleaned'`));
+        .where(and(eq(reportsTable.assignedOfficerId, officer.id), isNull(reportsTable.deletedAt), sql`${reportsTable.status} != 'cleaned'`));
       return {
         ...officer,
         reportCount: total.count,
@@ -71,6 +71,7 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
 
   const conditions: any[] = [
     sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map(id => sql`${id}::int`), sql`, `)}])`,
+    isNull(reportsTable.deletedAt),
   ];
   if (status) conditions.push(eq(reportsTable.status, status));
 
@@ -118,23 +119,25 @@ router.get("/panchayat/stats", requirePanchayatAdmin, async (req, res): Promise<
   }
 
   const officerIds = officerRows.map((o) => o.id);
-  const inArray = sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map(id => sql`${id}::int`), sql`, `)}])`;
+  const inOfficers = sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map(id => sql`${id}::int`), sql`, `)}])`;
+  const activeFilter = and(inOfficers, isNull(reportsTable.deletedAt));
 
-  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(inArray);
-  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(inArray, eq(reportsTable.status, "reported")));
-  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(inArray, eq(reportsTable.status, "cleaning")));
-  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(inArray, eq(reportsTable.status, "cleaned")));
+  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(activeFilter);
+  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "reported")));
+  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "cleaning")));
+  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "cleaned")));
 
   const wardStats = await Promise.all(
     officerRows.map(async (o) => {
+      const officerActive = and(eq(reportsTable.assignedOfficerId, o.id), isNull(reportsTable.deletedAt));
       const [totalRow] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(eq(reportsTable.assignedOfficerId, o.id));
+        .where(officerActive);
       const [pendingRow] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, o.id), sql`${reportsTable.status} != 'cleaned'`));
+        .where(and(officerActive, sql`${reportsTable.status} != 'cleaned'`));
       return {
         wardName: o.areaName ?? "Unassigned",
         officerName: o.name,
@@ -173,6 +176,7 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
 
   const officerIds = officerRows.map((o) => o.id);
   const inOfficers = sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map((id) => sql`${id}::int`), sql`, `)}])`;
+  const activeFilter = and(inOfficers, isNull(reportsTable.deletedAt));
 
   // 7-day daily trend
   const dailyRows = await db
@@ -182,7 +186,7 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
       count: sql<number>`count(*)::int`,
     })
     .from(reportsTable)
-    .where(and(inOfficers, sql`${reportsTable.createdAt} >= NOW() - INTERVAL '7 days'`))
+    .where(and(activeFilter, sql`${reportsTable.createdAt} >= NOW() - INTERVAL '7 days'`))
     .groupBy(sql`DATE(${reportsTable.createdAt})`, reportsTable.status)
     .orderBy(sql`DATE(${reportsTable.createdAt})`);
 
@@ -206,18 +210,19 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
   // Officer leaderboard
   const officerLeaderboard = await Promise.all(
     officerRows.map(async (o) => {
+      const officerActive = and(eq(reportsTable.assignedOfficerId, o.id), isNull(reportsTable.deletedAt));
       const [total] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(eq(reportsTable.assignedOfficerId, o.id));
+        .where(officerActive);
       const [cleaned] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, o.id), eq(reportsTable.status, "cleaned")));
+        .where(and(officerActive, eq(reportsTable.status, "cleaned")));
       const [pending] = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, o.id), sql`${reportsTable.status} != 'cleaned'`));
+        .where(and(officerActive, sql`${reportsTable.status} != 'cleaned'`));
       return {
         id: o.id,
         name: o.name,
@@ -240,7 +245,7 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
       address: sql<string | null>`MAX(${reportsTable.address})`,
     })
     .from(reportsTable)
-    .where(inOfficers)
+    .where(activeFilter)
     .groupBy(
       sql`ROUND(${reportsTable.latitude}::numeric, 3)`,
       sql`ROUND(${reportsTable.longitude}::numeric, 3)`
@@ -254,7 +259,7 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
     .select({ report: reportsTable, officer: officersTable })
     .from(reportsTable)
     .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
-    .where(inOfficers)
+    .where(activeFilter)
     .orderBy(sql`${reportsTable.createdAt} DESC`)
     .limit(10);
 
