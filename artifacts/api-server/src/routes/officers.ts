@@ -326,7 +326,7 @@ router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void>
   const limit = queryParsed.success && queryParsed.data.limit ? queryParsed.data.limit : 500;
   const days = queryParsed.success ? queryParsed.data.days : undefined;
 
-  let conditions: any[] = [eq(reportsTable.assignedOfficerId, id)];
+  let conditions: any[] = [eq(reportsTable.assignedOfficerId, id), isNull(reportsTable.deletedAt)];
   if (status) conditions.push(eq(reportsTable.status, status));
   if (days && days > 0) {
     const cutoff = new Date();
