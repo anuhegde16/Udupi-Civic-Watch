@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
 import geofencesData from "@/data/geofences.json";
+import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
 import { saveReport } from "@/hooks/use-saved-reports";
 import {
   Dialog,
@@ -55,6 +56,7 @@ export default function Report() {
   const [step, setStep] = useState<"form" | "success">("form");
   const [createdId, setCreatedId] = useState<number | null>(null);
   const [assignedWardName, setAssignedWardName] = useState<string | null>(null);
+  const [successQuote, setSuccessQuote] = useState<string>("");
 
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -260,6 +262,7 @@ export default function Report() {
         onSuccess: (data) => {
           setCreatedId(data.id);
           setAssignedWardName(data.assignedOfficer?.wardName ?? null);
+          setSuccessQuote(getRandomMotivationalQuote("citizen"));
           setStep("success");
           saveReport(data.id);
         },
@@ -309,6 +312,11 @@ export default function Report() {
           <CheckCircle2 className="w-12 h-12" />
         </div>
         <h2 className="text-3xl font-black text-foreground mb-2">Reported Successfully!</h2>
+        {successQuote && (
+          <p className="text-muted-foreground/80 text-base italic font-medium max-w-sm mb-3 leading-relaxed animate-in fade-in duration-700">
+            &#8220;{successQuote}&#8221;
+          </p>
+        )}
         <p className="text-muted-foreground mb-8 max-w-sm font-medium leading-relaxed">
           Thank you. You've just helped prevent more waste from reaching the Arabian Sea. The municipal team has been notified.
         </p>

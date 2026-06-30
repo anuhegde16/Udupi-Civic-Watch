@@ -1,5 +1,5 @@
 import { useRoute, useLocation } from "wouter";
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useGetReport, useUpdateReport, useUploadImage, getGetOfficerReportsQueryKey, getGetReportQueryKey } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileW
 import { useAuth } from "@/hooks/use-auth";
 import { ReportLocationMap } from "@/components/report-location-map";
 import { compressImage } from "@/lib/compress-image";
+import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
 
 type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string };
 const MAX_CLEANUP_PHOTOS = 5;
@@ -28,6 +29,7 @@ export default function OfficerReportDetail() {
   
   const [isUploading, setIsUploading] = useState(false);
   const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
+  const resolvedQuote = useMemo(() => getRandomMotivationalQuote("fieldOfficerResolved"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (isLoading || !report) {
@@ -48,7 +50,13 @@ export default function OfficerReportDetail() {
       { id, data: { status, cleanupImageUrl, cleanupImageUrls } },
       {
         onSuccess: (updatedReport) => {
-          toast({ title: "Status Updated", description: `Report is now marked as ${status}` });
+          const quoteDescription = status === "cleaning"
+            ? getRandomMotivationalQuote("fieldOfficerAccepted")
+            : undefined;
+          toast({
+            title: "Status Updated",
+            description: quoteDescription ?? `Report is now marked as ${status}`,
+          });
           queryClient.setQueryData(getGetReportQueryKey(id), updatedReport);
           if (user?.officerId) {
             queryClient.invalidateQueries({ queryKey: getGetOfficerReportsQueryKey(user.officerId) });
@@ -393,11 +401,11 @@ export default function OfficerReportDetail() {
             )}
 
             {report.status === 'cleaned' && (
-              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
+              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3 animate-in fade-in duration-700">
                 <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                 <div>
                   <p className="text-primary font-bold">Great job!</p>
-                  <p className="text-sm text-foreground/70 font-medium mt-1">This report is fully resolved. Your work helps keep Udupi's coast clean for everyone.</p>
+                  <p className="text-sm text-foreground/70 font-medium mt-1 italic">&#8220;{resolvedQuote}&#8221;</p>
                 </div>
               </div>
             )}
