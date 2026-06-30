@@ -200,16 +200,37 @@ export default function Report() {
     setPhotos(prev => prev.filter(p => p.id !== id));
   };
 
+  // Trigger the hidden file input and add a visibilitychange heuristic to detect
+  // silent camera denial (browser returns to foreground without onChange firing).
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+    if (!("permissions" in navigator)) return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      // Small delay so onChange can fire before we check the permission state
+      setTimeout(() => {
+        navigator.permissions.query({ name: "camera" as PermissionName }).then((s) => {
+          if (s.state === "denied") setCameraPermState("denied");
+        }).catch(() => {});
+      }, 400);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    // Clean up listener if user never opened the picker (e.g. cancelled immediately)
+    setTimeout(() => document.removeEventListener("visibilitychange", onVisible), 60_000);
+  };
+
+  // Invoke browser camera permission dialog via getUserMedia, then open file input on grant.
   const handleEnableCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      fileInputRef.current?.click();
+      triggerFileInput();
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(t => t.stop());
       setCameraPermState("granted");
-      fileInputRef.current?.click();
+      triggerFileInput();
     } catch {
       setCameraPermState("denied");
     }
@@ -330,16 +351,20 @@ export default function Report() {
             onChange={handleFileChange}
           />
 
-          {/* Empty state — permission denied */}
-          {photos.length === 0 && cameraPermState === "denied" && (
+          {/* Camera permission card — shown for 'prompt' (not yet asked) and 'denied' (blocked) */}
+          {photos.length === 0 && (cameraPermState === "prompt" || cameraPermState === "denied") && (
             <div className="w-full border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 rounded-2xl p-5 flex flex-col items-center gap-3 text-center animate-in fade-in duration-200">
               <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
                 <Lock className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="font-bold text-amber-800 dark:text-amber-300">Camera access blocked</p>
+                <p className="font-bold text-amber-800 dark:text-amber-300">
+                  {cameraPermState === "denied" ? "Camera access blocked" : "Camera access needed"}
+                </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
-                  Tap the button below to request camera access from your browser
+                  {cameraPermState === "denied"
+                    ? "Your browser has blocked camera access. Tap below to try again."
+                    : "Tap below to grant camera access so you can take a photo."}
                 </p>
               </div>
               <Button
@@ -349,17 +374,19 @@ export default function Report() {
               >
                 <Camera className="w-4 h-4 mr-2" /> Enable Camera
               </Button>
-              <p className="text-[11px] text-amber-600/80 dark:text-amber-500">
-                If still blocked, tap the lock icon in your browser's address bar and allow Camera access
-              </p>
+              {cameraPermState === "denied" && (
+                <p className="text-[11px] text-amber-600/80 dark:text-amber-500">
+                  If still blocked, tap the lock icon in your browser's address bar and allow Camera access
+                </p>
+              )}
             </div>
           )}
 
-          {/* Empty state — normal */}
-          {photos.length === 0 && cameraPermState !== "denied" && (
+          {/* Normal camera button — shown when granted or API unavailable ('unknown') */}
+          {photos.length === 0 && cameraPermState !== "prompt" && cameraPermState !== "denied" && (
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={triggerFileInput}
               className="w-full h-48 border-2 border-dashed border-border rounded-2xl bg-muted/50 flex flex-col items-center justify-center text-muted-foreground hover:bg-muted hover:border-primary transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 group"
             >
               <div className="w-14 h-14 rounded-full bg-background border border-border flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
