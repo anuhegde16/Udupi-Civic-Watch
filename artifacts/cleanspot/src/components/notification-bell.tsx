@@ -98,7 +98,7 @@ export function NotificationBell() {
   const { permission, isSubscribed, isLoading, supported, subscribe, unsubscribe } = usePushNotifications();
   const [, navigate] = useLocation();
 
-  // 10-second pulsing alarm + optional text-to-speech announcement
+  // 4-beep alarm (~1.8 s total) + optional text-to-speech announcement
   const playAlarm = useCallback((speechText?: string) => {
     alarmStopRef.current?.();
 
@@ -127,27 +127,27 @@ export function NotificationBell() {
         if (stopped) { ctx.close().catch(() => {}); return; }
 
         const t0 = ctx.currentTime;
-        const PULSE_ON = 0.2;
-        const PULSE_OFF = 0.15;
-        const CYCLE = PULSE_ON + PULSE_OFF;
-        const TOTAL_SECS = 10;
-        const cycles = Math.ceil(TOTAL_SECS / CYCLE);
-        const freqs = [880, 784];
+        const BEEP_ON = 0.18;   // 180 ms tone
+        const BEEP_GAP = 0.35;  // 350 ms silence between beeps
+        const CYCLE = BEEP_ON + BEEP_GAP;
+        const BEEP_COUNT = 4;
+        // total audio: 4×180 ms + 3×350 ms = 1770 ms
+        const TOTAL_BEEP_SECS = BEEP_COUNT * BEEP_ON + (BEEP_COUNT - 1) * BEEP_GAP;
 
-        for (let i = 0; i < cycles; i++) {
+        for (let i = 0; i < BEEP_COUNT; i++) {
           const t = t0 + i * CYCLE;
           const osc = ctx.createOscillator();
           const g = ctx.createGain();
           osc.connect(g);
           g.connect(ctx.destination);
-          osc.type = "square";
-          osc.frequency.value = freqs[i % 2];
+          osc.type = "sine";
+          osc.frequency.value = 880;
           g.gain.setValueAtTime(0.001, t);
-          g.gain.linearRampToValueAtTime(0.22, t + 0.02);
-          g.gain.setValueAtTime(0.22, t + PULSE_ON - 0.02);
-          g.gain.linearRampToValueAtTime(0.001, t + PULSE_ON);
+          g.gain.linearRampToValueAtTime(0.25, t + 0.02);
+          g.gain.setValueAtTime(0.25, t + BEEP_ON - 0.02);
+          g.gain.linearRampToValueAtTime(0.001, t + BEEP_ON);
           osc.start(t);
-          osc.stop(t + PULSE_ON);
+          osc.stop(t + BEEP_ON);
         }
 
         if (speechText && typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -158,10 +158,11 @@ export function NotificationBell() {
             u.rate = 0.9;
             u.volume = 1;
             window.speechSynthesis.speak(u);
-          }, 1500);
+          }, Math.round(TOTAL_BEEP_SECS * 1000) + 50);
         }
 
-        autoStopTimeout = setTimeout(stop, (TOTAL_SECS + 2) * 1000);
+        // allow enough time for speech to finish before auto-stopping
+        autoStopTimeout = setTimeout(stop, (TOTAL_BEEP_SECS + 4) * 1000);
       } catch {
         // Audio API unavailable or suspended — silent fail
       }
