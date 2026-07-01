@@ -17,10 +17,43 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// One-time repair migration for reports with genuinely missing images.
+//
+// IMPORTANT: `/api/uploads/files/%` is the CURRENT, LIVE upload path used by every
+// real citizen photo (see routes/uploads.ts). It must never be treated as broken by
+// pattern alone — only rows whose underlying object storage file provably no longer
+// exists are considered broken. This migration is also guarded to run at most once
+// (tracked in `system_migrations`) so a future logic mistake can't silently
+// re-corrupt data on every restart/redeploy.
+const FIX_IMAGE_URLS_MIGRATION_KEY = "fix_image_urls_v2_safe";
+const DUMMY_IMAGE_PATHS = ["/garbage-photo.jpg", "/cleaning-photo.jpg", "/cleaned-photo.jpg"];
+
+function dummyImageForStatus(status: string | null): string {
+  if (status === "cleaning") return "/cleaning-photo.jpg";
+  if (status === "cleaned") return "/cleaned-photo.jpg";
+  return "/garbage-photo.jpg";
+}
+
 async function fixImageUrls() {
   try {
     const { db } = await import("@workspace/db");
     const { sql } = await import("drizzle-orm");
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS system_migrations (
+        key TEXT PRIMARY KEY,
+        ran_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    const alreadyRan = await db.execute(
+      sql`SELECT 1 FROM system_migrations WHERE key = ${FIX_IMAGE_URLS_MIGRATION_KEY}`
+    );
+    if (alreadyRan.rows.length > 0) {
+      return;
+    }
+
+    // Genuinely broken: no image reference at all.
     await db.execute(sql`
       UPDATE reports
       SET image_url = CASE
@@ -29,9 +62,59 @@ async function fixImageUrls() {
         ELSE '/garbage-photo.jpg'
       END
       WHERE image_url IS NULL
-         OR image_url LIKE '/api/uploads/files/%'
     `);
-    logger.info("Image URLs fixed for reports");
+
+    // Rows on the current upload path are only "broken" if the file they point at
+    // has genuinely vanished from object storage — never assume broken by path alone.
+    const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
+    const candidatesResult = await db.execute(
+      sql`SELECT id, status, image_url FROM reports WHERE image_url LIKE '/api/uploads/files/%'`
+    );
+    const candidates = candidatesResult.rows as { id: number; status: string | null; image_url: string }[];
+
+    let repairedCount = 0;
+    if (bucketId && candidates.length > 0) {
+      const { objectStorageClient } = await import("./lib/objectStorage");
+      const bucket = objectStorageClient.bucket(bucketId);
+      for (const row of candidates) {
+        const filename = String(row.image_url)
+          .replace("/api/uploads/files/", "")
+          .replace(/[^a-zA-Z0-9.\-_]/g, "");
+        if (!filename) continue;
+        try {
+          const [exists] = await bucket.file(`uploads/${filename}`).exists();
+          if (!exists) {
+            const dummy = dummyImageForStatus(row.status);
+            await db.execute(sql`UPDATE reports SET image_url = ${dummy} WHERE id = ${row.id}`);
+            repairedCount++;
+          }
+        } catch (err) {
+          logger.warn({ err, reportId: row.id }, "Could not verify report image in object storage; leaving it untouched");
+        }
+      }
+    }
+
+    // Audit: surface reports currently showing a dummy placeholder so it's clear
+    // which ones may have already lost their real photo to this bug historically.
+    // (Recovering the original file itself is out of scope.)
+    const dummyRows = await db.execute(
+      sql`SELECT id FROM reports WHERE image_url IN (${sql.join(
+        DUMMY_IMAGE_PATHS.map((p) => sql`${p}`),
+        sql`, `
+      )})`
+    );
+    const dummyReportIds = (dummyRows.rows as { id: number }[]).map((r) => r.id);
+    if (dummyReportIds.length > 0) {
+      logger.warn(
+        { reportIds: dummyReportIds, count: dummyReportIds.length },
+        "Reports currently show a placeholder image — their real photo may have been overwritten by a past migration bug"
+      );
+    }
+
+    await db.execute(
+      sql`INSERT INTO system_migrations (key) VALUES (${FIX_IMAGE_URLS_MIGRATION_KEY}) ON CONFLICT (key) DO NOTHING`
+    );
+    logger.info({ repairedCount }, "One-time image URL repair migration completed and marked as run");
   } catch (err) {
     logger.warn({ err }, "Could not fix image URLs");
   }
