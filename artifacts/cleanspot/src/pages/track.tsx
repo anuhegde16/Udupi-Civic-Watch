@@ -1,6 +1,6 @@
 import { useRoute, useLocation } from "wouter";
 import { useTrackReport, getTrackReportQueryKey, ApiError } from "@workspace/api-client-react";
-import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin, Archive } from "lucide-react";
+import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin, Archive, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 
@@ -172,6 +172,47 @@ export default function Track() {
           })}
         </div>
       </div>
+
+      {(() => {
+        const validReportPhotos = (report.imageUrls ?? []).filter(
+          (p) => !!p && typeof p.url === "string" && p.url.length > 0
+        );
+        const reportPhotos: { url: string; uploadedAt?: string | null }[] =
+          validReportPhotos.length > 0
+            ? validReportPhotos
+            : report.imageUrl ? [{ url: report.imageUrl, uploadedAt: null }] : [];
+        if (reportPhotos.length === 0) return null;
+        return (
+          <div className="mb-8 bg-card rounded-3xl shadow-sm border border-border/50 overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-700">
+            <div className="p-5 border-b border-border/50 bg-muted/40">
+              <h3 className="font-black text-foreground flex items-center gap-2 text-xl">
+                <div className="w-8 h-8 rounded-full bg-muted text-foreground flex items-center justify-center">
+                  <Camera className="w-5 h-5" />
+                </div>
+                Reported Photo{reportPhotos.length > 1 ? `s (${reportPhotos.length})` : ""}
+              </h3>
+            </div>
+            <div className={`grid gap-1 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+              {reportPhotos.map((photo, idx) => (
+                <div key={idx} className="aspect-video w-full bg-muted relative group">
+                  <img
+                    src={photo.url}
+                    alt={`Reported photo ${idx + 1}`}
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                  />
+                  {photo.uploadedAt && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+                      <p className="text-white text-xs font-medium text-center">
+                        Uploaded {format(new Date(photo.uploadedAt), "MMM d, yyyy 'at' h:mm a")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {report.status === 'cleaned' && (report.cleanupImageUrls?.length || report.cleanupImageUrl) && (() => {
         const cleanupPhotos: { url: string; uploadedAt?: string | null }[] =

@@ -353,6 +353,23 @@ export const TrackReportResponse = zod.object({
   status: zod.enum(["reported", "cleaning", "cleaned"]),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
+  imageUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Legacy single original report photo URL (use imageUrls instead)",
+    ),
+  imageUrls: zod
+    .array(
+      zod.object({
+        url: zod.string(),
+        uploadedAt: zod
+          .string()
+          .describe("ISO-8601 timestamp of when this photo was uploaded"),
+      }),
+    )
+    .nullish()
+    .describe("Original report photo(s) submitted by the citizen"),
   cleanupImageUrl: zod.string().nullish(),
   cleanupImageUrls: zod
     .array(

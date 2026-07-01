@@ -330,6 +330,8 @@ router.get("/reports/:id/track", async (req, res): Promise<void> => {
     status: report.status,
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
+    imageUrl: report.imageUrl,
+    imageUrls: report.imageUrls ?? null,
     cleanupImageUrl: report.cleanupImageUrl,
     cleanupImageUrls: report.cleanupImageUrls ?? null,
     wardName: officer?.areaName ?? null,

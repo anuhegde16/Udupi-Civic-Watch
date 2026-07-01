@@ -848,6 +848,16 @@ components:
         updatedAt:
           type: string
           format: date-time
+        imageUrl:
+          type: string
+          nullable: true
+          description: Legacy single original report photo URL (use imageUrls instead)
+        imageUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotoItem"
+          nullable: true
+          description: Original report photo(s) submitted by the citizen
         cleanupImageUrl:
           type: string
           nullable: true

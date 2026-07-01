@@ -125,6 +125,10 @@ export interface ReportStatus {
   status: ReportStatusStatus;
   createdAt: string;
   updatedAt: string;
+  /** Legacy single original report photo URL (use imageUrls instead) */
+  imageUrl?: string | null;
+  /** Original report photo(s) submitted by the citizen */
+  imageUrls?: PhotoItem[] | null;
   cleanupImageUrl?: string | null;
   cleanupImageUrls?: PhotoItem[] | null;
   /** Ward handling this report (from assigned officer) */
