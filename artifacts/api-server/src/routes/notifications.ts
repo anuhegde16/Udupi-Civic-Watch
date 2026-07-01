@@ -154,6 +154,13 @@ router.post("/notifications/read-all", requireAuth, async (req, res): Promise<vo
   res.json({ success: true });
 });
 
+router.delete("/notifications/clear-all", requireAuth, async (req, res): Promise<void> => {
+  const user = (req as any).user;
+  await db.delete(notificationsTable).where(eq(notificationsTable.userId, user.id));
+  logger.info({ userId: user.id }, "Cleared all notifications");
+  res.json({ success: true });
+});
+
 router.post("/notifications/test", requireAuth, async (req, res): Promise<void> => {
   const user = (req as any).user;
 

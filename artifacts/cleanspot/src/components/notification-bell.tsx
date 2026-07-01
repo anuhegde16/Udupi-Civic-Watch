@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Bell, BellOff, BellRing, Check, X, Loader2, Send, ExternalLink } from "lucide-react";
+import { Bell, BellOff, BellRing, Check, X, Loader2, Send, ExternalLink, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -12,6 +12,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch, ApiError } from "@workspace/api-client-react";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
@@ -91,6 +101,7 @@ export function NotificationBell() {
   const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
   const queryClient = useQueryClient();
   const prevUnreadRef = useRef<number>(0);
   const alarmStopRef = useRef<(() => void) | null>(null);
@@ -239,6 +250,24 @@ export function NotificationBell() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: () =>
+      customFetch("/api/notifications/clear-all", { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      setClearAllOpen(false);
+      setOpen(false);
+      toast({ title: "Notifications cleared" });
+    },
+    onError: () => {
+      toast({
+        title: "Couldn't clear notifications",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const testPushMutation = useMutation({
     mutationFn: () =>
       customFetch<{ success: boolean; sent?: number }>(
@@ -367,6 +396,17 @@ export function NotificationBell() {
                   <Check className="h-3.5 w-3.5" />
                 </Button>
               )}
+              {notifications.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  title="Clear all notifications"
+                  onClick={() => setClearAllOpen(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           </div>
 
@@ -453,6 +493,34 @@ export function NotificationBell() {
           )}
         </PopoverContent>
       </Popover>
+
+      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all notifications?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove all {notifications.length} notification{notifications.length === 1 ? "" : "s"} from your tray. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearAllMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                clearAllMutation.mutate();
+              }}
+              disabled={clearAllMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {clearAllMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Clear all"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }

@@ -1,8 +1,19 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
-import { Bell, BellRing, Check, ChevronLeft, ExternalLink } from "lucide-react";
+import { Bell, BellRing, Check, ChevronLeft, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
 interface NotificationItem {
@@ -71,7 +82,9 @@ function notificationTypeLabel(type: string): string {
 export default function NotificationsPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [limit, setLimit] = useState(50);
+  const [clearAllOpen, setClearAllOpen] = useState(false);
 
   const { data, isLoading } = useQuery<NotificationsResponse>({
     queryKey: ["notifications", limit],
@@ -92,6 +105,23 @@ export default function NotificationsPage() {
       customFetch("/api/notifications/read-all", { method: "POST" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+
+  const clearAllMutation = useMutation({
+    mutationFn: () =>
+      customFetch("/api/notifications/clear-all", { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      setClearAllOpen(false);
+      toast({ title: "Notifications cleared" });
+    },
+    onError: () => {
+      toast({
+        title: "Couldn't clear notifications",
+        description: "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -140,6 +170,17 @@ export default function NotificationsPage() {
           >
             <Check className="h-3.5 w-3.5" />
             Mark all read
+          </Button>
+        )}
+        {notifications.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs shrink-0 gap-1.5 text-destructive hover:text-destructive"
+            onClick={() => setClearAllOpen(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Clear all
           </Button>
         )}
       </div>
@@ -219,6 +260,34 @@ export default function NotificationsPage() {
           </>
         )}
       </div>
+
+      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all notifications?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove all {notifications.length} notification{notifications.length === 1 ? "" : "s"} from your tray. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={clearAllMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                clearAllMutation.mutate();
+              }}
+              disabled={clearAllMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {clearAllMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                "Clear all"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
