@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ReportLocationMap } from "@/components/report-location-map";
 import { compressImage } from "@/lib/compress-image";
 import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string };
 const MAX_CLEANUP_PHOTOS = 5;
@@ -31,6 +32,7 @@ export default function OfficerReportDetail() {
   const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
   const resolvedQuote = useMemo(() => getRandomMotivationalQuote("fieldOfficerResolved"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { lightbox, open: openLightbox } = useImageLightbox();
 
   if (isLoading || !report) {
     return (
@@ -172,11 +174,18 @@ export default function OfficerReportDetail() {
               <div className={`grid gap-1 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                 {reportPhotos.map((photo, idx) => (
                   <div key={idx} className="aspect-[4/3] bg-muted relative group">
-                    <img
-                      src={photo.url}
-                      alt={`Report photo ${idx + 1} of ${reportPhotos.length}`}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openLightbox(reportPhotos.map((p) => p.url), idx)}
+                      className="absolute inset-0 w-full h-full cursor-zoom-in"
+                      aria-label={`View report photo ${idx + 1} full screen`}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={`Report photo ${idx + 1} of ${reportPhotos.length}`}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    </button>
                     {reportPhotos.length > 1 && (
                       <div className="absolute top-0 left-0 bg-black/60 px-2 py-1 rounded-br-lg">
                         <p className="text-white text-[10px] font-bold tracking-wide">
@@ -213,11 +222,18 @@ export default function OfficerReportDetail() {
               <div className={`grid gap-1 ${resolvedCleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                 {resolvedCleanupPhotos.map((photo, idx) => (
                   <div key={idx} className="aspect-[4/3] bg-muted relative group">
-                    <img
-                      src={photo.url}
-                      alt={`Cleanup photo ${idx + 1}`}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => openLightbox(resolvedCleanupPhotos.map((p) => p.url), idx)}
+                      className="absolute inset-0 w-full h-full cursor-zoom-in"
+                      aria-label={`View cleanup photo ${idx + 1} full screen`}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={`Cleanup photo ${idx + 1}`}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                      />
+                    </button>
                     {photo.uploadedAt && (
                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
                         <p className="text-white text-[10px] font-medium text-center">
@@ -412,6 +428,7 @@ export default function OfficerReportDetail() {
           </div>
         </div>
       </div>
+      {lightbox}
     </div>
   );
 }

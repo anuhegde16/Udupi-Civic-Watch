@@ -23,6 +23,7 @@ import {
   ArchiveX, Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useImageLightbox } from "@/components/image-lightbox";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
 type Report = {
@@ -121,6 +122,7 @@ export default function AdminReports() {
 
   const [mapReport, setMapReport] = useState<Report | null>(null);
   const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
+  const { lightbox, open: openLightbox } = useImageLightbox();
 
   const [deepLinkedReportId] = useState<number | null>(() => {
     const id = new URLSearchParams(window.location.search).get("report");
@@ -480,7 +482,14 @@ export default function AdminReports() {
                   {/* Photo thumbnail */}
                   <div className={`w-24 sm:w-32 shrink-0 relative bg-muted ${isArchived ? "opacity-60" : ""}`}>
                     {report.imageUrl ? (
-                      <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" style={{ minHeight: "100px" }} />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openLightbox([report.imageUrl!], 0); }}
+                        className="absolute inset-0 w-full h-full cursor-zoom-in"
+                        aria-label="View report photo full screen"
+                      >
+                        <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" style={{ minHeight: "100px" }} />
+                      </button>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/40 min-h-[100px]">
                         <Camera className="w-7 h-7" />
@@ -649,6 +658,12 @@ export default function AdminReports() {
                     <div className={`grid gap-2 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                       {reportPhotos.map((photo, idx) => (
                         <div key={idx} className="rounded-xl overflow-hidden border border-border/50 relative">
+                          <button
+                            type="button"
+                            onClick={() => openLightbox(reportPhotos.map((p) => p.url), idx)}
+                            className="absolute inset-0 w-full h-full cursor-zoom-in z-10"
+                            aria-label={`View report photo ${idx + 1} full screen`}
+                          />
                           <img src={photo.url} alt={`Report photo ${idx + 1}`} className="w-full h-36 object-cover" />
                           {photo.uploadedAt && (
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
@@ -671,6 +686,12 @@ export default function AdminReports() {
                     <div className={`grid gap-2 ${cleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
                       {cleanupPhotos.map((photo, idx) => (
                         <div key={idx} className="rounded-xl overflow-hidden border border-green-200 relative">
+                          <button
+                            type="button"
+                            onClick={() => openLightbox(cleanupPhotos.map((p) => p.url), idx)}
+                            className="absolute inset-0 w-full h-full cursor-zoom-in z-10"
+                            aria-label={`View cleanup photo ${idx + 1} full screen`}
+                          />
                           <img src={photo.url} alt={`Cleanup photo ${idx + 1}`} className="w-full h-36 object-cover" />
                           {photo.uploadedAt && (
                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5">
@@ -954,6 +975,7 @@ export default function AdminReports() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {lightbox}
     </div>
   );
 }

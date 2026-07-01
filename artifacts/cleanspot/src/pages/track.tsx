@@ -3,11 +3,13 @@ import { useTrackReport, getTrackReportQueryKey, ApiError } from "@workspace/api
 import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin, Archive, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 export default function Track() {
   const [, params] = useRoute("/track/:id");
   const [, setLocation] = useLocation();
   const id = params?.id ? parseInt(params.id, 10) : 0;
+  const { lightbox, open: openLightbox } = useImageLightbox();
   
   const { data: report, isLoading, error } = useTrackReport(id, { 
     query: { 
@@ -195,11 +197,18 @@ export default function Track() {
             <div className={`grid gap-1 ${reportPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
               {reportPhotos.map((photo, idx) => (
                 <div key={idx} className="aspect-video w-full bg-muted relative group">
-                  <img
-                    src={photo.url}
-                    alt={`Reported photo ${idx + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(reportPhotos.map((p) => p.url), idx)}
+                    className="absolute inset-0 w-full h-full cursor-zoom-in"
+                    aria-label={`View reported photo ${idx + 1} full screen`}
+                  >
+                    <img
+                      src={photo.url}
+                      alt={`Reported photo ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  </button>
                   {photo.uploadedAt && (
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
                       <p className="text-white text-xs font-medium text-center">
@@ -233,11 +242,18 @@ export default function Track() {
             <div className={`grid gap-1 ${cleanupPhotos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
               {cleanupPhotos.map((photo, idx) => (
                 <div key={idx} className="aspect-video w-full bg-muted relative group">
-                  <img 
-                    src={photo.url} 
-                    alt={`Cleanup photo ${idx + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => openLightbox(cleanupPhotos.map((p) => p.url), idx)}
+                    className="absolute inset-0 w-full h-full cursor-zoom-in"
+                    aria-label={`View cleanup photo ${idx + 1} full screen`}
+                  >
+                    <img
+                      src={photo.url}
+                      alt={`Cleanup photo ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                  </button>
                   {photo.uploadedAt && (
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
                       <p className="text-white text-xs font-medium text-center">
@@ -251,6 +267,7 @@ export default function Track() {
           </div>
         );
       })()}
+      {lightbox}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MapPin, Image as ImageIcon, Trash2, Mail, Loader2, CheckCircle2, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 export type ReportDetail = {
   id: number;
@@ -26,13 +27,18 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   cleaned: { label: "Cleaned", cls: "bg-primary/10 text-primary border-primary/20" },
 };
 
-function PhotoBlock({ src, label }: { src: string; label: string }) {
+function PhotoBlock({ src, label, onClick }: { src: string; label: string; onClick: () => void }) {
   return (
     <div>
       <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">{label}</p>
-      <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-muted">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block w-full aspect-[4/3] rounded-2xl overflow-hidden bg-muted cursor-zoom-in"
+        aria-label={`View ${label} full screen`}
+      >
         <img src={src} alt={label} className="w-full h-full object-cover" />
-      </div>
+      </button>
     </div>
   );
 }
@@ -46,6 +52,7 @@ interface ReportDetailSheetProps {
 }
 
 export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpdating }: ReportDetailSheetProps) {
+  const { lightbox, open: openLightbox } = useImageLightbox();
   const meta = report ? (STATUS_META[report.status] ?? { label: report.status, cls: "" }) : null;
 
   const canAdvance = report && onStatusChange && report.status !== "cleaned";
@@ -125,6 +132,7 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                       key={src}
                       src={src}
                       label={reportPhotos.length > 1 ? `Waste Report Photo ${i + 1}` : "Waste Report Photo"}
+                      onClick={() => openLightbox(reportPhotos, i)}
                     />
                   ))
                 ) : (
@@ -147,6 +155,7 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                     key={src}
                     src={src}
                     label={cleanupPhotos.length > 1 ? `Cleanup Confirmation Photo ${i + 1}` : "Cleanup Confirmation Photo"}
+                    onClick={() => openLightbox(cleanupPhotos, i)}
                   />
                 ));
               })()}
@@ -204,6 +213,7 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
           </>
         )}
       </SheetContent>
+      {lightbox}
     </Sheet>
   );
 }

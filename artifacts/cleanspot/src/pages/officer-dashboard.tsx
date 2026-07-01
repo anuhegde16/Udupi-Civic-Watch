@@ -31,6 +31,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfficerZoneMap } from "@/components/officer-zone-map";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 type StatusFilter = "all" | "reported" | "cleaning" | "cleaned";
 type SortOption = "newest" | "oldest" | "status";
@@ -45,6 +46,7 @@ export default function OfficerDashboard() {
   const queryClient = useQueryClient();
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { lightbox, open: openLightbox } = useImageLightbox();
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -360,11 +362,23 @@ export default function OfficerDashboard() {
               >
                 <div className="aspect-[4/3] w-full bg-muted relative overflow-hidden">
                   {(report.imageUrls?.[0]?.url ?? report.imageUrl) ? (
-                    <img
-                      src={report.imageUrls?.[0]?.url ?? report.imageUrl!}
-                      alt="Waste report"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const urls = (report.imageUrls?.length ? report.imageUrls.map((p) => p.url) : [report.imageUrl!]);
+                        openLightbox(urls, 0);
+                      }}
+                      className="absolute inset-0 w-full h-full cursor-zoom-in"
+                      aria-label="View report photo full screen"
+                    >
+                      <img
+                        src={report.imageUrls?.[0]?.url ?? report.imageUrl!}
+                        alt="Waste report"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      />
+                    </button>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-foreground">
                       <FileWarning className="w-12 h-12 opacity-50" />

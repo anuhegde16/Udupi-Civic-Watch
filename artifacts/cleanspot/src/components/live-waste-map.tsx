@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 function ensureYouAreHereStyle() {
   if (document.getElementById("ck-you-here-style")) return;
@@ -108,6 +109,11 @@ export function LiveWasteMap() {
   const [activeZone, setActiveZone] = useState<string | null>(zones[0]?.name ?? null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const { lightbox, open: openLightbox } = useImageLightbox();
+  const openLightboxRef = useRef(openLightbox);
+  useEffect(() => {
+    openLightboxRef.current = openLightbox;
+  }, [openLightbox]);
 
   // Recompute count from cached spots whenever the active zone changes
   useEffect(() => {
@@ -203,6 +209,19 @@ export function LiveWasteMap() {
           });
         }
       }
+
+      map.on("popupopen", (e: any) => {
+        const el = e.popup.getElement?.();
+        const img = el?.querySelector?.("img");
+        if (img && !img.dataset.lightboxBound) {
+          img.dataset.lightboxBound = "true";
+          img.style.cursor = "zoom-in";
+          img.addEventListener("click", (ev: Event) => {
+            ev.stopPropagation();
+            openLightboxRef.current([img.src]);
+          });
+        }
+      });
 
       leafletMapRef.current = map;
       setMapReady(true);
@@ -460,6 +479,7 @@ export function LiveWasteMap() {
           </div>
         </div>
       </div>
+      {lightbox}
     </div>
   );
 }
