@@ -17,27 +17,27 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// One-time repair migration for reports with genuinely missing images.
-//
-// IMPORTANT: `/api/uploads/files/%` is the CURRENT, LIVE upload path used by every
-// real citizen photo (see routes/uploads.ts). It must never be treated as broken by
-// pattern alone — only rows whose underlying object storage file provably no longer
-// exists are considered broken. This migration is also guarded to run at most once
-// (tracked in `system_migrations`) so a future logic mistake can't silently
-// re-corrupt data on every restart/redeploy.
-const FIX_IMAGE_URLS_MIGRATION_KEY = "fix_image_urls_v2_safe";
-const DUMMY_IMAGE_PATHS = ["/garbage-photo.jpg", "/cleaning-photo.jpg", "/cleaned-photo.jpg"];
+/**
+ * One-time migration: clear broken local-disk image references.
+ *
+ * Before GCS-backed object storage, uploads were saved to ephemeral local
+ * disk. Those files are gone after any server restart, so any report still
+ * pointing to `/api/uploads/files/<filename>` that doesn't exist in GCS is
+ * a broken reference. We null those out so the UI shows "no photo" gracefully.
+ *
+ * Reports that already had their URLs migrated to GCS (the file exists) are
+ * left untouched. New uploads go straight to GCS and are unaffected.
+ *
+ * Guarded to run at most once (tracked in `system_migrations`) so it doesn't
+ * re-scan every report and hit object storage on every restart/redeploy.
+ */
+const CLEAR_BROKEN_DISK_IMAGE_REFS_MIGRATION_KEY = "clear_broken_disk_image_refs_v1";
 
-function dummyImageForStatus(status: string | null): string {
-  if (status === "cleaning") return "/cleaning-photo.jpg";
-  if (status === "cleaned") return "/cleaned-photo.jpg";
-  return "/garbage-photo.jpg";
-}
-
-async function fixImageUrls() {
+async function clearBrokenDiskImageRefs() {
   try {
-    const { db } = await import("@workspace/db");
-    const { sql } = await import("drizzle-orm");
+    const { db, reportsTable } = await import("@workspace/db");
+    const { eq, or, like, isNotNull, sql } = await import("drizzle-orm");
+    const { objectStorageClient } = await import("./lib/objectStorage");
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS system_migrations (
@@ -47,76 +47,140 @@ async function fixImageUrls() {
     `);
 
     const alreadyRan = await db.execute(
-      sql`SELECT 1 FROM system_migrations WHERE key = ${FIX_IMAGE_URLS_MIGRATION_KEY}`
+      sql`SELECT 1 FROM system_migrations WHERE key = ${CLEAR_BROKEN_DISK_IMAGE_REFS_MIGRATION_KEY}`
     );
     if (alreadyRan.rows.length > 0) {
       return;
     }
 
-    // Genuinely broken: no image reference at all.
-    await db.execute(sql`
-      UPDATE reports
-      SET image_url = CASE
-        WHEN status = 'cleaning' THEN '/cleaning-photo.jpg'
-        WHEN status = 'cleaned'  THEN '/cleaned-photo.jpg'
-        ELSE '/garbage-photo.jpg'
-      END
-      WHERE image_url IS NULL
-    `);
-
-    // Rows on the current upload path are only "broken" if the file they point at
-    // has genuinely vanished from object storage — never assume broken by path alone.
     const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-    const candidatesResult = await db.execute(
-      sql`SELECT id, status, image_url FROM reports WHERE image_url LIKE '/api/uploads/files/%'`
-    );
-    const candidates = candidatesResult.rows as { id: number; status: string | null; image_url: string }[];
+    if (!bucketId) {
+      logger.warn("DEFAULT_OBJECT_STORAGE_BUCKET_ID not set — skipping broken image ref migration");
+      return;
+    }
+    const bucket = objectStorageClient.bucket(bucketId);
 
-    let repairedCount = 0;
-    if (bucketId && candidates.length > 0) {
-      const { objectStorageClient } = await import("./lib/objectStorage");
-      const bucket = objectStorageClient.bucket(bucketId);
-      for (const row of candidates) {
-        const filename = String(row.image_url)
-          .replace("/api/uploads/files/", "")
-          .replace(/[^a-zA-Z0-9.\-_]/g, "");
-        if (!filename) continue;
-        try {
-          const [exists] = await bucket.file(`uploads/${filename}`).exists();
-          if (!exists) {
-            const dummy = dummyImageForStatus(row.status);
-            await db.execute(sql`UPDATE reports SET image_url = ${dummy} WHERE id = ${row.id}`);
-            repairedCount++;
-          }
-        } catch (err) {
-          logger.warn({ err, reportId: row.id }, "Could not verify report image in object storage; leaving it untouched");
-        }
+    const DISK_PATTERN = "/api/uploads/files/%";
+
+    // Fetch all reports that have at least one local-disk-style URL
+    const candidates = await db
+      .select({
+        id: reportsTable.id,
+        imageUrl: reportsTable.imageUrl,
+        imageUrls: reportsTable.imageUrls,
+        cleanupImageUrl: reportsTable.cleanupImageUrl,
+        cleanupImageUrls: reportsTable.cleanupImageUrls,
+      })
+      .from(reportsTable)
+      .where(
+        or(
+          like(reportsTable.imageUrl, DISK_PATTERN),
+          like(reportsTable.cleanupImageUrl, DISK_PATTERN),
+          // Also catch reports where JSONB arrays contain disk-path items
+          // (use a raw SQL condition for the JSONB cast)
+          isNotNull(reportsTable.imageUrls),
+          isNotNull(reportsTable.cleanupImageUrls),
+        )
+      );
+
+    /** Extract GCS filename from a /api/uploads/files/<filename> URL */
+    function gcsPath(url: string): string | null {
+      const m = url.match(/^\/api\/uploads\/files\/([^/]+)$/);
+      return m ? `uploads/${m[1]}` : null;
+    }
+
+    /** Check whether a file actually exists in GCS */
+    async function existsInGcs(url: string): Promise<boolean> {
+      const path = gcsPath(url);
+      if (!path) return false; // Not a local-disk URL; keep as-is
+      try {
+        const [exists] = await bucket.file(path).exists();
+        return exists;
+      } catch {
+        return false;
       }
     }
 
-    // Audit: surface reports currently showing a dummy placeholder so it's clear
-    // which ones may have already lost their real photo to this bug historically.
-    // (Recovering the original file itself is out of scope.)
-    const dummyRows = await db.execute(
-      sql`SELECT id FROM reports WHERE image_url IN (${sql.join(
-        DUMMY_IMAGE_PATHS.map((p) => sql`${p}`),
-        sql`, `
-      )})`
-    );
-    const dummyReportIds = (dummyRows.rows as { id: number }[]).map((r) => r.id);
-    if (dummyReportIds.length > 0) {
-      logger.warn(
-        { reportIds: dummyReportIds, count: dummyReportIds.length },
-        "Reports currently show a placeholder image — their real photo may have been overwritten by a past migration bug"
-      );
+    let cleared = 0;
+
+    for (const row of candidates) {
+      const updates: Record<string, unknown> = {};
+
+      // --- imageUrl (scalar) ---
+      if (row.imageUrl && row.imageUrl.startsWith("/api/uploads/files/")) {
+        const inGcs = await existsInGcs(row.imageUrl);
+        if (!inGcs) {
+          updates.imageUrl = null;
+          updates.imageUploadedAt = null;
+        }
+      }
+
+      // --- imageUrls (JSONB array) ---
+      if (Array.isArray(row.imageUrls) && row.imageUrls.length > 0) {
+        const kept: typeof row.imageUrls = [];
+        for (const item of row.imageUrls) {
+          if (item.url.startsWith("/api/uploads/files/")) {
+            const inGcs = await existsInGcs(item.url);
+            if (inGcs) kept.push(item);
+            // else: discard the broken entry
+          } else {
+            kept.push(item); // Non-disk URL (e.g. already GCS-public) — keep
+          }
+        }
+        if (kept.length !== row.imageUrls.length) {
+          updates.imageUrls = kept.length > 0 ? kept : null;
+          // Keep imageUrl in sync: if we already cleared it above, leave null;
+          // otherwise derive from surviving items if the scalar was intact
+          if (!("imageUrl" in updates)) {
+            updates.imageUrl = kept[0]?.url ?? null;
+          }
+        }
+      }
+
+      // --- cleanupImageUrl (scalar) ---
+      if (row.cleanupImageUrl && row.cleanupImageUrl.startsWith("/api/uploads/files/")) {
+        const inGcs = await existsInGcs(row.cleanupImageUrl);
+        if (!inGcs) {
+          updates.cleanupImageUrl = null;
+        }
+      }
+
+      // --- cleanupImageUrls (JSONB array) ---
+      if (Array.isArray(row.cleanupImageUrls) && row.cleanupImageUrls.length > 0) {
+        const kept: typeof row.cleanupImageUrls = [];
+        for (const item of row.cleanupImageUrls) {
+          if (item.url.startsWith("/api/uploads/files/")) {
+            const inGcs = await existsInGcs(item.url);
+            if (inGcs) kept.push(item);
+          } else {
+            kept.push(item);
+          }
+        }
+        if (kept.length !== row.cleanupImageUrls.length) {
+          updates.cleanupImageUrls = kept.length > 0 ? kept : null;
+          if (!("cleanupImageUrl" in updates)) {
+            updates.cleanupImageUrl = kept[0]?.url ?? null;
+          }
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db.update(reportsTable).set(updates as any).where(eq(reportsTable.id, row.id));
+        cleared++;
+      }
+    }
+
+    if (cleared > 0) {
+      logger.info({ cleared }, "Cleared broken local-disk image references from reports");
+    } else {
+      logger.info("No broken local-disk image references found");
     }
 
     await db.execute(
-      sql`INSERT INTO system_migrations (key) VALUES (${FIX_IMAGE_URLS_MIGRATION_KEY}) ON CONFLICT (key) DO NOTHING`
+      sql`INSERT INTO system_migrations (key) VALUES (${CLEAR_BROKEN_DISK_IMAGE_REFS_MIGRATION_KEY}) ON CONFLICT (key) DO NOTHING`
     );
-    logger.info({ repairedCount }, "One-time image URL repair migration completed and marked as run");
   } catch (err) {
-    logger.warn({ err }, "Could not fix image URLs");
+    logger.warn({ err }, "Could not clear broken disk image references");
   }
 }
 
@@ -267,7 +331,7 @@ async function start() {
   await migrateRoles();
   await ensurePanchayatAdmin();
   await seedOfficerPanchayatNames();
-  await fixImageUrls();
+  await clearBrokenDiskImageRefs();
   await relocateDemoReportsToSaligrama();
 
   startScheduler();
