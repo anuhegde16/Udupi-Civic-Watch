@@ -199,10 +199,10 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
 
         L.polygon(ward.latlngs, {
           color: isHighlighted ? "#0d9488" : officer ? color : "#d1d5db",
-          weight: isHighlighted ? 3 : officer ? 1.5 : 0.5,
+          weight: isHighlighted ? 2.75 : officer ? 1.25 : 0.5,
           dashArray: officer ? undefined : "4 6",
           fillColor: isHighlighted ? "#0d9488" : officer ? color : "#f3f4f6",
-          fillOpacity: isHighlighted ? 0.35 : officer ? 0.12 : 0.03,
+          fillOpacity: isHighlighted ? 0.14 : officer ? 0.03 : 0.01,
           interactive: false,
         }).addTo(map);
 
@@ -231,13 +231,23 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
 
       reports.forEach((report) => {
         const color = STATUS_COLORS[report.status] ?? "#6b7280";
-        const marker = L.circleMarker([report.latitude, report.longitude], {
-          radius: 6,
-          fillColor: color,
-          color: "#fff",
-          weight: 1.5,
-          fillOpacity: 0.88,
+        const isCleaned = report.status === "cleaned";
+        const iconHtml = isCleaned
+          ? `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 0 0 2px ${color}40,0 2px 6px rgba(0,0,0,0.18);"></div>`
+          : `<div class="pulse-marker" style="--pulse-color: ${color}; width:28px; height:28px;">
+               <div class="pulse-ring pulse-ring-1" style="width:18px;height:18px;"></div>
+               <div class="pulse-ring pulse-ring-2" style="width:26px;height:26px;"></div>
+               <div class="pulse-core" style="width:10px;height:10px;"></div>
+             </div>`;
+
+        const icon = L.divIcon({
+          html: iconHtml,
+          className: "",
+          iconSize: isCleaned ? [16, 16] : [28, 28],
+          iconAnchor: isCleaned ? [8, 8] : [14, 14],
         });
+
+        const marker = L.marker([report.latitude, report.longitude], { icon });
 
         const popup = document.createElement("div");
         popup.style.cssText = "min-width:160px;padding:4px 0;";
