@@ -252,11 +252,11 @@ export function AdminDistrictMap({
               : true);
 
           const poly = L.polygon(zone.latlngs, {
-            color: isInActivePanchayat ? (isSelected ? wardColor : wardColor) : "#d1d5db",
-            weight: isSelected ? 2.5 : (isInActivePanchayat ? 1 : 0.5),
+            color: isInActivePanchayat ? wardColor : "#d1d5db",
+            weight: isSelected ? 2.5 : (isInActivePanchayat ? 1.25 : 0.5),
             dashArray: isSelected ? undefined : (isInActivePanchayat ? "4 3" : "3 8"),
             fillColor: isInActivePanchayat ? wardColor : "#e5e7eb",
-            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.22 : 0.06),
+            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.14 : 0.03),
             interactive: isInActivePanchayat,
           }).addTo(map);
 
@@ -285,9 +285,9 @@ export function AdminDistrictMap({
                 onWardSelect(zone.name);
               }
             });
-            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.28 }));
+            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.2, weight: isSelected ? 2.5 : 1.75 }));
             poly.on("mouseout", () =>
-              poly.setStyle({ fillOpacity: isSelected ? 0.22 : 0.06 })
+              poly.setStyle({ fillOpacity: isSelected ? 0.14 : 0.03, weight: isSelected ? 2.5 : 1.25 })
             );
           }
         });
@@ -298,14 +298,23 @@ export function AdminDistrictMap({
             selectedOfficerId !== null &&
             report.assignedOfficerId !== selectedOfficerId;
 
-          const marker = L.circleMarker([report.latitude, report.longitude], {
-            radius: 6,
-            fillColor: color,
-            color: "#fff",
-            weight: 1.5,
-            fillOpacity: dimmed ? 0.2 : 0.88,
-            opacity: dimmed ? 0.35 : 1,
+          const isCleaned = report.status === "cleaned";
+          const iconHtml = isCleaned
+            ? `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2.5px solid #fff;box-shadow:0 0 0 2px ${color}40,0 2px 6px rgba(0,0,0,0.18);opacity:${dimmed ? 0.35 : 1};"></div>`
+            : `<div class="pulse-marker" style="--pulse-color: ${color}; opacity:${dimmed ? 0.35 : 1}; width:28px; height:28px;">
+                 <div class="pulse-ring pulse-ring-1" style="width:18px;height:18px;"></div>
+                 <div class="pulse-ring pulse-ring-2" style="width:26px;height:26px;"></div>
+                 <div class="pulse-core" style="width:10px;height:10px;"></div>
+               </div>`;
+
+          const icon = L.divIcon({
+            html: iconHtml,
+            className: "",
+            iconSize: isCleaned ? [16, 16] : [28, 28],
+            iconAnchor: isCleaned ? [8, 8] : [14, 14],
           });
+
+          const marker = L.marker([report.latitude, report.longitude], { icon });
 
           const popup = document.createElement("div");
           popup.style.cssText = "min-width:170px;padding:4px 0;";
