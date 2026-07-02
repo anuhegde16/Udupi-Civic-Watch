@@ -207,22 +207,18 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
 
         if (officer) {
           // Show compact ward number instead of officer name to avoid clutter.
-          // No solid fill background here — just colored text on a tiny
-          // translucent chip so it doesn't read as a colored blob on the ward.
+          // Plain text only — no background, border, or chip of any kind.
           const wardNum = ward.name.replace(/\D+/g, "");
           const labelText = wardNum ? wardNum : ward.name.slice(0, 4);
           const labelColor = isHighlighted ? "#0d9488" : color;
           const icon = L.divIcon({
             html: `<div style="
-              background:rgba(255,255,255,0.88);
               color:${labelColor};
-              padding:1px 5px;
-              border-radius:5px;
-              font-size:10px;
+              font-size:11px;
               font-weight:800;
               line-height:1.3;
               white-space:nowrap;
-              border:1.5px solid ${labelColor};
+              text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);
             ">${labelText}</div>`,
             className: "",
             iconAnchor: [0, 8],

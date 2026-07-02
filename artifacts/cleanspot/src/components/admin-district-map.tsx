@@ -262,9 +262,8 @@ export function AdminDistrictMap({
           if (isInActivePanchayat) {
             const wardNum = zone.name.replace(/\D+/g, "");
             const labelColor = assignedOfficer ? wardColor : WARD_AMBER;
-            // No solid fill background — colored text on a small translucent
-            // chip so it doesn't read as a colored blob covering the ward.
-            const labelHtml = `<div style="background:rgba(255,255,255,0.88);color:${labelColor};padding:1px 5px;border-radius:5px;font-size:10px;font-weight:800;line-height:1.3;white-space:nowrap;border:1.5px solid ${labelColor};pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">Ward ${wardNum}</div>`;
+            // Plain text only — no background, border, or chip of any kind.
+            const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">Ward ${wardNum}</div>`;
             const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
             L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
           }
