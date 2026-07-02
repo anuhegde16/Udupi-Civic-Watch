@@ -1,7 +1,18 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Image as ImageIcon, Trash2, Mail, Loader2, CheckCircle2, Clock } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MapPin, Image as ImageIcon, Trash2, Mail, Loader2, CheckCircle2, Clock, Archive } from "lucide-react";
 import { format } from "date-fns";
 import { useImageLightbox } from "@/components/image-lightbox";
 
@@ -19,6 +30,7 @@ export type ReportDetail = {
   cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
   reporterEmail?: string | null;
   createdAt?: string | null;
+  deletedAt?: string | null;
 };
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -49,9 +61,11 @@ interface ReportDetailSheetProps {
   onClose: () => void;
   onStatusChange?: (reportId: number, newStatus: "cleaning" | "cleaned") => Promise<void>;
   isUpdating?: boolean;
+  onArchive?: (reportId: number) => void;
+  isArchiving?: boolean;
 }
 
-export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpdating }: ReportDetailSheetProps) {
+export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpdating, onArchive, isArchiving }: ReportDetailSheetProps) {
   const { lightbox, open: openLightbox } = useImageLightbox();
   const meta = report ? (STATUS_META[report.status] ?? { label: report.status, cls: "" }) : null;
 
@@ -207,6 +221,51 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                 <div className="border-t border-border/50 pt-4 flex items-center gap-2 text-xs text-primary font-medium">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>This report has been cleaned.</span>
+                </div>
+              )}
+
+              {onArchive && !report.deletedAt && (
+                <div className="border-t border-border/50 pt-4">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-xl h-11 font-bold text-sm border-slate-300 text-slate-600 hover:bg-slate-50 hover:text-slate-700"
+                        disabled={isArchiving}
+                      >
+                        {isArchiving ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Archive className="w-4 h-4 mr-2" />
+                        )}
+                        Archive Report
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-[2rem] p-8">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-black text-2xl">Archive this report?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                          Report #{report.id} will be moved to the archive and hidden from the dashboard, map, and stats. It is not deleted and can still be viewed in the Archived view.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-6 gap-2">
+                        <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-slate-700 hover:bg-slate-800 rounded-xl font-black h-11"
+                          onClick={() => onArchive(report.id)}
+                        >
+                          Yes, archive
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              )}
+
+              {report.deletedAt && (
+                <div className="border-t border-border/50 pt-4 flex items-center gap-2 text-xs text-slate-500 font-medium">
+                  <Archive className="w-4 h-4 shrink-0" />
+                  <span>This report is archived.</span>
                 </div>
               )}
             </div>

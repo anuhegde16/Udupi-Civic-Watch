@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable } from "@workspace/db";
-import { eq, sql, and, isNull } from "drizzle-orm";
+import { eq, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { requirePanchayatAdmin } from "../lib/auth";
 import geofencesData from "../data/geofences.json";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -56,6 +57,7 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
   }
 
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const archived = req.query.archived === "true";
 
   const officerRows = await db
     .select({ id: officersTable.id })
@@ -71,9 +73,13 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
 
   const conditions: any[] = [
     sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map(id => sql`${id}::int`), sql`, `)}])`,
-    isNull(reportsTable.deletedAt),
   ];
-  if (status) conditions.push(eq(reportsTable.status, status));
+  if (archived) {
+    conditions.push(isNotNull(reportsTable.deletedAt));
+  } else {
+    conditions.push(isNull(reportsTable.deletedAt));
+    if (status) conditions.push(eq(reportsTable.status, status));
+  }
 
   const reports = await db
     .select({ report: reportsTable, officer: officersTable })
@@ -99,6 +105,57 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
   });
 
   res.json({ reports: formatted, total: countRow.count });
+});
+
+router.delete("/panchayat/reports/:id", requirePanchayatAdmin, async (req, res): Promise<void> => {
+  const user = (req as any).user;
+  if (!user.panchayatName) {
+    res.status(403).json({ error: "No panchayat assigned to this account" });
+    return;
+  }
+
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const officerRows = await db
+    .select({ id: officersTable.id })
+    .from(officersTable)
+    .where(and(eq(officersTable.panchayatName, user.panchayatName), isNull(officersTable.deletedAt)));
+  const officerIds = officerRows.map((o) => o.id);
+
+  if (officerIds.length === 0) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  const [report] = await db
+    .select({ id: reportsTable.id, assignedOfficerId: reportsTable.assignedOfficerId, deletedAt: reportsTable.deletedAt })
+    .from(reportsTable)
+    .where(eq(reportsTable.id, id))
+    .limit(1);
+
+  if (!report || report.assignedOfficerId === null || !officerIds.includes(report.assignedOfficerId)) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  const [archived] = await db
+    .update(reportsTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(reportsTable.id, id), isNull(reportsTable.deletedAt)))
+    .returning();
+
+  if (!archived) {
+    res.status(404).json({ error: "Report not found or already archived" });
+    return;
+  }
+
+  logger.info({ reportId: id, panchayatName: user.panchayatName }, "Report archived (soft-deleted) by panchayat admin");
+  res.json({ success: true, id });
 });
 
 router.get("/panchayat/stats", requirePanchayatAdmin, async (req, res): Promise<void> => {

@@ -26,6 +26,7 @@ import {
   X,
   KeyRound,
   RefreshCw,
+  Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -152,6 +153,15 @@ function usePanchayatReports() {
   });
 }
 
+function usePanchayatArchivedReports(enabled: boolean) {
+  return useQuery<{ reports: PanchayatMapReport[]; total: number }>({
+    queryKey: ["panchayat-reports-archived"],
+    queryFn: () => customFetch("/api/panchayat/reports?archived=true"),
+    retry: false,
+    enabled,
+  });
+}
+
 function useDeleteOfficer() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -197,6 +207,27 @@ export default function MasterDashboard() {
   const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const { data: archivedReportsData, isLoading: isLoadingArchived } = usePanchayatArchivedReports(archivedOpen);
+
+  const archiveReportMutation = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/panchayat/reports/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      toast({ title: "Report archived", description: "The report was moved to the archive." });
+      setSelectedReport((prev) => (prev && prev.id === id ? null : prev));
+      queryClient.invalidateQueries({ queryKey: ["panchayat-reports-map"] });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-reports-archived"] });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Failed to archive", description: err.message, variant: "destructive" }),
+  });
+
+  function handleArchiveReport(reportId: number) {
+    archiveReportMutation.mutate(reportId);
+  }
 
   const [deepLinkedReportId] = useState<number | null>(() => {
     const id = new URLSearchParams(window.location.search).get("report");
@@ -390,6 +421,16 @@ export default function MasterDashboard() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               <span>Updated {format(lastRefreshed, "HH:mm")}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setArchivedOpen(true)}
+              title="View archived reports"
+              className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted px-3 py-2 rounded-xl"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>Archived Reports</span>
             </button>
 
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -1058,9 +1099,68 @@ export default function MasterDashboard() {
         report={selectedReport}
         open={selectedReport !== null}
         onClose={() => setSelectedReport(null)}
-        onStatusChange={handleReportStatusChange}
+        onStatusChange={selectedReport?.deletedAt ? undefined : handleReportStatusChange}
         isUpdating={updateReport.isPending}
+        onArchive={selectedReport?.deletedAt ? undefined : handleArchiveReport}
+        isArchiving={archiveReportMutation.isPending}
       />
+
+      <Sheet open={archivedOpen} onOpenChange={setArchivedOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2 font-black">
+              <Archive className="w-5 h-5" />
+              Archived Reports
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-3">
+            {isLoadingArchived && (
+              <div className="text-sm text-muted-foreground text-center py-8">Loading archived reports…</div>
+            )}
+            {!isLoadingArchived && (archivedReportsData?.reports.length ?? 0) === 0 && (
+              <div className="text-sm text-muted-foreground text-center py-8">No archived reports yet.</div>
+            )}
+            {archivedReportsData?.reports.map((r) => {
+              const officer = officers.find((o) => o.id === r.assignedOfficerId);
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => {
+                    setSelectedReport({
+                      id: r.id,
+                      address: r.address,
+                      latitude: r.latitude,
+                      longitude: r.longitude,
+                      status: r.status,
+                      wardName: officer?.areaName ?? null,
+                      officerName: officer?.name ?? null,
+                      imageUrl: r.imageUrls?.[0]?.url ?? r.imageUrl ?? null,
+                      imageUrls: r.imageUrls ?? null,
+                      cleanupImageUrl: r.cleanupImageUrl ?? null,
+                      cleanupImageUrls: r.cleanupImageUrls ?? null,
+                      reporterEmail: r.reporterEmail ?? null,
+                      createdAt: r.createdAt ?? null,
+                      deletedAt: (r as any).deletedAt ?? new Date().toISOString(),
+                    });
+                  }}
+                  className="w-full text-left rounded-xl border border-border/60 p-3 hover:bg-muted/50 transition-colors flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold truncate">
+                      {r.address ?? `${r.latitude.toFixed(4)}° N, ${r.longitude.toFixed(4)}° E`}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {officer?.name ?? "Unassigned"}
+                      {r.createdAt ? ` · ${format(new Date(r.createdAt), "MMM d, yyyy")}` : ""}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="shrink-0 capitalize">{r.status}</Badge>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
