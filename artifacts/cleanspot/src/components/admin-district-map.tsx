@@ -253,10 +253,9 @@ export function AdminDistrictMap({
 
           const poly = L.polygon(zone.latlngs, {
             color: isInActivePanchayat ? wardColor : "#d1d5db",
-            weight: isSelected ? 2.5 : (isInActivePanchayat ? 1.25 : 0.5),
+            weight: isSelected ? 3 : (isInActivePanchayat ? 1.25 : 0.5),
             dashArray: isSelected ? undefined : (isInActivePanchayat ? "4 3" : "3 8"),
-            fillColor: isInActivePanchayat ? wardColor : "#e5e7eb",
-            fillOpacity: !isInActivePanchayat ? 0.01 : (isSelected ? 0.14 : 0.03),
+            fillOpacity: 0,
             interactive: isInActivePanchayat,
           }).addTo(map);
 
@@ -285,9 +284,9 @@ export function AdminDistrictMap({
                 onWardSelect(zone.name);
               }
             });
-            poly.on("mouseover", () => poly.setStyle({ fillOpacity: 0.2, weight: isSelected ? 2.5 : 1.75 }));
+            poly.on("mouseover", () => poly.setStyle({ weight: isSelected ? 3 : 2 }));
             poly.on("mouseout", () =>
-              poly.setStyle({ fillOpacity: isSelected ? 0.14 : 0.03, weight: isSelected ? 2.5 : 1.25 })
+              poly.setStyle({ weight: isSelected ? 3 : 1.25 })
             );
           }
         });

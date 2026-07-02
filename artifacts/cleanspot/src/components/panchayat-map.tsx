@@ -199,10 +199,9 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
 
         L.polygon(ward.latlngs, {
           color: isHighlighted ? "#0d9488" : officer ? color : "#d1d5db",
-          weight: isHighlighted ? 2.75 : officer ? 1.25 : 0.5,
+          weight: isHighlighted ? 3 : officer ? 1.25 : 0.5,
           dashArray: officer ? undefined : "4 6",
-          fillColor: isHighlighted ? "#0d9488" : officer ? color : "#f3f4f6",
-          fillOpacity: isHighlighted ? 0.14 : officer ? 0.03 : 0.01,
+          fillOpacity: 0,
           interactive: false,
         }).addTo(map);
 
