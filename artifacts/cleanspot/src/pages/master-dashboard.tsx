@@ -207,6 +207,7 @@ export default function MasterDashboard() {
   const [editingOfficer, setEditingOfficer] = useState<PanchayatOfficer | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "reported" | "cleaning" | "cleaned">("all");
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+  const [mobileOfficerDetail, setMobileOfficerDetail] = useState<PanchayatOfficer | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
   const { data: archivedReportsData, isLoading: isLoadingArchived } = usePanchayatArchivedReports(archivedOpen);
 
@@ -1008,74 +1009,204 @@ export default function MasterDashboard() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {officers.map((officer, i) => {
-              const color = ZONE_COLORS[i % ZONE_COLORS.length];
-              const resolvedCount = officer.reportCount - officer.pendingCount;
-              return (
-                <Card key={officer.id} className="rounded-xl border-border/50 p-3 relative overflow-hidden group hover:shadow-md transition-all">
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
-                        {officer.name.charAt(0)}
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
-                        <p className="text-[10px] text-muted-foreground font-bold truncate">
-                          {officer.areaName || "No ward assigned"}
-                        </p>
-                      </div>
+          <>
+            {/* Mobile: compact tappable list (name + ward only) */}
+            <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+              {officers.map((officer, i) => {
+                const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                return (
+                  <button
+                    key={officer.id}
+                    type="button"
+                    onClick={() => setMobileOfficerDetail(officer)}
+                    className="w-full flex items-center gap-3 p-3 text-left active:bg-muted/50 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                      {officer.name.charAt(0)}
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-6 w-6 rounded-full"
-                        onClick={() => openEdit(officer)}
-                        title="Edit officer"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-6 w-6 rounded-full">
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="rounded-[2rem] p-8">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
-                            <AlertDialogDescription className="text-base text-muted-foreground mt-3">
-                              This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter className="mt-6 gap-2">
-                            <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
-                            <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => handleDelete(officer.id)}>
-                              Yes, remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
+                      <p className="text-[11px] text-muted-foreground font-bold truncate">
+                        {officer.areaName || "No ward assigned"}
+                      </p>
                     </div>
-                  </div>
+                    {officer.pendingCount > 0 && (
+                      <Badge className="bg-destructive/10 text-destructive border-destructive/20 shrink-0 text-[10px] font-black">
+                        {officer.pendingCount} pending
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
-                      <div className="text-sm font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
+            {/* Desktop/tablet: full detail cards */}
+            <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {officers.map((officer, i) => {
+                const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                const resolvedCount = officer.reportCount - officer.pendingCount;
+                return (
+                  <Card key={officer.id} className="rounded-xl border-border/50 p-3 relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="flex items-center justify-between gap-2 mb-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                          {officer.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
+                          <p className="text-[10px] text-muted-foreground font-bold truncate">
+                            {officer.areaName || "No ward assigned"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-6 w-6 rounded-full"
+                          onClick={() => openEdit(officer)}
+                          title="Edit officer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-6 w-6 rounded-full">
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-[2rem] p-8">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                              <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                                This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="mt-6 gap-2">
+                              <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                              <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => handleDelete(officer.id)}>
+                                Yes, remove
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
-                    <div className="rounded-lg py-1.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
-                      <div className="text-sm font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
-                      <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
+                        <div className="text-sm font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
+                      </div>
+                      <div className="rounded-lg py-1.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
+                        <div className="text-sm font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
+
+      {/* Mobile officer detail sheet */}
+      <Sheet open={mobileOfficerDetail !== null} onOpenChange={(open) => !open && setMobileOfficerDetail(null)}>
+        <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto">
+          {mobileOfficerDetail && (() => {
+            const officer = mobileOfficerDetail;
+            const i = officers.findIndex((o) => o.id === officer.id);
+            const color = ZONE_COLORS[(i < 0 ? 0 : i) % ZONE_COLORS.length];
+            const resolvedCount = officer.reportCount - officer.pendingCount;
+            return (
+              <div className="pt-2 pb-4">
+                <SheetHeader className="text-left mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-black text-lg shrink-0" style={{ background: color }}>
+                      {officer.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <SheetTitle className="font-black text-lg truncate">{officer.name}</SheetTitle>
+                      <p className="text-xs text-muted-foreground font-medium">
+                        Joined {format(new Date(officer.createdAt), "MMM yyyy")}
+                      </p>
+                    </div>
+                  </div>
+                </SheetHeader>
+
+                <div className="space-y-1.5 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-foreground/80 font-medium">
+                    <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{officer.email}</span>
+                  </div>
+                  {officer.phone && (
+                    <div className="flex items-center gap-2 text-sm text-foreground/80 font-medium">
+                      <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span>{officer.phone}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-sm font-bold bg-muted/30 px-2.5 py-2 rounded-lg">
+                    <MapPin className="w-4 h-4 text-primary shrink-0" />
+                    <span className="truncate">{officer.areaName || "No ward assigned"}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mb-5">
+                  <div className="bg-muted/50 rounded-xl p-3 text-center border border-border/50">
+                    <div className="text-xl font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
+                  </div>
+                  <div className="rounded-xl p-3 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
+                    <div className="text-xl font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-xl font-bold h-11"
+                    onClick={() => {
+                      setMobileOfficerDetail(null);
+                      openEdit(officer);
+                    }}
+                  >
+                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" className="flex-1 rounded-xl font-bold h-11 text-destructive border-destructive/30 hover:bg-destructive/10">
+                        <Trash2 className="w-4 h-4 mr-2" /> Remove
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-[2rem] p-8">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                        <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                          This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-6 gap-2">
+                        <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-destructive rounded-xl font-black h-11"
+                          onClick={() => {
+                            setMobileOfficerDetail(null);
+                            handleDelete(officer.id);
+                          }}
+                        >
+                          Yes, remove
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            );
+          })()}
+        </SheetContent>
+      </Sheet>
 
       <ReportDetailSheet
         report={selectedReport}
