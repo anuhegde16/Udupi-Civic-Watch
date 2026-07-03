@@ -64,6 +64,7 @@ interface WasteSpot {
   address: string | null;
   createdAt: string;
   imageUrl: string | null;
+  cleanupImageUrl: string | null;
 }
 
 interface Zone {
@@ -259,7 +260,7 @@ export function LiveWasteMap() {
         spot.status === "reported"
           ? "#ef4444"
           : spot.status === "cleaning"
-            ? "#f97316"
+            ? "#3b82f6"
             : "#22c55e";
       const label =
         spot.status === "reported"
@@ -285,8 +286,20 @@ export function LiveWasteMap() {
       });
 
       const timeAgo = getTimeAgo(spot.createdAt);
+      const showAfter = spot.status === "cleaned" && !!spot.cleanupImageUrl;
       const imgHtml = spot.imageUrl
-        ? `<div style="margin:-4px -4px 10px -4px; border-radius:8px 8px 0 0; overflow:hidden; height:130px;">
+        ? showAfter
+          ? `<div style="display:flex; gap:4px; margin:-4px -4px 10px -4px;">
+               <div style="flex:1; position:relative; border-radius:8px 0 0 8px; overflow:hidden; height:130px;">
+                 <img src="${spot.imageUrl}" alt="Before" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                 <span style="position:absolute; bottom:3px; left:3px; font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:99px;">Before</span>
+               </div>
+               <div style="flex:1; position:relative; border-radius:0 8px 8px 0; overflow:hidden; height:130px;">
+                 <img src="${spot.cleanupImageUrl}" alt="After" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                 <span style="position:absolute; bottom:3px; left:3px; font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:99px;">After</span>
+               </div>
+             </div>`
+          : `<div style="margin:-4px -4px 10px -4px; border-radius:8px 8px 0 0; overflow:hidden; height:130px;">
              <img src="${spot.imageUrl}" alt="Waste photo" style="width:100%; height:100%; object-fit:cover; display:block;" />
            </div>`
         : "";
@@ -450,8 +463,8 @@ export function LiveWasteMap() {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-60"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-60"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
             </span>
             <span className="text-xs text-muted-foreground font-medium">Being cleaned</span>
           </div>

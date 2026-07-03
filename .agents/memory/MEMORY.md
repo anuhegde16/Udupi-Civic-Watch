@@ -6,3 +6,4 @@
 - [SW dev mode required for push subscriptions](sw-dev-mode.md) — devOptions.enabled:false means navigator.serviceWorker.ready never resolves; subscribe() hangs forever; zero DB subscriptions result; fix is enabled:true + type:"module".
 - [Seed data casing mismatches](seed-data-casing.md) — seeded fixture identifiers can differ in capitalization from project docs; verify exact values via the DB rather than trusting docs for login-dependent e2e tests.
 - [District boundary derived from ward union](district-boundary-derivation.md) — Saligrama district polygon must be regenerated from ward union via script, never hand-edited, or coverage gaps reappear.
+- [Cleaning-status color = blue](status-color-conventions.md) — "cleaning" status is blue (#3b82f6) everywhere, not amber/orange; amber/orange stays reserved for warnings, zone palettes, and hotspots.

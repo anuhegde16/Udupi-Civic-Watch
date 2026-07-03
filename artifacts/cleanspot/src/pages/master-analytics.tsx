@@ -126,10 +126,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   },
   cleaning: {
     label: "Cleaning",
-    color: "text-orange-600",
-    bg: "bg-orange-50",
-    dot: "bg-orange-500",
-    border: "border-orange-200",
+    color: "text-blue-600",
+    bg: "bg-blue-50",
+    dot: "bg-blue-500",
+    border: "border-blue-200",
   },
   cleaned: {
     label: "Cleaned",
@@ -162,7 +162,7 @@ function TrendChart({ data }: { data: DayTrend[] }) {
                   style={{ height: `${Math.max(pct, 4)}%` }}
                 >
                   <div className="bg-destructive/70" style={{ height: `${reportedPct}%` }} />
-                  <div className="bg-orange-400" style={{ height: `${cleaningPct}%` }} />
+                  <div className="bg-blue-400" style={{ height: `${cleaningPct}%` }} />
                   <div className="bg-indigo-500" style={{ height: `${cleanedPct}%` }} />
                 </div>
               )}
@@ -282,9 +282,9 @@ export default function MasterAnalytics() {
       label: "In Progress",
       value: stats?.cleaning ?? 0,
       icon: <Clock className="w-5 h-5" />,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-      ring: "ring-orange-300",
+      color: "text-blue-500",
+      bg: "bg-blue-50",
+      ring: "ring-blue-300",
       status: "cleaning",
     },
     {
@@ -382,7 +382,7 @@ export default function MasterAnalytics() {
           </div>
           <div className="flex items-center gap-3 text-[11px] font-bold shrink-0">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 inline-block" /> Cleaned</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-orange-400 inline-block" /> Cleaning</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block" /> Cleaning</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-destructive/70 inline-block" /> New</span>
           </div>
         </div>
@@ -567,7 +567,7 @@ export default function MasterAnalytics() {
             <div className="flex items-center justify-between">
               <SheetTitle className="text-xl font-black text-foreground flex items-center gap-2">
                 {filter.status === "reported" && <AlertCircle className="w-5 h-5 text-destructive" />}
-                {filter.status === "cleaning" && <Clock className="w-5 h-5 text-orange-500" />}
+                {filter.status === "cleaning" && <Clock className="w-5 h-5 text-blue-500" />}
                 {filter.status === "cleaned" && <CheckCircle2 className="w-5 h-5 text-indigo-600" />}
                 {!filter.status && <LayoutList className="w-5 h-5 text-foreground" />}
                 {filter.label}

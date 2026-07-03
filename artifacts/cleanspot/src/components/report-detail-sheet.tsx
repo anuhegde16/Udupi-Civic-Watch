@@ -35,7 +35,7 @@ export type ReportDetail = {
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   reported: { label: "New", cls: "bg-destructive/10 text-destructive border-destructive/20" },
-  cleaning: { label: "In Progress", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+  cleaning: { label: "In Progress", cls: "bg-blue-100 text-blue-700 border-blue-200" },
   cleaned: { label: "Cleaned", cls: "bg-primary/10 text-primary border-primary/20" },
 };
 
@@ -199,7 +199,7 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                   <Button
                     className={`w-full rounded-xl h-11 font-black text-sm ${
                       nextStatus === "cleaning"
-                        ? "bg-orange-500 hover:bg-orange-600 text-white"
+                        ? "bg-blue-500 hover:bg-blue-600 text-white"
                         : "bg-primary hover:bg-primary/90 text-primary-foreground"
                     }`}
                     disabled={isUpdating}

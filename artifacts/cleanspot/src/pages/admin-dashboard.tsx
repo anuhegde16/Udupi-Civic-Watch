@@ -106,7 +106,7 @@ const panchayatAreaNames: string[] = geofencesData.features
 
 const STATUS_COLORS = {
   reported: "#ef4444",
-  cleaning: "#f59e0b",
+  cleaning: "#3b82f6",
   cleaned: "#22c55e",
 };
 
@@ -175,6 +175,10 @@ type ReportItem = {
   status: string;
   createdAt: string;
   assignedOfficerId?: number | null;
+  imageUrl?: string | null;
+  imageUrls?: { url: string; uploadedAt: string }[] | null;
+  cleanupImageUrl?: string | null;
+  cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
 };
 
 export default function AdminDashboard() {
@@ -462,6 +466,10 @@ export default function AdminDashboard() {
     address: r.address,
     status: r.status,
     assignedOfficerId: r.assignedOfficerId,
+    imageUrl: r.imageUrl,
+    imageUrls: r.imageUrls,
+    cleanupImageUrl: r.cleanupImageUrl,
+    cleanupImageUrls: r.cleanupImageUrls,
   }));
 
   return (
@@ -521,8 +529,8 @@ export default function AdminDashboard() {
           title="In Progress"
           value={stats.cleaning}
           icon={Clock}
-          colorClass="text-amber-600"
-          iconBg="bg-amber-50"
+          colorClass="text-blue-600"
+          iconBg="bg-blue-50"
           href="/admin/reports?status=cleaning"
         />
         <StatCard
@@ -762,7 +770,7 @@ export default function AdminDashboard() {
           </div>
           <div className="flex items-center gap-3 text-[10px] sm:text-xs font-bold">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />New</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />Progress</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />Progress</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Cleaned</span>
           </div>
         </div>

@@ -43,9 +43,9 @@ const STATUS_CONFIG: Record<string, { label: string; border: string; bg: string;
   },
   cleaning: {
     label: "In Progress",
-    border: "border-l-amber-500",
-    bg: "bg-amber-50/60",
-    badge: "bg-amber-100 text-amber-800 border-amber-200",
+    border: "border-l-blue-500",
+    bg: "bg-blue-50/60",
+    badge: "bg-blue-100 text-blue-800 border-blue-200",
     icon: HardHat,
   },
   cleaned: {

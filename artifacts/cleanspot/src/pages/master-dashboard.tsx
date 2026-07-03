@@ -374,7 +374,7 @@ export default function MasterDashboard() {
   const statCards: { label: string; value: number; icon: React.ReactNode; color: string; bg: string; activeBg: string; filter: StatFilter }[] = [
     { label: "Total", value: stats?.total ?? 0, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60", activeBg: "bg-muted ring-2 ring-foreground/30", filter: "all" },
     { label: "New", value: stats?.reported ?? 0, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8", activeBg: "bg-destructive/20 ring-2 ring-destructive/40", filter: "reported" },
-    { label: "In Progress", value: stats?.cleaning ?? 0, icon: <Clock className="w-5 h-5" />, color: "text-orange-500", bg: "bg-orange-50", activeBg: "bg-orange-100 ring-2 ring-orange-400/40", filter: "cleaning" },
+    { label: "In Progress", value: stats?.cleaning ?? 0, icon: <Clock className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50", activeBg: "bg-blue-100 ring-2 ring-blue-400/40", filter: "cleaning" },
     { label: "Cleaned", value: stats?.cleaned ?? 0, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8", activeBg: "bg-primary/20 ring-2 ring-primary/40", filter: "cleaned" },
   ];
 
@@ -576,7 +576,7 @@ export default function MasterDashboard() {
         {!isLoading && statusFilter !== "all" && (() => {
           const filtered = allReports.filter((r) => r.status === statusFilter);
           const label = statusFilter === "reported" ? "New" : statusFilter === "cleaning" ? "In Progress" : "Cleaned";
-          const labelColor = statusFilter === "reported" ? "text-destructive bg-destructive/10" : statusFilter === "cleaning" ? "text-orange-600 bg-orange-50" : "text-primary bg-primary/10";
+          const labelColor = statusFilter === "reported" ? "text-destructive bg-destructive/10" : statusFilter === "cleaning" ? "text-blue-600 bg-blue-50" : "text-primary bg-primary/10";
           return (
             <div className="mt-5 border-t border-border/40 pt-4">
               <div className="flex items-center justify-between mb-3">
@@ -639,7 +639,7 @@ export default function MasterDashboard() {
           </h2>
           <div className="flex items-center gap-3 text-[11px] font-bold text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> New</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> In Progress</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" /> In Progress</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" /> Cleaned</span>
           </div>
         </div>
@@ -785,9 +785,9 @@ export default function MasterDashboard() {
                         <p className="text-2xl font-black text-red-600">{pendingCount}</p>
                         <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide mt-0.5">New</p>
                       </div>
-                      <div className="text-center bg-amber-50 rounded-xl py-3 border border-amber-100">
-                        <p className="text-2xl font-black text-amber-600">{cleaningCount}</p>
-                        <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wide mt-0.5">In Progress</p>
+                      <div className="text-center bg-blue-50 rounded-xl py-3 border border-blue-100">
+                        <p className="text-2xl font-black text-blue-600">{cleaningCount}</p>
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wide mt-0.5">In Progress</p>
                       </div>
                       <div className="text-center bg-indigo-50 rounded-xl py-3 border border-indigo-100">
                         <p className="text-2xl font-black text-indigo-600">{wardOfficer.reportCount - wardOfficer.pendingCount}</p>
@@ -825,7 +825,7 @@ export default function MasterDashboard() {
                                 <span className={`text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-full ${
                                   isNew
                                     ? "bg-red-100 text-red-700"
-                                    : "bg-amber-100 text-amber-700"
+                                    : "bg-blue-100 text-blue-700"
                                 }`}>
                                   {isNew ? "New" : "In Progress"}
                                 </span>

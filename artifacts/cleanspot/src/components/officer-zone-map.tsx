@@ -110,7 +110,7 @@ export function OfficerZoneMap({
         r.status === "reported"
           ? "#ef4444"
           : r.status === "cleaning"
-          ? "#f97316"
+          ? "#3b82f6"
           : "#22c55e";
       const label =
         r.status === "reported"
@@ -144,15 +144,45 @@ export function OfficerZoneMap({
 
       if (r.imageUrl) {
         const safeUrl = /^(https?:\/\/|\/)/.test(r.imageUrl) ? r.imageUrl : "";
+        const safeAfterUrl =
+          r.status === "cleaned" && r.cleanupImageUrl && /^(https?:\/\/|\/)/.test(r.cleanupImageUrl)
+            ? r.cleanupImageUrl
+            : "";
         if (safeUrl) {
-          const imgWrap = document.createElement("div");
-          imgWrap.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
-          const img = document.createElement("img");
-          img.src = safeUrl;
-          img.alt = "Waste photo";
-          img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
-          imgWrap.appendChild(img);
-          popupEl.appendChild(imgWrap);
+          const imgRow = document.createElement("div");
+          imgRow.style.cssText = safeAfterUrl
+            ? "display:flex;gap:3px;margin:-4px -4px 8px -4px;"
+            : "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+
+          const buildThumb = (src: string, label: string, radiusSide: "left" | "right" | "full") => {
+            const wrap = document.createElement("div");
+            const radius =
+              radiusSide === "left" ? "8px 0 0 0" : radiusSide === "right" ? "0 8px 0 0" : "8px 8px 0 0";
+            wrap.style.cssText = `flex:1;position:relative;border-radius:${radius};overflow:hidden;height:100px;`;
+            const img = document.createElement("img");
+            img.src = src;
+            img.alt = label;
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+            wrap.appendChild(img);
+            const tag = document.createElement("span");
+            tag.style.cssText =
+              "position:absolute;bottom:2px;left:2px;font-size:8px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,0.55);padding:1px 4px;border-radius:99px;";
+            tag.textContent = label;
+            wrap.appendChild(tag);
+            return wrap;
+          };
+
+          if (safeAfterUrl) {
+            imgRow.appendChild(buildThumb(safeUrl, "Before", "left"));
+            imgRow.appendChild(buildThumb(safeAfterUrl, "After", "right"));
+          } else {
+            const img = document.createElement("img");
+            img.src = safeUrl;
+            img.alt = "Waste photo";
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+            imgRow.appendChild(img);
+          }
+          popupEl.appendChild(imgRow);
         }
       }
 
@@ -217,7 +247,7 @@ export function OfficerZoneMap({
       <div className="absolute bottom-0 left-0 right-0 z-[1000] flex items-center gap-4 px-3 py-1.5 bg-card/90 backdrop-blur-md border-t border-border/50">
         {[
           { color: "#ef4444", label: "New", pulse: true },
-          { color: "#f97316", label: "In Progress", pulse: true },
+          { color: "#3b82f6", label: "In Progress", pulse: true },
           { color: "#22c55e", label: "Cleaned", pulse: false },
         ].map(({ color, label, pulse }) => (
           <div key={label} className="flex items-center gap-1.5">

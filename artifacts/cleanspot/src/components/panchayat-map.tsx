@@ -3,7 +3,7 @@ import geofencesData from "@/data/geofences.json";
 
 const STATUS_COLORS: Record<string, string> = {
   reported: "#ef4444",
-  cleaning: "#f59e0b",
+  cleaning: "#3b82f6",
   cleaned: "#22c55e",
 };
 
@@ -249,6 +249,45 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
 
         const popup = document.createElement("div");
         popup.style.cssText = "min-width:160px;padding:4px 0;";
+
+        const beforeUrl =
+          (report.imageUrls && report.imageUrls[0]?.url) || report.imageUrl || null;
+        const afterUrl =
+          report.status === "cleaned"
+            ? (report.cleanupImageUrls && report.cleanupImageUrls[0]?.url) || report.cleanupImageUrl || null
+            : null;
+
+        if (beforeUrl) {
+          const imgRow = document.createElement("div");
+          imgRow.style.cssText = afterUrl
+            ? "display:flex;gap:3px;margin:-4px -4px 8px -4px;"
+            : "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+
+          const buildThumb = (src: string, label: string, side: "left" | "right" | "full") => {
+            const wrap = document.createElement("div");
+            const radius = side === "left" ? "8px 0 0 0" : side === "right" ? "0 8px 0 0" : "8px 8px 0 0";
+            wrap.style.cssText = `flex:1;position:relative;border-radius:${radius};overflow:hidden;height:100px;`;
+            const img = document.createElement("img");
+            img.src = src;
+            img.alt = label;
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+            wrap.appendChild(img);
+            const tag = document.createElement("span");
+            tag.style.cssText =
+              "position:absolute;bottom:2px;left:2px;font-size:8px;font-weight:800;letter-spacing:0.04em;text-transform:uppercase;color:#fff;background:rgba(0,0,0,0.55);padding:1px 4px;border-radius:99px;";
+            tag.textContent = label;
+            wrap.appendChild(tag);
+            return wrap;
+          };
+
+          if (afterUrl) {
+            imgRow.appendChild(buildThumb(beforeUrl, "Before", "left"));
+            imgRow.appendChild(buildThumb(afterUrl, "After", "right"));
+          } else {
+            imgRow.appendChild(buildThumb(beforeUrl, "Photo", "full"));
+          }
+          popup.appendChild(imgRow);
+        }
 
         const badge = document.createElement("span");
         badge.style.cssText = `display:inline-block;font-size:10px;font-weight:800;

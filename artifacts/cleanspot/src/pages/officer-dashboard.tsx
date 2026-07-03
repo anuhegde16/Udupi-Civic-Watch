@@ -165,9 +165,9 @@ export default function OfficerDashboard() {
       label: "In Progress",
       value: stats.inProgress,
       icon: <Wrench className="w-5 h-5" />,
-      color: "text-orange-500",
-      bg: "bg-orange-50",
-      activeBg: "bg-orange-100 ring-2 ring-orange-400/40",
+      color: "text-blue-500",
+      bg: "bg-blue-50",
+      activeBg: "bg-blue-100 ring-2 ring-blue-400/40",
       filter: "cleaning",
     },
     {
@@ -318,7 +318,7 @@ export default function OfficerDashboard() {
             </TabsTrigger>
             <TabsTrigger
               value="cleaning"
-              className="rounded-xl data-[state=active]:bg-orange-500 data-[state=active]:text-white py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
+              className="rounded-xl data-[state=active]:bg-blue-500 data-[state=active]:text-white py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
             >
               Progress ({stats.inProgress})
             </TabsTrigger>
