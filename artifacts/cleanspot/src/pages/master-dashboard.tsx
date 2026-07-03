@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -423,6 +424,15 @@ export default function MasterDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               <span>Updated {format(lastRefreshed, "HH:mm")}</span>
             </button>
+
+            <Link
+              href="/master/reports"
+              title="View all reports"
+              className="relative z-10 flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-800 transition-colors bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-xl"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              <span>All Reports</span>
+            </Link>
 
             <button
               type="button"

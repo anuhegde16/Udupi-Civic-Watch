@@ -17,6 +17,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import AdminOfficers from "@/pages/admin-officers";
 import AdminReports from "@/pages/admin-reports";
 import MasterDashboard from "@/pages/master-dashboard";
+import MasterReports from "@/pages/master-reports";
 import MasterAnalytics from "@/pages/master-analytics";
 import NotificationsPage from "@/pages/notifications";
 
@@ -51,6 +52,11 @@ function Router() {
         <Route path="/master/dashboard">
           <AuthGuard roles={["panchayat_admin"]}>
             <MasterDashboard />
+          </AuthGuard>
+        </Route>
+        <Route path="/master/reports">
+          <AuthGuard roles={["panchayat_admin"]}>
+            <MasterReports />
           </AuthGuard>
         </Route>
         <Route path="/master/analytics">
