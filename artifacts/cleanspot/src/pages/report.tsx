@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus, Lock, MapPinned } from "lucide-react";
-import { useCreateReport, useUploadImage, customFetch, ApiError } from "@workspace/api-client-react";
+import { Camera, MapPin, Loader2, CheckCircle2, ArrowRight, Info, Navigation, AlertTriangle, Hand, Mail, Bell, LayoutGrid, X, Plus, Lock, MapPinned, RefreshCw } from "lucide-react";
+import { useCreateReport, customFetch, ApiError } from "@workspace/api-client-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
 import { compressImage } from "@/lib/compress-image";
+import { uploadImageWithProgress, UploadTimeoutError } from "@/lib/upload-with-progress";
 import { format } from "date-fns";
 
 // Ray-casting point-in-polygon. Ring is GeoJSON [lon, lat] pairs.
@@ -46,7 +47,7 @@ function isWithinServiceArea(lat: number, lng: number): boolean {
   return false;
 }
 
-type PhotoEntry = { id: string; preview: string; url: string; uploadedAt: string };
+type PhotoEntry = { id: string; preview: string; url: string; uploadedAt: string; progress: number; error: string | null };
 const MAX_CITIZEN_PHOTOS = 2;
 
 export default function Report() {
@@ -59,7 +60,8 @@ export default function Report() {
   const [successQuote, setSuccessQuote] = useState<string>("");
 
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const isUploading = isProcessing || photos.some(p => !p.url && !p.error);
 
   const [location, setGeoLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -83,7 +85,6 @@ export default function Report() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const createReport = useCreateReport();
-  const uploadImage = useUploadImage();
 
   const { data: testModeData } = useQuery({
     queryKey: ["test-mode"],
@@ -168,6 +169,25 @@ export default function Report() {
     );
   };
 
+  const startUpload = (photoId: string, dataUrl: string) => {
+    setPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, error: null, progress: 0 } : p)));
+
+    uploadImageWithProgress(dataUrl, (percent) => {
+      setPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, progress: percent } : p)));
+    })
+      .then((data) => {
+        setPhotos(prev => prev.map(p =>
+          p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt, progress: 100, error: null } : p
+        ));
+      })
+      .catch((err) => {
+        const message = err instanceof UploadTimeoutError
+          ? err.message
+          : err instanceof Error ? err.message : "Upload failed. Please try again.";
+        setPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, error: message, progress: 0 } : p)));
+      });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -177,30 +197,19 @@ export default function Report() {
     const photoId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     try {
-      setIsUploading(true);
+      setIsProcessing(true);
       const compressed = await compressImage(file);
-      setPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "" }]);
-
-      uploadImage.mutate(
-        { data: { dataUrl: compressed } },
-        {
-          onSuccess: (data) => {
-            setPhotos(prev => prev.map(p =>
-              p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt } : p
-            ));
-            setIsUploading(false);
-          },
-          onError: (err) => {
-            setPhotos(prev => prev.filter(p => p.id !== photoId));
-            toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-            setIsUploading(false);
-          },
-        }
-      );
+      setPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "", progress: 0, error: null }]);
+      setIsProcessing(false);
+      startUpload(photoId, compressed);
     } catch {
-      setIsUploading(false);
+      setIsProcessing(false);
       toast({ title: "Error", description: "Failed to process image. Please try again.", variant: "destructive" });
     }
+  };
+
+  const retryUpload = (photo: PhotoEntry) => {
+    startUpload(photo.id, photo.preview);
   };
 
   const removePhoto = (id: string) => {
@@ -290,7 +299,12 @@ export default function Report() {
       return;
     }
     if (!allPhotosUploaded) {
-      toast({ title: "Upload in progress", description: "Please wait for all photos to finish uploading.", variant: "destructive" });
+      const hasFailedUpload = photos.some(p => !p.url && p.error);
+      toast(
+        hasFailedUpload
+          ? { title: "Upload failed", description: "One of your photos didn't upload. Tap Retry on it before submitting.", variant: "destructive" }
+          : { title: "Upload in progress", description: "Please wait for all photos to finish uploading.", variant: "destructive" }
+      );
       return;
     }
     if (!location) {
@@ -427,10 +441,32 @@ export default function Report() {
               {photos.map((photo) => (
                 <div key={photo.id} className="relative rounded-2xl overflow-hidden bg-muted aspect-[4/3] group border border-border/50">
                   <img src={photo.preview} alt="Waste photo" className="w-full h-full object-cover" />
-                  {/* Uploading overlay */}
-                  {!photo.url && (
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                  {/* Uploading overlay with progress bar */}
+                  {!photo.url && !photo.error && (
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2 backdrop-blur-sm px-4">
                       <Loader2 className="w-6 h-6 animate-spin text-white" />
+                      <div className="w-full h-1.5 bg-white/25 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-white rounded-full transition-all duration-200"
+                          style={{ width: `${photo.progress}%` }}
+                        />
+                      </div>
+                      <span className="text-white text-[10px] font-bold">{photo.progress}%</span>
+                    </div>
+                  )}
+                  {/* Upload failed / timed out — friendly retry prompt */}
+                  {!photo.url && photo.error && (
+                    <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                      <AlertTriangle className="w-6 h-6 text-amber-400" />
+                      <p className="text-white text-[11px] font-medium leading-snug">{photo.error}</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => retryUpload(photo)}
+                        className="h-8 px-3 rounded-lg bg-white text-foreground hover:bg-white/90 font-bold text-xs"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Retry
+                      </Button>
                     </div>
                   )}
                   {/* Timestamp badge */}

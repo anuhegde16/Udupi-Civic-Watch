@@ -1,19 +1,20 @@
 import { useRoute, useLocation } from "wouter";
 import { useState, useRef, useMemo } from "react";
-import { useGetReport, useUpdateReport, useUploadImage, getGetOfficerReportsQueryKey, getGetReportQueryKey } from "@workspace/api-client-react";
+import { useGetReport, useUpdateReport, getGetOfficerReportsQueryKey, getGetReportQueryKey } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight, X, Plus, Images } from "lucide-react";
+import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight, X, Plus, Images, AlertTriangle, RefreshCw } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ReportLocationMap } from "@/components/report-location-map";
 import { compressImage } from "@/lib/compress-image";
+import { uploadImageWithProgress, UploadTimeoutError } from "@/lib/upload-with-progress";
 import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
 import { useImageLightbox } from "@/components/image-lightbox";
 
-type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string };
+type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string; progress: number; error: string | null };
 const MAX_CLEANUP_PHOTOS = 5;
 
 export default function OfficerReportDetail() {
@@ -26,10 +27,10 @@ export default function OfficerReportDetail() {
   
   const { data: report, isLoading } = useGetReport(id, { query: { queryKey: getGetReportQueryKey(id), enabled: !!id } });
   const updateReport = useUpdateReport();
-  const uploadImage = useUploadImage();
   
-  const [isUploading, setIsUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
+  const isUploading = isProcessing || cleanupPhotos.some(p => !p.url && !p.error);
   const resolvedQuote = useMemo(() => getRandomMotivationalQuote("fieldOfficerResolved"), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
@@ -71,6 +72,25 @@ export default function OfficerReportDetail() {
     );
   };
 
+  const startUpload = (photoId: string, dataUrl: string) => {
+    setCleanupPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, error: null, progress: 0 } : p)));
+
+    uploadImageWithProgress(dataUrl, (percent) => {
+      setCleanupPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, progress: percent } : p)));
+    })
+      .then((data) => {
+        setCleanupPhotos(prev => prev.map(p =>
+          p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt, progress: 100, error: null } : p
+        ));
+      })
+      .catch((err) => {
+        const message = err instanceof UploadTimeoutError
+          ? err.message
+          : err instanceof Error ? err.message : "Upload failed. Please try again.";
+        setCleanupPhotos(prev => prev.map(p => (p.id === photoId ? { ...p, error: message, progress: 0 } : p)));
+      });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -80,30 +100,19 @@ export default function OfficerReportDetail() {
     const photoId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     try {
-      setIsUploading(true);
+      setIsProcessing(true);
       const compressed = await compressImage(file);
-      setCleanupPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "" }]);
-
-      uploadImage.mutate(
-        { data: { dataUrl: compressed } },
-        {
-          onSuccess: (data) => {
-            setCleanupPhotos(prev => prev.map(p =>
-              p.id === photoId ? { ...p, url: data.url, uploadedAt: data.uploadedAt } : p
-            ));
-            setIsUploading(false);
-          },
-          onError: (err) => {
-            setCleanupPhotos(prev => prev.filter(p => p.id !== photoId));
-            toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-            setIsUploading(false);
-          }
-        }
-      );
+      setCleanupPhotos(prev => [...prev, { id: photoId, preview: compressed, url: "", uploadedAt: "", progress: 0, error: null }]);
+      setIsProcessing(false);
+      startUpload(photoId, compressed);
     } catch {
-      setIsUploading(false);
+      setIsProcessing(false);
       toast({ title: "Error", description: "Failed to process image. Please try again.", variant: "destructive" });
     }
+  };
+
+  const retryCleanupUpload = (photo: CleanupPhoto) => {
+    startUpload(photo.id, photo.preview);
   };
 
   const removeCleanupPhoto = (id: string) => {
@@ -340,9 +349,28 @@ export default function OfficerReportDetail() {
                       {cleanupPhotos.map((photo) => (
                         <div key={photo.id} className="relative rounded-xl overflow-hidden bg-muted aspect-square group">
                           <img src={photo.preview} alt="Cleanup" className="w-full h-full object-cover" />
-                          {!photo.url && (
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          {!photo.url && !photo.error && (
+                            <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-1 px-2">
                               <Loader2 className="w-5 h-5 animate-spin text-white" />
+                              <div className="w-full h-1 bg-white/25 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-white rounded-full transition-all duration-200"
+                                  style={{ width: `${photo.progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {!photo.url && photo.error && (
+                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-1 px-1.5 text-center">
+                              <AlertTriangle className="w-4 h-4 text-amber-400" />
+                              <p className="text-white text-[8px] font-medium leading-tight line-clamp-2">{photo.error}</p>
+                              <button
+                                type="button"
+                                onClick={() => retryCleanupUpload(photo)}
+                                className="flex items-center gap-1 h-6 px-2 rounded-md bg-white text-foreground font-bold text-[9px]"
+                              >
+                                <RefreshCw className="w-2.5 h-2.5" /> Retry
+                              </button>
                             </div>
                           )}
                           {photo.uploadedAt && (

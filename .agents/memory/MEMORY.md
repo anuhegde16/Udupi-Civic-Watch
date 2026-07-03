@@ -4,3 +4,4 @@
 - [DB schema push workaround](db-push-workaround.md) — drizzle-kit push hangs on interactive column-rename prompts; use psql direct SQL as fallback.
 - [PWA push + in-app notifications](push-notifications.md) — injectManifest mode required for custom SW; NotificationOptions TS lib lacks vibrate/renotify; notification sound via Web Audio API (not file).
 - [SW dev mode required for push subscriptions](sw-dev-mode.md) — devOptions.enabled:false means navigator.serviceWorker.ready never resolves; subscribe() hangs forever; zero DB subscriptions result; fix is enabled:true + type:"module".
+- [Seed data casing mismatches](seed-data-casing.md) — seeded fixture identifiers can differ in capitalization from project docs; verify exact values via the DB rather than trusting docs for login-dependent e2e tests.
