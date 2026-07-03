@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +46,7 @@ export default function OfficerDashboard() {
   const officerId = user?.officerId || 0;
   const queryClient = useQueryClient();
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
@@ -209,7 +211,7 @@ export default function OfficerDashboard() {
             className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Updated {format(lastRefreshed, "HH:mm")}</span>
+            <span className="hidden sm:inline">Updated {relativeLastRefreshed}</span>
           </button>
         </div>
 

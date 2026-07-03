@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch, useCreateOfficer, useUpdateOfficer, useUpdateReport } from "@workspace/api-client-react";
@@ -180,6 +181,7 @@ export default function MasterDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   async function handleRefresh() {
@@ -422,7 +424,7 @@ export default function MasterDashboard() {
               className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span>Updated {format(lastRefreshed, "HH:mm")}</span>
+              <span>Updated {relativeLastRefreshed}</span>
             </button>
 
             <Link
