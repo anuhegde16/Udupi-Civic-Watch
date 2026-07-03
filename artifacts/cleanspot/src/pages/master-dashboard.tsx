@@ -1013,34 +1013,33 @@ export default function MasterDashboard() {
               const color = ZONE_COLORS[i % ZONE_COLORS.length];
               const resolvedCount = officer.reportCount - officer.pendingCount;
               return (
-                <Card key={officer.id} className="rounded-2xl border-border/50 p-5 relative overflow-hidden group hover:shadow-md transition-all">
-                  <div className="absolute top-0 right-0 w-16 h-16 rounded-bl-[60px] transition-transform duration-500 group-hover:scale-125" style={{ background: `${color}15` }} />
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0" style={{ background: color }}>
+                <Card key={officer.id} className="rounded-xl border-border/50 p-3 relative overflow-hidden group hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
                         {officer.name.charAt(0)}
                       </div>
-                      <div>
-                        <h3 className="font-black text-foreground text-sm leading-tight mb-0.5">{officer.name}</h3>
-                        <p className="text-[10px] text-muted-foreground font-medium">
-                          Joined {format(new Date(officer.createdAt), "MMM yyyy")}
+                      <div className="min-w-0">
+                        <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
+                        <p className="text-[10px] text-muted-foreground font-bold truncate">
+                          {officer.areaName || "No ward assigned"}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 -mt-1 -mr-1">
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-7 w-7 rounded-full"
+                        className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-6 w-6 rounded-full"
                         onClick={() => openEdit(officer)}
                         title="Edit officer"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3 h-3" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-7 w-7 rounded-full">
-                            <Trash2 className="w-3.5 h-3.5" />
+                          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-6 w-6 rounded-full">
+                            <Trash2 className="w-3 h-3" />
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="rounded-[2rem] p-8">
@@ -1061,31 +1060,14 @@ export default function MasterDashboard() {
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 mb-4">
-                    <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                      <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="truncate">{officer.email}</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
+                      <div className="text-sm font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
                     </div>
-                    {officer.phone && (
-                      <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                        <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                        <span>{officer.phone}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-xs font-bold bg-muted/30 px-2 py-1.5 rounded-lg">
-                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span className="truncate">{officer.areaName || "No ward assigned"}</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-muted/50 rounded-xl p-2.5 text-center border border-border/50">
-                      <div className="text-lg font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
-                    </div>
-                    <div className="rounded-xl p-2.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
-                      <div className="text-lg font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+                    <div className="rounded-lg py-1.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
+                      <div className="text-sm font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
                     </div>
                   </div>
                 </Card>
