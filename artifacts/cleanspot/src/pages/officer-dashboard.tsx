@@ -303,28 +303,28 @@ export default function OfficerDashboard() {
           value={statusFilter}
           onValueChange={(v) => setStatusFilter(v as StatusFilter)}
         >
-          <TabsList className="bg-background/50 backdrop-blur-sm border border-border shadow-sm rounded-2xl p-1.5 h-auto flex flex-wrap max-w-full overflow-x-auto w-full">
+          <TabsList className="bg-background/50 backdrop-blur-sm border border-border shadow-sm rounded-2xl p-1.5 h-auto grid grid-cols-2 sm:flex sm:flex-nowrap gap-1.5 sm:gap-0 w-full">
             <TabsTrigger
               value="all"
-              className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2 px-5 font-bold text-sm flex-1 transition-all"
+              className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
             >
               All ({stats.total})
             </TabsTrigger>
             <TabsTrigger
               value="reported"
-              className="rounded-xl data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground py-2 px-5 font-bold text-sm flex-1 transition-all"
+              className="rounded-xl data-[state=active]:bg-destructive data-[state=active]:text-destructive-foreground py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
             >
               New ({stats.newCount})
             </TabsTrigger>
             <TabsTrigger
               value="cleaning"
-              className="rounded-xl data-[state=active]:bg-orange-500 data-[state=active]:text-white py-2 px-5 font-bold text-sm flex-1 transition-all"
+              className="rounded-xl data-[state=active]:bg-orange-500 data-[state=active]:text-white py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
             >
               Progress ({stats.inProgress})
             </TabsTrigger>
             <TabsTrigger
               value="cleaned"
-              className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-primary py-2 px-5 font-bold text-sm flex-1 transition-all"
+              className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-primary py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1 transition-all"
             >
               Cleaned ({stats.cleaned})
             </TabsTrigger>

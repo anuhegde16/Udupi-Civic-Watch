@@ -459,7 +459,7 @@ export default function MasterDashboard() {
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FormField control={form.control} name="email" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="font-bold">Email</FormLabel>
