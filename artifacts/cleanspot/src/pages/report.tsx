@@ -720,7 +720,7 @@ export default function Report() {
             <DialogHeader className="space-y-1.5 text-left">
               <DialogTitle className="text-xl font-black">Waste already reported nearby</DialogTitle>
               <DialogDescription className="text-sm text-muted-foreground font-medium leading-relaxed">
-                Someone already reported waste within 20 metres of this spot
+                Someone already reported waste within 5 metres of this spot
                 {duplicateReportCreatedAt
                   ? ` on ${format(new Date(duplicateReportCreatedAt), "d MMM, h:mm a")}.`
                   : "."}

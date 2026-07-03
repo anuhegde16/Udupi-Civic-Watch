@@ -25,7 +25,7 @@ function sanitizeReport<T extends { reporterEmail?: string | null; reporterIp?: 
   return safe;
 }
 
-const DUPLICATE_RADIUS_DEG = 0.00018; // ~20m at Udupi's latitude (13°N)
+const DUPLICATE_RADIUS_DEG = 0.000045; // ~5m at Udupi's latitude (13°N)
 const RATE_LIMIT_HOURS = 1;
 const RATE_LIMIT_MAX = 5;
 
@@ -136,7 +136,7 @@ router.post("/reports", async (req, res): Promise<void> => {
   const { latitude, longitude, imageUrl, imageUrls: rawImageUrls, address, description, reporterEmail } = parsed.data;
   const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.ip || "";
 
-  // Duplicate check within ~20m radius (active reports only), unless force=true
+  // Duplicate check within ~5m radius (active reports only), unless force=true
   const { force } = parsed.data;
   if (!force) {
     const existing = await db
