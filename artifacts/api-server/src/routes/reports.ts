@@ -520,7 +520,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
 
         // Push notifications for status change — panchayat admins + control center (both for any status change)
         const statusLabel = newStatus === "cleaning" ? "Cleaning Started" : "Report Cleaned ✓";
-        const pushBody = `Report #${report.id} — ${officerName} ${newStatus === "cleaning" ? "started cleaning" : "marked as cleaned"}`;
+        const pushBody = `Report #${report.id} — ${officerName} ${newStatus === "cleaning" ? "have initiated cleaning" : "marked as cleaned"}`;
 
         // Control center gets both cleaning and cleaned events
         const ccUsersForPush = newStatus === "cleaning"
