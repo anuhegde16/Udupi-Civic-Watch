@@ -481,14 +481,25 @@ export default function AdminReports() {
                 <div className="flex gap-0">
                   {/* Photo thumbnail */}
                   <div className={`w-24 sm:w-32 shrink-0 relative bg-muted ${isArchived ? "opacity-60" : ""}`}>
-                    {report.imageUrl ? (
+                    {(report.imageUrls?.[0]?.url ?? report.imageUrl) ? (
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openLightbox([report.imageUrl!], 0); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const urls = report.imageUrls?.length
+                            ? report.imageUrls.map((p) => p.url)
+                            : [report.imageUrl!];
+                          openLightbox(urls, 0);
+                        }}
                         className="absolute inset-0 w-full h-full cursor-zoom-in"
                         aria-label="View report photo full screen"
                       >
-                        <img src={report.imageUrl} alt="Report" className="w-full h-full object-cover" style={{ minHeight: "100px" }} />
+                        <img
+                          src={report.imageUrls?.[0]?.url ?? report.imageUrl!}
+                          alt="Report"
+                          className="w-full h-full object-cover"
+                          style={{ minHeight: "100px" }}
+                        />
                       </button>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/40 min-h-[100px]">

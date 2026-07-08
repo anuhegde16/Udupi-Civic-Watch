@@ -63,6 +63,7 @@ type Report = {
   latitude: number;
   longitude: number;
   imageUrl?: string | null;
+  imageUrls?: { url: string; uploadedAt: string }[] | null;
   createdAt: string;
   assignedOfficer?: { id: number; name: string; areaName?: string | null } | null;
 };
@@ -186,9 +187,9 @@ function ReportRow({ report }: { report: Report }) {
   const cfg = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.reported;
   return (
     <div className="py-4 flex items-start gap-3 border-b border-border/40 last:border-0">
-      {report.imageUrl ? (
+      {(report.imageUrls?.[0]?.url ?? report.imageUrl) ? (
         <img
-          src={report.imageUrl}
+          src={report.imageUrls?.[0]?.url ?? report.imageUrl!}
           alt="Report"
           className="w-14 h-14 rounded-xl object-cover shrink-0 border border-border/40"
         />
