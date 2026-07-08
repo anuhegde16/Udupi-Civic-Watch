@@ -306,6 +306,25 @@ async function ensureReportsColumns() {
     await db.execute(sql`
       ALTER TABLE reports ADD COLUMN IF NOT EXISTS image_uploaded_at timestamp with time zone
     `);
+    await db.execute(sql`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS cleaning_started_at timestamp with time zone
+    `);
+    await db.execute(sql`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS cleaned_at timestamp with time zone
+    `);
+    // Backfill historical rows (created before these columns existed) so delay analytics
+    // aren't empty for pre-existing data. Best-effort approximation using updated_at, since
+    // we don't have the exact status-transition timestamps for older reports.
+    await db.execute(sql`
+      UPDATE reports
+      SET cleaning_started_at = updated_at
+      WHERE cleaning_started_at IS NULL AND status IN ('cleaning', 'cleaned')
+    `);
+    await db.execute(sql`
+      UPDATE reports
+      SET cleaned_at = updated_at
+      WHERE cleaned_at IS NULL AND status = 'cleaned'
+    `);
     logger.info("reports schema columns verified");
   } catch (err) {
     logger.warn({ err }, "Could not ensure reports columns");
