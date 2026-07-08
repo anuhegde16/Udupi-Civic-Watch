@@ -265,6 +265,164 @@ router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<v
   });
 });
 
+// ── District-wide analytics (Control Center) ───────────────────────────────
+router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => {
+  const activeFilter = isNull(reportsTable.deletedAt);
+
+  // KPI totals
+  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(activeFilter);
+  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "reported")));
+  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "cleaning")));
+  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(activeFilter, eq(reportsTable.status, "cleaned")));
+
+  // 14-day daily trend (by status)
+  const dailyRows = await db
+    .select({
+      date: sql<string>`DATE(${reportsTable.createdAt})::text`,
+      status: reportsTable.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(reportsTable)
+    .where(and(activeFilter, sql`${reportsTable.createdAt} >= NOW() - INTERVAL '14 days'`))
+    .groupBy(sql`DATE(${reportsTable.createdAt})`, reportsTable.status)
+    .orderBy(sql`DATE(${reportsTable.createdAt})`);
+
+  const last14Days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (13 - i));
+    return d.toISOString().slice(0, 10);
+  });
+
+  const dailyTrend = last14Days.map((date) => {
+    const rows = dailyRows.filter((r) => r.date === date);
+    return {
+      date,
+      reported: rows.find((r) => r.status === "reported")?.count ?? 0,
+      cleaning: rows.find((r) => r.status === "cleaning")?.count ?? 0,
+      cleaned: rows.find((r) => r.status === "cleaned")?.count ?? 0,
+      total: rows.reduce((sum, r) => sum + r.count, 0),
+    };
+  });
+
+  // Officer leaderboard — district-wide, every active officer
+  const officerRows = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
+  const officerLeaderboard = await Promise.all(
+    officerRows.map(async (o) => {
+      const officerActive = and(eq(reportsTable.assignedOfficerId, o.id), isNull(reportsTable.deletedAt));
+      const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(officerActive);
+      const [cleanedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(officerActive, eq(reportsTable.status, "cleaned")));
+      const [overdueRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(reportsTable)
+        .where(and(officerActive, eq(reportsTable.status, "reported"), sql`${reportsTable.createdAt} < NOW() - INTERVAL '24 hours'`));
+      const [avgRow] = await db
+        .select({
+          avgHours: sql<number | null>`AVG(EXTRACT(EPOCH FROM (${reportsTable.updatedAt} - ${reportsTable.createdAt})) / 3600)`,
+        })
+        .from(reportsTable)
+        .where(and(officerActive, eq(reportsTable.status, "cleaned")));
+
+      const totalCount = totalRow.count;
+      const cleanedCount = cleanedRow.count;
+      const pendingCount = totalCount - cleanedCount;
+      const resolutionRate = totalCount > 0 ? Math.round((cleanedCount / totalCount) * 100) : 0;
+
+      return {
+        id: o.id,
+        name: o.name,
+        areaName: o.areaName ?? null,
+        panchayatName: o.panchayatName ?? null,
+        total: totalCount,
+        cleaned: cleanedCount,
+        pending: pendingCount,
+        resolutionRate,
+        avgResolutionHours: avgRow.avgHours !== null ? Math.round(avgRow.avgHours * 10) / 10 : null,
+        overdueCount: overdueRow.count,
+        belowTarget: totalCount > 0 && (resolutionRate < 50 || overdueRow.count >= 3),
+      };
+    })
+  );
+  officerLeaderboard.sort((a, b) => b.total - a.total);
+
+  // Hotspots — grouped by rounded lat/lng (~100m), with a 7-day trend signal
+  const hotspotRows = await db.execute(sql`
+    SELECT
+      ROUND(${reportsTable.latitude}::numeric, 3)::float AS lat,
+      ROUND(${reportsTable.longitude}::numeric, 3)::float AS lng,
+      COUNT(*)::int AS count,
+      MAX(${reportsTable.address}) AS address,
+      COUNT(*) FILTER (WHERE ${reportsTable.createdAt} >= NOW() - INTERVAL '7 days')::int AS recent7,
+      COUNT(*) FILTER (WHERE ${reportsTable.createdAt} >= NOW() - INTERVAL '14 days' AND ${reportsTable.createdAt} < NOW() - INTERVAL '7 days')::int AS prior7
+    FROM ${reportsTable}
+    WHERE ${reportsTable.deletedAt} IS NULL
+    GROUP BY 1, 2
+    HAVING COUNT(*) > 1
+    ORDER BY COUNT(*) DESC
+    LIMIT 12
+  `);
+  const hotspots = ((hotspotRows as any).rows ?? (hotspotRows as unknown as any[])).map((r: any) => ({
+    lat: r.lat,
+    lng: r.lng,
+    count: r.count,
+    address: r.address,
+    trend: r.recent7 > r.prior7 ? "worsening" : r.recent7 < r.prior7 ? "improving" : "steady",
+  }));
+
+  // Delay metrics — overall + median, based on created_at → updated_at deltas
+  const [delayRow] = await db.execute(sql`
+    SELECT
+      AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600) FILTER (WHERE status = 'cleaned') AS avg_resolution_hours,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600) FILTER (WHERE status = 'cleaned') AS median_resolution_hours,
+      AVG(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600) FILTER (WHERE status != 'cleaned') AS avg_open_hours
+    FROM ${reportsTable}
+    WHERE deleted_at IS NULL
+  `).then((r) => (r as any).rows ?? (r as unknown as any[]));
+
+  // Longest-outstanding open reports
+  const oldestRows = await db
+    .select({ report: reportsTable, officer: officersTable })
+    .from(reportsTable)
+    .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
+    .where(and(isNull(reportsTable.deletedAt), sql`${reportsTable.status} != 'cleaned'`))
+    .orderBy(sql`${reportsTable.createdAt} ASC`)
+    .limit(10);
+
+  const oldestOpenReports = oldestRows.map(({ report, officer }) => ({
+    id: report.id,
+    status: report.status,
+    address: report.address,
+    latitude: report.latitude,
+    longitude: report.longitude,
+    createdAt: report.createdAt,
+    hoursOpen: Math.round(((Date.now() - new Date(report.createdAt).getTime()) / 3_600_000) * 10) / 10,
+    assignedOfficer: officer ? { id: officer.id, name: officer.name, areaName: officer.areaName } : null,
+  }));
+
+  const totalCount = total.count;
+  const cleanedCount = cleaned.count;
+
+  res.json({
+    kpis: {
+      totalReports: totalCount,
+      completionRate: totalCount > 0 ? Math.round((cleanedCount / totalCount) * 100) : 0,
+      activeHotspots: hotspots.length,
+      officersBelowTarget: officerLeaderboard.filter((o) => o.belowTarget).length,
+      reported: reported.count,
+      cleaning: cleaning.count,
+      cleaned: cleanedCount,
+    },
+    dailyTrend,
+    officerLeaderboard,
+    hotspots,
+    delayMetrics: {
+      avgResolutionHours: delayRow?.avg_resolution_hours !== null && delayRow?.avg_resolution_hours !== undefined ? Math.round(Number(delayRow.avg_resolution_hours) * 10) / 10 : null,
+      medianResolutionHours: delayRow?.median_resolution_hours !== null && delayRow?.median_resolution_hours !== undefined ? Math.round(Number(delayRow.median_resolution_hours) * 10) / 10 : null,
+      avgOpenHours: delayRow?.avg_open_hours !== null && delayRow?.avg_open_hours !== undefined ? Math.round(Number(delayRow.avg_open_hours) * 10) / 10 : null,
+    },
+    oldestOpenReports,
+  });
+});
+
 // ── Panchayat Admin Management (Control Center only) ──────────────────────────
 
 router.get("/admin/panchayat-admins", requireControlCenter, async (req, res): Promise<void> => {

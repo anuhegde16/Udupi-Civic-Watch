@@ -19,6 +19,7 @@ import AdminReports from "@/pages/admin-reports";
 import MasterDashboard from "@/pages/master-dashboard";
 import MasterReports from "@/pages/master-reports";
 import MasterAnalytics from "@/pages/master-analytics";
+import ControlCenterAnalytics from "@/pages/control-center-analytics";
 import NotificationsPage from "@/pages/notifications";
 
 const queryClient = new QueryClient();
@@ -79,6 +80,11 @@ function Router() {
         <Route path="/admin/reports">
           <AuthGuard roles={["admin", "control_center"]}>
             <AdminReports />
+          </AuthGuard>
+        </Route>
+        <Route path="/admin/analytics">
+          <AuthGuard roles={["admin", "control_center"]}>
+            <ControlCenterAnalytics />
           </AuthGuard>
         </Route>
 

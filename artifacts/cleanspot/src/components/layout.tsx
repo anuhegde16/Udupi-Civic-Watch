@@ -266,6 +266,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <Link href="/admin/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Dashboard</Link>
                         <Link href="/admin/reports" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">All Reports</Link>
                         <Link href="/admin/officers" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Officers</Link>
+                        <Link href="/admin/analytics" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Analytics</Link>
                       </>
                     )}
                     {isPanchayatAdmin && (
