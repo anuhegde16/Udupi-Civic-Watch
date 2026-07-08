@@ -32,6 +32,104 @@ export interface TestPushResponse {
   error?: string;
 }
 
+export type DistrictAnalyticsResponseKpis = {
+  totalReports: number;
+  /** Percent of active reports with status=cleaned */
+  completionRate: number;
+  activeHotspots: number;
+  officersBelowTarget: number;
+  reported: number;
+  cleaning: number;
+  cleaned: number;
+};
+
+export type DistrictAnalyticsResponseDailyTrendItem = {
+  date: string;
+  reported: number;
+  cleaning: number;
+  cleaned: number;
+  total: number;
+};
+
+export type DistrictAnalyticsResponseOfficerLeaderboardItem = {
+  id: number;
+  name: string;
+  areaName?: string | null;
+  panchayatName?: string | null;
+  total: number;
+  cleaned: number;
+  pending: number;
+  resolutionRate: number;
+  avgResolutionHours: number | null;
+  avgReportedToCleaningHours: number | null;
+  overdueCount: number;
+  /** resolutionRate<50% or overdueCount>=3 */
+  belowTarget: boolean;
+  /** One of the top 3 officers by resolution rate */
+  topPerformer: boolean;
+};
+
+export type DistrictAnalyticsResponseHotspotsItemTrend =
+  (typeof DistrictAnalyticsResponseHotspotsItemTrend)[keyof typeof DistrictAnalyticsResponseHotspotsItemTrend];
+
+export const DistrictAnalyticsResponseHotspotsItemTrend = {
+  worsening: "worsening",
+  improving: "improving",
+  steady: "steady",
+} as const;
+
+export type DistrictAnalyticsResponseHotspotsItem = {
+  lat: number;
+  lng: number;
+  count: number;
+  address?: string | null;
+  trend: DistrictAnalyticsResponseHotspotsItemTrend;
+};
+
+export type DistrictAnalyticsResponseDelayMetricsByWardItem = {
+  ward: string;
+  total: number;
+  avgReportedToCleaningHours: number | null;
+  avgReportedToCleanedHours: number | null;
+};
+
+export type DistrictAnalyticsResponseDelayMetrics = {
+  avgReportedToCleaningHours: number | null;
+  medianReportedToCleaningHours: number | null;
+  avgReportedToCleanedHours: number | null;
+  medianReportedToCleanedHours: number | null;
+  avgResolutionHours: number | null;
+  medianResolutionHours: number | null;
+  avgOpenHours: number | null;
+  byWard: DistrictAnalyticsResponseDelayMetricsByWardItem[];
+};
+
+export type DistrictAnalyticsResponseOldestOpenReportsItemAssignedOfficer = {
+  id?: number;
+  name?: string;
+  areaName?: string | null;
+} | null;
+
+export type DistrictAnalyticsResponseOldestOpenReportsItem = {
+  id: number;
+  status: string;
+  address?: string | null;
+  latitude: number;
+  longitude: number;
+  createdAt: string;
+  hoursOpen: number;
+  assignedOfficer?: DistrictAnalyticsResponseOldestOpenReportsItemAssignedOfficer;
+};
+
+export interface DistrictAnalyticsResponse {
+  kpis: DistrictAnalyticsResponseKpis;
+  dailyTrend: DistrictAnalyticsResponseDailyTrendItem[];
+  officerLeaderboard: DistrictAnalyticsResponseOfficerLeaderboardItem[];
+  hotspots: DistrictAnalyticsResponseHotspotsItem[];
+  delayMetrics: DistrictAnalyticsResponseDelayMetrics;
+  oldestOpenReports: DistrictAnalyticsResponseOldestOpenReportsItem[];
+}
+
 export interface LoginBody {
   email: string;
   password: string;

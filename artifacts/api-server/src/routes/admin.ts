@@ -265,6 +265,10 @@ router.get("/admin/reports/analytics", requireAdmin, async (req, res): Promise<v
   });
 });
 
+function numOrNull(v: unknown): number | null {
+  return v !== null && v !== undefined ? Math.round(Number(v) * 10) / 10 : null;
+}
+
 // ── District-wide analytics (Control Center) ───────────────────────────────
 router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => {
   const activeFilter = isNull(reportsTable.deletedAt);
@@ -304,45 +308,74 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     };
   });
 
-  // Officer leaderboard — district-wide, every active officer
-  const officerRows = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
-  const officerLeaderboard = await Promise.all(
-    officerRows.map(async (o) => {
-      const officerActive = and(eq(reportsTable.assignedOfficerId, o.id), isNull(reportsTable.deletedAt));
-      const [totalRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(officerActive);
-      const [cleanedRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(officerActive, eq(reportsTable.status, "cleaned")));
-      const [overdueRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(reportsTable)
-        .where(and(officerActive, eq(reportsTable.status, "reported"), sql`${reportsTable.createdAt} < NOW() - INTERVAL '24 hours'`));
-      const [avgRow] = await db
-        .select({
-          avgHours: sql<number | null>`AVG(EXTRACT(EPOCH FROM (${reportsTable.updatedAt} - ${reportsTable.createdAt})) / 3600)`,
-        })
-        .from(reportsTable)
-        .where(and(officerActive, eq(reportsTable.status, "cleaned")));
+  // Officer leaderboard — district-wide, every active officer.
+  // Single grouped query (left join + aggregates) instead of one round-trip per officer.
+  const officerStatsRows = await db.execute(sql`
+    SELECT
+      o.id AS id,
+      o.name AS name,
+      o.area_name AS area_name,
+      o.panchayat_name AS panchayat_name,
+      COUNT(r.id)::int AS total,
+      COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int AS cleaned,
+      COUNT(r.id) FILTER (WHERE r.status = 'reported' AND r.created_at < NOW() - INTERVAL '24 hours')::int AS overdue_count,
+      AVG(EXTRACT(EPOCH FROM (r.updated_at - r.created_at)) / 3600) FILTER (WHERE r.status = 'cleaned') AS avg_resolution_hours,
+      AVG(EXTRACT(EPOCH FROM (r.cleaning_started_at - r.created_at)) / 3600) FILTER (WHERE r.cleaning_started_at IS NOT NULL) AS avg_reported_to_cleaning_hours
+    FROM officers o
+    LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
+    WHERE o.deleted_at IS NULL
+    GROUP BY o.id, o.name, o.area_name, o.panchayat_name
+  `);
 
-      const totalCount = totalRow.count;
-      const cleanedCount = cleanedRow.count;
-      const pendingCount = totalCount - cleanedCount;
-      const resolutionRate = totalCount > 0 ? Math.round((cleanedCount / totalCount) * 100) : 0;
+  type OfficerLeaderboardEntry = {
+    id: number;
+    name: string;
+    areaName: string | null;
+    panchayatName: string | null;
+    total: number;
+    cleaned: number;
+    pending: number;
+    resolutionRate: number;
+    avgResolutionHours: number | null;
+    avgReportedToCleaningHours: number | null;
+    overdueCount: number;
+    belowTarget: boolean;
+    topPerformer: boolean;
+  };
 
-      return {
-        id: o.id,
-        name: o.name,
-        areaName: o.areaName ?? null,
-        panchayatName: o.panchayatName ?? null,
-        total: totalCount,
-        cleaned: cleanedCount,
-        pending: pendingCount,
-        resolutionRate,
-        avgResolutionHours: avgRow.avgHours !== null ? Math.round(avgRow.avgHours * 10) / 10 : null,
-        overdueCount: overdueRow.count,
-        belowTarget: totalCount > 0 && (resolutionRate < 50 || overdueRow.count >= 3),
-      };
-    })
-  );
+  const officerLeaderboard: OfficerLeaderboardEntry[] = ((officerStatsRows as any).rows ?? (officerStatsRows as unknown as any[])).map((r: any): OfficerLeaderboardEntry => {
+    const totalCount = r.total;
+    const cleanedCount = r.cleaned;
+    const pendingCount = totalCount - cleanedCount;
+    const resolutionRate = totalCount > 0 ? Math.round((cleanedCount / totalCount) * 100) : 0;
+    return {
+      id: r.id,
+      name: r.name,
+      areaName: r.area_name ?? null,
+      panchayatName: r.panchayat_name ?? null,
+      total: totalCount,
+      cleaned: cleanedCount,
+      pending: pendingCount,
+      resolutionRate,
+      avgResolutionHours: r.avg_resolution_hours !== null ? Math.round(Number(r.avg_resolution_hours) * 10) / 10 : null,
+      avgReportedToCleaningHours: r.avg_reported_to_cleaning_hours !== null ? Math.round(Number(r.avg_reported_to_cleaning_hours) * 10) / 10 : null,
+      overdueCount: r.overdue_count,
+      belowTarget: totalCount > 0 && (resolutionRate < 50 || r.overdue_count >= 3),
+      topPerformer: false,
+    };
+  });
   officerLeaderboard.sort((a, b) => b.total - a.total);
+
+  // Flag the top 3 performers: officers who have actually cleaned at least one report,
+  // are not already flagged below-target, ranked by resolution rate then total cleaned.
+  // Kept distinct from the sort-by-volume order used for the leaderboard list itself.
+  const rankedForTop = [...officerLeaderboard]
+    .filter((o) => o.cleaned > 0 && !o.belowTarget)
+    .sort((a, b) => b.resolutionRate - a.resolutionRate || b.cleaned - a.cleaned);
+  rankedForTop.slice(0, 3).forEach((o) => {
+    const target = officerLeaderboard.find((x) => x.id === o.id);
+    if (target) target.topPerformer = true;
+  });
 
   // Hotspots — grouped by rounded lat/lng (~100m), with a 7-day trend signal
   const hotspotRows = await db.execute(sql`
@@ -368,15 +401,41 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     trend: r.recent7 > r.prior7 ? "worsening" : r.recent7 < r.prior7 ? "improving" : "steady",
   }));
 
-  // Delay metrics — overall + median, based on created_at → updated_at deltas
+  // Delay metrics — overall avg/median for both the reported→cleaning and reported→cleaned
+  // transitions (using the dedicated cleaning_started_at / cleaned_at timestamps captured on
+  // status change), plus how long currently-open reports have been waiting.
   const [delayRow] = await db.execute(sql`
     SELECT
+      AVG(EXTRACT(EPOCH FROM (cleaning_started_at - created_at)) / 3600) FILTER (WHERE cleaning_started_at IS NOT NULL) AS avg_reported_to_cleaning_hours,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (cleaning_started_at - created_at)) / 3600) FILTER (WHERE cleaning_started_at IS NOT NULL) AS median_reported_to_cleaning_hours,
+      AVG(EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600) FILTER (WHERE cleaned_at IS NOT NULL) AS avg_reported_to_cleaned_hours,
+      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600) FILTER (WHERE cleaned_at IS NOT NULL) AS median_reported_to_cleaned_hours,
       AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600) FILTER (WHERE status = 'cleaned') AS avg_resolution_hours,
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (updated_at - created_at)) / 3600) FILTER (WHERE status = 'cleaned') AS median_resolution_hours,
       AVG(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600) FILTER (WHERE status != 'cleaned') AS avg_open_hours
     FROM ${reportsTable}
     WHERE deleted_at IS NULL
   `).then((r) => (r as any).rows ?? (r as unknown as any[]));
+
+  // Ward-level delay breakdown — same two transitions, grouped by the officer's ward (area_name)
+  const wardDelayRows = await db.execute(sql`
+    SELECT
+      COALESCE(o.area_name, 'Unassigned') AS ward,
+      COUNT(r.id)::int AS total,
+      AVG(EXTRACT(EPOCH FROM (r.cleaning_started_at - r.created_at)) / 3600) FILTER (WHERE r.cleaning_started_at IS NOT NULL) AS avg_reported_to_cleaning_hours,
+      AVG(EXTRACT(EPOCH FROM (r.cleaned_at - r.created_at)) / 3600) FILTER (WHERE r.cleaned_at IS NOT NULL) AS avg_reported_to_cleaned_hours
+    FROM ${reportsTable} r
+    LEFT JOIN ${officersTable} o ON o.id = r.assigned_officer_id
+    WHERE r.deleted_at IS NULL
+    GROUP BY COALESCE(o.area_name, 'Unassigned')
+    ORDER BY ward
+  `);
+  const wardDelayBreakdown = ((wardDelayRows as any).rows ?? (wardDelayRows as unknown as any[])).map((r: any) => ({
+    ward: r.ward,
+    total: r.total,
+    avgReportedToCleaningHours: r.avg_reported_to_cleaning_hours !== null ? Math.round(Number(r.avg_reported_to_cleaning_hours) * 10) / 10 : null,
+    avgReportedToCleanedHours: r.avg_reported_to_cleaned_hours !== null ? Math.round(Number(r.avg_reported_to_cleaned_hours) * 10) / 10 : null,
+  }));
 
   // Longest-outstanding open reports
   const oldestRows = await db
@@ -415,9 +474,14 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     officerLeaderboard,
     hotspots,
     delayMetrics: {
-      avgResolutionHours: delayRow?.avg_resolution_hours !== null && delayRow?.avg_resolution_hours !== undefined ? Math.round(Number(delayRow.avg_resolution_hours) * 10) / 10 : null,
-      medianResolutionHours: delayRow?.median_resolution_hours !== null && delayRow?.median_resolution_hours !== undefined ? Math.round(Number(delayRow.median_resolution_hours) * 10) / 10 : null,
-      avgOpenHours: delayRow?.avg_open_hours !== null && delayRow?.avg_open_hours !== undefined ? Math.round(Number(delayRow.avg_open_hours) * 10) / 10 : null,
+      avgReportedToCleaningHours: numOrNull(delayRow?.avg_reported_to_cleaning_hours),
+      medianReportedToCleaningHours: numOrNull(delayRow?.median_reported_to_cleaning_hours),
+      avgReportedToCleanedHours: numOrNull(delayRow?.avg_reported_to_cleaned_hours),
+      medianReportedToCleanedHours: numOrNull(delayRow?.median_reported_to_cleaned_hours),
+      avgResolutionHours: numOrNull(delayRow?.avg_resolution_hours),
+      medianResolutionHours: numOrNull(delayRow?.median_resolution_hours),
+      avgOpenHours: numOrNull(delayRow?.avg_open_hours),
+      byWard: wardDelayBreakdown,
     },
     oldestOpenReports,
   });

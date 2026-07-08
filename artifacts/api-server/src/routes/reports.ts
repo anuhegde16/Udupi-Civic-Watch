@@ -438,7 +438,18 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const updates: Record<string, any> = {};
-  if (parsed.data.status !== undefined) updates.status = parsed.data.status;
+  if (parsed.data.status !== undefined) {
+    updates.status = parsed.data.status;
+    if (parsed.data.status === "cleaning" && !existing.cleaningStartedAt) {
+      updates.cleaningStartedAt = new Date();
+    }
+    if (parsed.data.status === "cleaned" && !existing.cleanedAt) {
+      updates.cleanedAt = new Date();
+      if (!existing.cleaningStartedAt && !updates.cleaningStartedAt) {
+        updates.cleaningStartedAt = new Date();
+      }
+    }
+  }
   if (parsed.data.cleanupImageUrls && parsed.data.cleanupImageUrls.length > 0) {
     updates.cleanupImageUrls = parsed.data.cleanupImageUrls;
     updates.cleanupImageUrl = parsed.data.cleanupImageUrls[0].url;

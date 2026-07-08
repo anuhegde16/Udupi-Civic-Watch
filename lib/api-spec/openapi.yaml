@@ -385,6 +385,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReportList"
 
+  /admin/analytics:
+    get:
+      operationId: getDistrictAnalytics
+      tags: [admin]
+      summary: District-wide analytics for the Control Center (admin/control_center roles)
+      description: >
+        KPIs, 14-day trend, officer leaderboard (with top-performer and below-target flags),
+        repeat-report hotspots, delay metrics (reported→cleaning, reported→cleaned, overall
+        resolution and open-report age, plus a per-ward breakdown), and the longest-outstanding
+        open reports.
+      responses:
+        "200":
+          description: District-wide analytics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DistrictAnalyticsResponse"
+
   /admin/reports/bulk-archive-preview:
     get:
       operationId: getBulkArchivePreview
@@ -716,6 +734,104 @@ components:
         error:
           type: string
       required: [success]
+
+    DistrictAnalyticsResponse:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            totalReports: { type: integer }
+            completionRate: { type: integer, description: "Percent of active reports with status=cleaned" }
+            activeHotspots: { type: integer }
+            officersBelowTarget: { type: integer }
+            reported: { type: integer }
+            cleaning: { type: integer }
+            cleaned: { type: integer }
+          required: [totalReports, completionRate, activeHotspots, officersBelowTarget, reported, cleaning, cleaned]
+        dailyTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              reported: { type: integer }
+              cleaning: { type: integer }
+              cleaned: { type: integer }
+              total: { type: integer }
+            required: [date, reported, cleaning, cleaned, total]
+        officerLeaderboard:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              areaName: { type: string, nullable: true }
+              panchayatName: { type: string, nullable: true }
+              total: { type: integer }
+              cleaned: { type: integer }
+              pending: { type: integer }
+              resolutionRate: { type: integer }
+              avgResolutionHours: { type: number, nullable: true }
+              avgReportedToCleaningHours: { type: number, nullable: true }
+              overdueCount: { type: integer }
+              belowTarget: { type: boolean, description: "resolutionRate<50% or overdueCount>=3" }
+              topPerformer: { type: boolean, description: "One of the top 3 officers by resolution rate" }
+            required: [id, name, total, cleaned, pending, resolutionRate, avgResolutionHours, avgReportedToCleaningHours, overdueCount, belowTarget, topPerformer]
+        hotspots:
+          type: array
+          items:
+            type: object
+            properties:
+              lat: { type: number }
+              lng: { type: number }
+              count: { type: integer }
+              address: { type: string, nullable: true }
+              trend: { type: string, enum: [worsening, improving, steady] }
+            required: [lat, lng, count, trend]
+        delayMetrics:
+          type: object
+          properties:
+            avgReportedToCleaningHours: { type: number, nullable: true }
+            medianReportedToCleaningHours: { type: number, nullable: true }
+            avgReportedToCleanedHours: { type: number, nullable: true }
+            medianReportedToCleanedHours: { type: number, nullable: true }
+            avgResolutionHours: { type: number, nullable: true }
+            medianResolutionHours: { type: number, nullable: true }
+            avgOpenHours: { type: number, nullable: true }
+            byWard:
+              type: array
+              items:
+                type: object
+                properties:
+                  ward: { type: string }
+                  total: { type: integer }
+                  avgReportedToCleaningHours: { type: number, nullable: true }
+                  avgReportedToCleanedHours: { type: number, nullable: true }
+                required: [ward, total, avgReportedToCleaningHours, avgReportedToCleanedHours]
+          required: [avgReportedToCleaningHours, medianReportedToCleaningHours, avgReportedToCleanedHours, medianReportedToCleanedHours, avgResolutionHours, medianResolutionHours, avgOpenHours, byWard]
+        oldestOpenReports:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              status: { type: string }
+              address: { type: string, nullable: true }
+              latitude: { type: number }
+              longitude: { type: number }
+              createdAt: { type: string, format: date-time }
+              hoursOpen: { type: number }
+              assignedOfficer:
+                type: object
+                nullable: true
+                properties:
+                  id: { type: integer }
+                  name: { type: string }
+                  areaName: { type: string, nullable: true }
+            required: [id, status, latitude, longitude, createdAt, hoursOpen]
+      required: [kpis, dailyTrend, officerLeaderboard, hotspots, delayMetrics, oldestOpenReports]
 
     LoginBody:
       type: object

@@ -25,6 +25,7 @@ import type {
   CreateOfficerBody,
   CreateReportBody,
   DeletePushSubscriptionBody,
+  DistrictAnalyticsResponse,
   DuplicateReportResponse,
   ErrorResponse,
   GetBulkArchivePreviewParams,
@@ -1502,6 +1503,83 @@ export function useAdminListReports<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAdminListReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * KPIs, 14-day trend, officer leaderboard (with top-performer and below-target flags), repeat-report hotspots, delay metrics (reported→cleaning, reported→cleaned, overall resolution and open-report age, plus a per-ward breakdown), and the longest-outstanding open reports.
+
+ * @summary District-wide analytics for the Control Center (admin/control_center roles)
+ */
+export const getGetDistrictAnalyticsUrl = () => {
+  return `/api/admin/analytics`;
+};
+
+export const getDistrictAnalytics = async (
+  options?: RequestInit,
+): Promise<DistrictAnalyticsResponse> => {
+  return customFetch<DistrictAnalyticsResponse>(getGetDistrictAnalyticsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDistrictAnalyticsQueryKey = () => {
+  return [`/api/admin/analytics`] as const;
+};
+
+export const getGetDistrictAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDistrictAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDistrictAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDistrictAnalyticsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getDistrictAnalytics>>
+  > = ({ signal }) => getDistrictAnalytics({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDistrictAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDistrictAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDistrictAnalytics>>
+>;
+export type GetDistrictAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary District-wide analytics for the Control Center (admin/control_center roles)
+ */
+
+export function useGetDistrictAnalytics<
+  TData = Awaited<ReturnType<typeof getDistrictAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getDistrictAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDistrictAnalyticsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

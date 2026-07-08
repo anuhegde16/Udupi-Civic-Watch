@@ -684,6 +684,99 @@ export const AdminListReportsResponse = zod.object({
 });
 
 /**
+ * KPIs, 14-day trend, officer leaderboard (with top-performer and below-target flags), repeat-report hotspots, delay metrics (reported→cleaning, reported→cleaned, overall resolution and open-report age, plus a per-ward breakdown), and the longest-outstanding open reports.
+
+ * @summary District-wide analytics for the Control Center (admin/control_center roles)
+ */
+export const GetDistrictAnalyticsResponse = zod.object({
+  kpis: zod.object({
+    totalReports: zod.number(),
+    completionRate: zod
+      .number()
+      .describe("Percent of active reports with status=cleaned"),
+    activeHotspots: zod.number(),
+    officersBelowTarget: zod.number(),
+    reported: zod.number(),
+    cleaning: zod.number(),
+    cleaned: zod.number(),
+  }),
+  dailyTrend: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      reported: zod.number(),
+      cleaning: zod.number(),
+      cleaned: zod.number(),
+      total: zod.number(),
+    }),
+  ),
+  officerLeaderboard: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      areaName: zod.string().nullish(),
+      panchayatName: zod.string().nullish(),
+      total: zod.number(),
+      cleaned: zod.number(),
+      pending: zod.number(),
+      resolutionRate: zod.number(),
+      avgResolutionHours: zod.number().nullable(),
+      avgReportedToCleaningHours: zod.number().nullable(),
+      overdueCount: zod.number(),
+      belowTarget: zod
+        .boolean()
+        .describe("resolutionRate<50% or overdueCount>=3"),
+      topPerformer: zod
+        .boolean()
+        .describe("One of the top 3 officers by resolution rate"),
+    }),
+  ),
+  hotspots: zod.array(
+    zod.object({
+      lat: zod.number(),
+      lng: zod.number(),
+      count: zod.number(),
+      address: zod.string().nullish(),
+      trend: zod.enum(["worsening", "improving", "steady"]),
+    }),
+  ),
+  delayMetrics: zod.object({
+    avgReportedToCleaningHours: zod.number().nullable(),
+    medianReportedToCleaningHours: zod.number().nullable(),
+    avgReportedToCleanedHours: zod.number().nullable(),
+    medianReportedToCleanedHours: zod.number().nullable(),
+    avgResolutionHours: zod.number().nullable(),
+    medianResolutionHours: zod.number().nullable(),
+    avgOpenHours: zod.number().nullable(),
+    byWard: zod.array(
+      zod.object({
+        ward: zod.string(),
+        total: zod.number(),
+        avgReportedToCleaningHours: zod.number().nullable(),
+        avgReportedToCleanedHours: zod.number().nullable(),
+      }),
+    ),
+  }),
+  oldestOpenReports: zod.array(
+    zod.object({
+      id: zod.number(),
+      status: zod.string(),
+      address: zod.string().nullish(),
+      latitude: zod.number(),
+      longitude: zod.number(),
+      createdAt: zod.coerce.date(),
+      hoursOpen: zod.number(),
+      assignedOfficer: zod
+        .object({
+          id: zod.number().optional(),
+          name: zod.string().optional(),
+          areaName: zod.string().nullish(),
+        })
+        .nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Preview how many active reports would be archived by an age cutoff
  */
 export const GetBulkArchivePreviewQueryParams = zod.object({

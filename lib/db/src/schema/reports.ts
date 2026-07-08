@@ -25,6 +25,8 @@ export const reportsTable = pgTable("reports", {
   assignedOfficerId: integer("assigned_officer_id").references(() => officersTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  cleaningStartedAt: timestamp("cleaning_started_at", { withTimezone: true }),
+  cleanedAt: timestamp("cleaned_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 

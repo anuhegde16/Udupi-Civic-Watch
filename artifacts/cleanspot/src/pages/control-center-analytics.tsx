@@ -41,8 +41,17 @@ type OfficerStat = {
   pending: number;
   resolutionRate: number;
   avgResolutionHours: number | null;
+  avgReportedToCleaningHours: number | null;
   overdueCount: number;
   belowTarget: boolean;
+  topPerformer: boolean;
+};
+
+type WardDelay = {
+  ward: string;
+  total: number;
+  avgReportedToCleaningHours: number | null;
+  avgReportedToCleanedHours: number | null;
 };
 
 type Hotspot = {
@@ -78,9 +87,14 @@ type DistrictAnalytics = {
   officerLeaderboard: OfficerStat[];
   hotspots: Hotspot[];
   delayMetrics: {
+    avgReportedToCleaningHours: number | null;
+    medianReportedToCleaningHours: number | null;
+    avgReportedToCleanedHours: number | null;
+    medianReportedToCleanedHours: number | null;
     avgResolutionHours: number | null;
     medianResolutionHours: number | null;
     avgOpenHours: number | null;
+    byWard: WardDelay[];
   };
   oldestOpenReports: OldestOpenReport[];
 };
@@ -247,16 +261,38 @@ export default function ControlCenterAnalytics() {
       </div>
 
       {/* Delay metrics strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+            <Timer className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-foreground">
+              {formatHours(data?.delayMetrics.avgReportedToCleaningHours ?? null)}
+            </div>
+            <div className="text-xs font-bold text-muted-foreground">Avg reported → cleaning</div>
+          </div>
+        </div>
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
             <Timer className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl font-black text-foreground">
-              {formatHours(data?.delayMetrics.avgResolutionHours ?? null)}
+              {formatHours(data?.delayMetrics.avgReportedToCleanedHours ?? null)}
             </div>
-            <div className="text-xs font-bold text-muted-foreground">Avg time to clean</div>
+            <div className="text-xs font-bold text-muted-foreground">Avg reported → cleaned</div>
+          </div>
+        </div>
+        <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+            <History className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-xl font-black text-foreground">
+              {formatHours(data?.delayMetrics.medianReportedToCleanedHours ?? null)}
+            </div>
+            <div className="text-xs font-bold text-muted-foreground">Median reported → cleaned</div>
           </div>
         </div>
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 flex items-center gap-3">
@@ -267,7 +303,7 @@ export default function ControlCenterAnalytics() {
             <div className="text-xl font-black text-foreground">
               {formatHours(data?.delayMetrics.medianResolutionHours ?? null)}
             </div>
-            <div className="text-xs font-bold text-muted-foreground">Median time to clean</div>
+            <div className="text-xs font-bold text-muted-foreground">Median time to clean (overall)</div>
           </div>
         </div>
         <div className="bg-card rounded-2xl border border-border/50 shadow-sm p-5 flex items-center gap-3">
@@ -282,6 +318,40 @@ export default function ControlCenterAnalytics() {
           </div>
         </div>
       </div>
+
+      {/* Ward-level delay breakdown */}
+      {!isLoading && !!data?.delayMetrics.byWard.length && (
+        <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
+          <h2 className="text-xl font-black text-foreground flex items-center gap-2 mb-1">
+            <MapPin className="w-5 h-5 text-indigo-500" /> Delay by Ward
+          </h2>
+          <p className="text-sm text-muted-foreground font-medium mb-5">
+            Average time spent reported → cleaning and reported → cleaned, grouped by ward
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[11px] font-black text-muted-foreground uppercase border-b border-border/40">
+                  <th className="py-2 pr-3">Ward</th>
+                  <th className="py-2 pr-3">Reports</th>
+                  <th className="py-2 pr-3">Avg → Cleaning</th>
+                  <th className="py-2 pr-3">Avg → Cleaned</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {data.delayMetrics.byWard.map((w) => (
+                  <tr key={w.ward}>
+                    <td className="py-2.5 pr-3 font-bold text-foreground">{w.ward}</td>
+                    <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{w.total}</td>
+                    <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{formatHours(w.avgReportedToCleaningHours)}</td>
+                    <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{formatHours(w.avgReportedToCleanedHours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* 14-day trend */}
       <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
@@ -335,12 +405,14 @@ export default function ControlCenterAnalytics() {
                   className={`flex items-center gap-3 p-3 rounded-2xl border transition-colors ${
                     officer.belowTarget
                       ? "bg-destructive/5 border-destructive/20"
+                      : officer.topPerformer
+                      ? "bg-emerald-50/60 border-emerald-300/60"
                       : "bg-muted/30 border-border/40 hover:bg-muted/50"
                   }`}
                 >
                   <div
                     className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0 ${
-                      officer.belowTarget ? "bg-destructive" : "bg-indigo-500"
+                      officer.belowTarget ? "bg-destructive" : officer.topPerformer ? "bg-emerald-500" : "bg-indigo-500"
                     }`}
                   >
                     {officer.name.charAt(0)}
@@ -353,6 +425,11 @@ export default function ControlCenterAnalytics() {
                           <MapPin className="w-2.5 h-2.5" />{officer.areaName}
                         </span>
                       )}
+                      {officer.topPerformer && (
+                        <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
+                          <Trophy className="w-2.5 h-2.5" /> Top Performer
+                        </span>
+                      )}
                       {officer.belowTarget && (
                         <span className="text-[10px] font-black text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full shrink-0">
                           Below Target
@@ -361,12 +438,14 @@ export default function ControlCenterAnalytics() {
                     </div>
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${officer.belowTarget ? "bg-destructive" : "bg-indigo-500"}`}
+                        className={`h-full rounded-full transition-all duration-700 ${
+                          officer.belowTarget ? "bg-destructive" : officer.topPerformer ? "bg-emerald-500" : "bg-indigo-500"
+                        }`}
                         style={{ width: `${officer.resolutionRate}%` }}
                       />
                     </div>
                     <div className="text-[10px] text-muted-foreground font-semibold mt-1">
-                      {officer.resolutionRate}% resolved · avg {formatHours(officer.avgResolutionHours)} to clean
+                      {officer.resolutionRate}% resolved · avg {formatHours(officer.avgReportedToCleaningHours)} to start · {formatHours(officer.avgResolutionHours)} to clean
                       {officer.overdueCount > 0 && (
                         <span className="text-destructive font-bold"> · {officer.overdueCount} overdue</span>
                       )}
