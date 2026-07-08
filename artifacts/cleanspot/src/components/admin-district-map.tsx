@@ -267,7 +267,7 @@ export function AdminDistrictMap({
             const wardNum = zone.name.replace(/\D+/g, "");
             const labelColor = assignedOfficer ? wardColor : WARD_AMBER;
             // Plain text only — no background, border, or chip of any kind.
-            const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">Ward ${wardNum}</div>`;
+            const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">${wardNum}</div>`;
             const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
             L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
           }
