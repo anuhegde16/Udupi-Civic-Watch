@@ -117,6 +117,13 @@ function formatHours(hours: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
+function safeCsvCell(value: string): string {
+  // Neutralise CSV formula injection: cells starting with =, +, -, @, tab, CR, or LF
+  // are prefixed with a single quote so spreadsheet apps treat them as plain text.
+  if (/^[=+\-@\t\r\n]/.test(value)) return `'${value}`;
+  return value;
+}
+
 function exportCSV(data: DistrictAnalytics) {
   const now = new Date().toLocaleDateString("en-IN");
   const rows: string[][] = [];
@@ -149,9 +156,9 @@ function exportCSV(data: DistrictAnalytics) {
   rows.push(["Officer", "Ward", "Panchayat", "Total", "Cleaned", "Pending", "Resolution Rate", "Avg → Cleaning", "Avg → Cleaned", "Overdue", "Status"]);
   data.officerLeaderboard.forEach((o) => {
     rows.push([
-      o.name,
-      o.areaName ?? "",
-      o.panchayatName ?? "",
+      safeCsvCell(o.name),
+      safeCsvCell(o.areaName ?? ""),
+      safeCsvCell(o.panchayatName ?? ""),
       String(o.total),
       String(o.cleaned),
       String(o.pending),
@@ -167,21 +174,21 @@ function exportCSV(data: DistrictAnalytics) {
   rows.push(["HOTSPOTS"]);
   rows.push(["Location", "Latitude", "Longitude", "Report Count", "7-day Trend"]);
   data.hotspots.forEach((h) => {
-    rows.push([h.address ?? "", String(h.lat), String(h.lng), String(h.count), h.trend]);
+    rows.push([safeCsvCell(h.address ?? ""), String(h.lat), String(h.lng), String(h.count), h.trend]);
   });
   rows.push([]);
 
   rows.push(["DELAY BY WARD"]);
   rows.push(["Ward", "Total Reports", "Avg → Cleaning", "Avg → Cleaned"]);
   data.delayMetrics.byWard.forEach((w) => {
-    rows.push([w.ward, String(w.total), formatHours(w.avgReportedToCleaningHours), formatHours(w.avgReportedToCleanedHours)]);
+    rows.push([safeCsvCell(w.ward), String(w.total), formatHours(w.avgReportedToCleaningHours), formatHours(w.avgReportedToCleanedHours)]);
   });
   rows.push([]);
 
   rows.push(["14-DAY TREND"]);
   rows.push(["Date", "Total", "Reported", "Cleaning", "Cleaned"]);
   data.dailyTrend.forEach((d) => {
-    rows.push([d.date, String(d.total), String(d.reported), String(d.cleaning), String(d.cleaned)]);
+    rows.push([safeCsvCell(d.date), String(d.total), String(d.reported), String(d.cleaning), String(d.cleaned)]);
   });
 
   const csv = rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
