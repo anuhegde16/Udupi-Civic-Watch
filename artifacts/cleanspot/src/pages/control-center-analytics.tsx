@@ -21,6 +21,8 @@ import {
   ShieldAlert,
   Timer,
   History,
+  Download,
+  FileText,
 } from "lucide-react";
 
 type DayTrend = {
@@ -113,6 +115,255 @@ function formatHours(hours: number | null): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`;
   if (hours < 48) return `${hours.toFixed(1)}h`;
   return `${(hours / 24).toFixed(1)}d`;
+}
+
+function exportCSV(data: DistrictAnalytics) {
+  const now = new Date().toLocaleDateString("en-IN");
+  const rows: string[][] = [];
+
+  rows.push(["DISTRICT ANALYTICS EXPORT", `Generated: ${now}`]);
+  rows.push([]);
+  rows.push(["KPIs"]);
+  rows.push(["Total Reports", String(data.kpis.totalReports)]);
+  rows.push(["Completion Rate", `${data.kpis.completionRate}%`]);
+  rows.push(["Active Hotspots", String(data.kpis.activeHotspots)]);
+  rows.push(["Officers Below Target", String(data.kpis.officersBelowTarget)]);
+  rows.push(["Reported (active)", String(data.kpis.reported)]);
+  rows.push(["Cleaning (active)", String(data.kpis.cleaning)]);
+  rows.push(["Cleaned (active)", String(data.kpis.cleaned)]);
+  rows.push([]);
+
+  rows.push(["DELAY METRICS"]);
+  rows.push(["Metric", "Value"]);
+  const dm = data.delayMetrics;
+  rows.push(["Avg Reported → Cleaning", formatHours(dm.avgReportedToCleaningHours)]);
+  rows.push(["Median Reported → Cleaning", formatHours(dm.medianReportedToCleaningHours)]);
+  rows.push(["Avg Reported → Cleaned", formatHours(dm.avgReportedToCleanedHours)]);
+  rows.push(["Median Reported → Cleaned", formatHours(dm.medianReportedToCleanedHours)]);
+  rows.push(["Avg Resolution Time", formatHours(dm.avgResolutionHours)]);
+  rows.push(["Median Resolution Time", formatHours(dm.medianResolutionHours)]);
+  rows.push(["Avg Age of Open Reports", formatHours(dm.avgOpenHours)]);
+  rows.push([]);
+
+  rows.push(["OFFICER LEADERBOARD"]);
+  rows.push(["Officer", "Ward", "Panchayat", "Total", "Cleaned", "Pending", "Resolution Rate", "Avg → Cleaning", "Avg → Cleaned", "Overdue", "Status"]);
+  data.officerLeaderboard.forEach((o) => {
+    rows.push([
+      o.name,
+      o.areaName ?? "",
+      o.panchayatName ?? "",
+      String(o.total),
+      String(o.cleaned),
+      String(o.pending),
+      `${o.resolutionRate}%`,
+      formatHours(o.avgReportedToCleaningHours),
+      formatHours(o.avgResolutionHours),
+      String(o.overdueCount),
+      o.topPerformer ? "Top Performer" : o.belowTarget ? "Below Target" : "",
+    ]);
+  });
+  rows.push([]);
+
+  rows.push(["HOTSPOTS"]);
+  rows.push(["Location", "Latitude", "Longitude", "Report Count", "7-day Trend"]);
+  data.hotspots.forEach((h) => {
+    rows.push([h.address ?? "", String(h.lat), String(h.lng), String(h.count), h.trend]);
+  });
+  rows.push([]);
+
+  rows.push(["DELAY BY WARD"]);
+  rows.push(["Ward", "Total Reports", "Avg → Cleaning", "Avg → Cleaned"]);
+  data.delayMetrics.byWard.forEach((w) => {
+    rows.push([w.ward, String(w.total), formatHours(w.avgReportedToCleaningHours), formatHours(w.avgReportedToCleanedHours)]);
+  });
+  rows.push([]);
+
+  rows.push(["14-DAY TREND"]);
+  rows.push(["Date", "Total", "Reported", "Cleaning", "Cleaned"]);
+  data.dailyTrend.forEach((d) => {
+    rows.push([d.date, String(d.total), String(d.reported), String(d.cleaning), String(d.cleaned)]);
+  });
+
+  const csv = rows.map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `district-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportPDF(data: DistrictAnalytics) {
+  const now = new Date().toLocaleString("en-IN");
+  const dm = data.delayMetrics;
+
+  const officerRows = data.officerLeaderboard
+    .map(
+      (o) => `
+      <tr>
+        <td style="font-weight:700">${o.name}</td>
+        <td>${o.areaName ?? "—"}</td>
+        <td>${o.panchayatName ?? "—"}</td>
+        <td style="font-weight:700;text-align:center">${o.total}</td>
+        <td style="text-align:center">${o.cleaned}</td>
+        <td style="text-align:center">${o.pending}</td>
+        <td style="font-weight:700;text-align:center">${o.resolutionRate}%</td>
+        <td style="text-align:center">${formatHours(o.avgReportedToCleaningHours)}</td>
+        <td style="text-align:center">${formatHours(o.avgResolutionHours)}</td>
+        <td style="text-align:center;color:${o.overdueCount > 0 ? "#dc2626" : "inherit"};font-weight:${o.overdueCount > 0 ? "700" : "400"}">${o.overdueCount}</td>
+        <td style="text-align:center">${o.topPerformer ? '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:99px;font-weight:700;font-size:9px">Top Performer</span>' : o.belowTarget ? '<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:99px;font-weight:700;font-size:9px">Below Target</span>' : ""}</td>
+      </tr>`
+    )
+    .join("");
+
+  const hotspotRows = data.hotspots
+    .map(
+      (h, i) => `
+      <tr>
+        <td style="text-align:center">${i + 1}</td>
+        <td>${h.address ?? "—"}</td>
+        <td>${h.lat.toFixed(4)}° N, ${h.lng.toFixed(4)}° E</td>
+        <td style="font-weight:700;text-align:center">${h.count}</td>
+        <td style="font-weight:700;color:${h.trend === "worsening" ? "#dc2626" : h.trend === "improving" ? "#16a34a" : "#64748b"}">${h.trend.charAt(0).toUpperCase() + h.trend.slice(1)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const wardRows = data.delayMetrics.byWard
+    .map(
+      (w) => `
+      <tr>
+        <td style="font-weight:700">${w.ward}</td>
+        <td style="text-align:center">${w.total}</td>
+        <td style="text-align:center">${formatHours(w.avgReportedToCleaningHours)}</td>
+        <td style="text-align:center">${formatHours(w.avgReportedToCleanedHours)}</td>
+      </tr>`
+    )
+    .join("");
+
+  const trendRows = data.dailyTrend
+    .map(
+      (d) => `
+      <tr>
+        <td>${d.date}</td>
+        <td style="font-weight:700;text-align:center">${d.total}</td>
+        <td style="text-align:center">${d.reported}</td>
+        <td style="text-align:center">${d.cleaning}</td>
+        <td style="font-weight:700;text-align:center;color:#16a34a">${d.cleaned}</td>
+      </tr>`
+    )
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>District Analytics Report — Udupi</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+  body{padding:32px;color:#111;font-size:11px;line-height:1.5}
+  h1{font-size:20px;font-weight:900;margin-bottom:2px}
+  h2{font-size:12px;font-weight:800;margin:20px 0 8px;color:#3730a3;border-bottom:2px solid #e0e7ff;padding-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+  .gov-bar{font-size:9px;font-weight:700;color:#4338ca;letter-spacing:.05em;text-transform:uppercase;margin-bottom:4px}
+  .meta{color:#64748b;font-size:10px;margin-bottom:20px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+  .kpi{border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px}
+  .kpi-val{font-size:20px;font-weight:900}
+  .kpi-lbl{font-size:9px;color:#64748b;font-weight:600;margin-top:1px}
+  .delay-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+  .delay-cell{border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px}
+  .delay-val{font-size:16px;font-weight:900;color:#3730a3}
+  .delay-lbl{font-size:9px;color:#64748b;font-weight:600;margin-top:1px}
+  table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:4px}
+  th{text-align:left;font-weight:700;padding:5px 8px;background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:9px;text-transform:uppercase;color:#475569;letter-spacing:.03em}
+  td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .footer{margin-top:32px;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;display:flex;justify-content:space-between}
+  @media print{body{padding:16px}@page{margin:1cm}}
+</style>
+</head>
+<body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e0e7ff">
+  <div>
+    <div class="gov-bar">Government of Karnataka · Udupi District Administration · Swachh Bharat Mission</div>
+    <h1>District Analytics Report</h1>
+    <div class="meta">Control Center · All Taluks · Live data snapshot as at ${now}</div>
+  </div>
+  <div style="font-size:9px;color:#64748b;text-align:right;white-space:nowrap">CleanSpot<br>Udupi District</div>
+</div>
+
+<h2>District KPIs</h2>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-val">${data.kpis.totalReports}</div><div class="kpi-lbl">Total Reports</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#16a34a">${data.kpis.completionRate}%</div><div class="kpi-lbl">Completion Rate</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#ea580c">${data.kpis.activeHotspots}</div><div class="kpi-lbl">Active Hotspots</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#dc2626">${data.kpis.officersBelowTarget}</div><div class="kpi-lbl">Officers Below Target</div></div>
+</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-val">${data.kpis.reported}</div><div class="kpi-lbl">Reported (active)</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#2563eb">${data.kpis.cleaning}</div><div class="kpi-lbl">Cleaning (active)</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#16a34a">${data.kpis.cleaned}</div><div class="kpi-lbl">Cleaned (active)</div></div>
+  <div class="kpi"></div>
+</div>
+
+<h2>Delay Metrics</h2>
+<div class="delay-grid">
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.avgReportedToCleaningHours)}</div><div class="delay-lbl">Avg Reported → Cleaning</div></div>
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.medianReportedToCleaningHours)}</div><div class="delay-lbl">Median Reported → Cleaning</div></div>
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.avgReportedToCleanedHours)}</div><div class="delay-lbl">Avg Reported → Cleaned</div></div>
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.medianReportedToCleanedHours)}</div><div class="delay-lbl">Median Reported → Cleaned</div></div>
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.avgResolutionHours)}</div><div class="delay-lbl">Avg Resolution Time</div></div>
+  <div class="delay-cell"><div class="delay-val">${formatHours(dm.avgOpenHours)}</div><div class="delay-lbl">Avg Age of Open Reports</div></div>
+</div>
+
+<h2>Officer Performance Leaderboard</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Officer</th><th>Ward</th><th>Panchayat</th><th style="text-align:center">Total</th><th style="text-align:center">Cleaned</th>
+      <th style="text-align:center">Pending</th><th style="text-align:center">Rate</th><th style="text-align:center">→ Cleaning</th>
+      <th style="text-align:center">→ Cleaned</th><th style="text-align:center">Overdue</th><th style="text-align:center">Status</th>
+    </tr>
+  </thead>
+  <tbody>${officerRows}</tbody>
+</table>
+
+<h2>District Hotspots</h2>
+${data.hotspots.length ? `
+<table>
+  <thead><tr><th style="text-align:center">#</th><th>Location</th><th>Coordinates</th><th style="text-align:center">Reports</th><th>7-day Trend</th></tr></thead>
+  <tbody>${hotspotRows}</tbody>
+</table>` : "<p style='color:#64748b;font-size:10px;padding:8px 0'>No repeated hotspots recorded.</p>"}
+
+${data.delayMetrics.byWard.length ? `
+<h2>Delay by Ward</h2>
+<table>
+  <thead><tr><th>Ward</th><th style="text-align:center">Total Reports</th><th style="text-align:center">Avg → Cleaning</th><th style="text-align:center">Avg → Cleaned</th></tr></thead>
+  <tbody>${wardRows}</tbody>
+</table>` : ""}
+
+<h2>14-Day Trend</h2>
+<table>
+  <thead><tr><th>Date</th><th style="text-align:center">Total</th><th style="text-align:center">Reported</th><th style="text-align:center">Cleaning</th><th style="text-align:center">Cleaned</th></tr></thead>
+  <tbody>${trendRows}</tbody>
+</table>
+
+<div class="footer">
+  <span>CleanSpot · Udupi District Administration · Swachh Bharat Mission</span>
+  <span>Generated: ${now}</span>
+</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("Please allow pop-ups for this site to export as PDF.");
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
 }
 
 const STATUS_COLORS = {
@@ -223,7 +474,7 @@ export default function ControlCenterAnalytics() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
             <Link href="/admin/dashboard">
               <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-muted-foreground hover:bg-muted/60 transition-colors cursor-pointer">
                 <Users className="w-4 h-4" /> Dashboard
@@ -232,6 +483,22 @@ export default function ControlCenterAnalytics() {
             <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-black bg-indigo-600 text-white cursor-default">
               <BarChart2 className="w-4 h-4" /> Analytics
             </span>
+            <button
+              onClick={() => data && exportCSV(data)}
+              disabled={!data}
+              title="Download as CSV"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" /> CSV
+            </button>
+            <button
+              onClick={() => data && exportPDF(data)}
+              disabled={!data}
+              title="Export as PDF (opens print dialog)"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FileText className="w-4 h-4" /> PDF
+            </button>
           </div>
         </div>
 
