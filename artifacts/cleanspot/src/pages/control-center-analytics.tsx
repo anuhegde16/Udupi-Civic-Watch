@@ -194,6 +194,16 @@ function exportCSV(data: DistrictAnalytics) {
   URL.revokeObjectURL(url);
 }
 
+function escHtml(raw: string | null | undefined): string {
+  if (raw == null) return "—";
+  return raw
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function exportPDF(data: DistrictAnalytics) {
   const now = new Date().toLocaleString("en-IN");
   const dm = data.delayMetrics;
@@ -202,15 +212,15 @@ function exportPDF(data: DistrictAnalytics) {
     .map(
       (o) => `
       <tr>
-        <td style="font-weight:700">${o.name}</td>
-        <td>${o.areaName ?? "—"}</td>
-        <td>${o.panchayatName ?? "—"}</td>
+        <td style="font-weight:700">${escHtml(o.name)}</td>
+        <td>${escHtml(o.areaName)}</td>
+        <td>${escHtml(o.panchayatName)}</td>
         <td style="font-weight:700;text-align:center">${o.total}</td>
         <td style="text-align:center">${o.cleaned}</td>
         <td style="text-align:center">${o.pending}</td>
         <td style="font-weight:700;text-align:center">${o.resolutionRate}%</td>
-        <td style="text-align:center">${formatHours(o.avgReportedToCleaningHours)}</td>
-        <td style="text-align:center">${formatHours(o.avgResolutionHours)}</td>
+        <td style="text-align:center">${escHtml(formatHours(o.avgReportedToCleaningHours))}</td>
+        <td style="text-align:center">${escHtml(formatHours(o.avgResolutionHours))}</td>
         <td style="text-align:center;color:${o.overdueCount > 0 ? "#dc2626" : "inherit"};font-weight:${o.overdueCount > 0 ? "700" : "400"}">${o.overdueCount}</td>
         <td style="text-align:center">${o.topPerformer ? '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:99px;font-weight:700;font-size:9px">Top Performer</span>' : o.belowTarget ? '<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:99px;font-weight:700;font-size:9px">Below Target</span>' : ""}</td>
       </tr>`
@@ -222,10 +232,10 @@ function exportPDF(data: DistrictAnalytics) {
       (h, i) => `
       <tr>
         <td style="text-align:center">${i + 1}</td>
-        <td>${h.address ?? "—"}</td>
+        <td>${escHtml(h.address)}</td>
         <td>${h.lat.toFixed(4)}° N, ${h.lng.toFixed(4)}° E</td>
         <td style="font-weight:700;text-align:center">${h.count}</td>
-        <td style="font-weight:700;color:${h.trend === "worsening" ? "#dc2626" : h.trend === "improving" ? "#16a34a" : "#64748b"}">${h.trend.charAt(0).toUpperCase() + h.trend.slice(1)}</td>
+        <td style="font-weight:700;color:${h.trend === "worsening" ? "#dc2626" : h.trend === "improving" ? "#16a34a" : "#64748b"}">${h.trend === "worsening" ? "Worsening" : h.trend === "improving" ? "Improving" : "Steady"}</td>
       </tr>`
     )
     .join("");
@@ -234,10 +244,10 @@ function exportPDF(data: DistrictAnalytics) {
     .map(
       (w) => `
       <tr>
-        <td style="font-weight:700">${w.ward}</td>
+        <td style="font-weight:700">${escHtml(w.ward)}</td>
         <td style="text-align:center">${w.total}</td>
-        <td style="text-align:center">${formatHours(w.avgReportedToCleaningHours)}</td>
-        <td style="text-align:center">${formatHours(w.avgReportedToCleanedHours)}</td>
+        <td style="text-align:center">${escHtml(formatHours(w.avgReportedToCleaningHours))}</td>
+        <td style="text-align:center">${escHtml(formatHours(w.avgReportedToCleanedHours))}</td>
       </tr>`
     )
     .join("");
@@ -246,7 +256,7 @@ function exportPDF(data: DistrictAnalytics) {
     .map(
       (d) => `
       <tr>
-        <td>${d.date}</td>
+        <td>${escHtml(d.date)}</td>
         <td style="font-weight:700;text-align:center">${d.total}</td>
         <td style="text-align:center">${d.reported}</td>
         <td style="text-align:center">${d.cleaning}</td>
