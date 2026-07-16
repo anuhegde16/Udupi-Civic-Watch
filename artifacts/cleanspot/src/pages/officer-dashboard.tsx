@@ -28,6 +28,7 @@ import {
   LayoutList,
   ArrowUpDown,
   RefreshCw,
+  WifiOff,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfficerZoneMap } from "@/components/officer-zone-map";
@@ -49,6 +50,18 @@ export default function OfficerDashboard() {
   const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { lightbox, open: openLightbox } = useImageLightbox();
+
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
 
   async function handleRefresh() {
     setIsRefreshing(true);
@@ -205,6 +218,17 @@ export default function OfficerDashboard() {
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       <NotificationCTABanner variant="officer" />
+
+      {/* Offline banner */}
+      {isOffline && (
+        <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 text-sm font-medium">
+          <WifiOff className="w-4 h-4 shrink-0 text-amber-500" />
+          <span>
+            You're offline — showing data from {relativeLastRefreshed}. Move to a better signal area to receive new assignments.
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-bl-[100px] pointer-events-none" />
