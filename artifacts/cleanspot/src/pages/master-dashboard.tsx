@@ -133,6 +133,8 @@ function usePanchayatOfficers() {
     queryFn: () => customFetch("/api/panchayat/officers"),
     retry: false,
     staleTime: 5 * 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -142,6 +144,8 @@ function usePanchayatStats() {
     queryFn: () => customFetch("/api/panchayat/stats"),
     retry: false,
     staleTime: 2 * 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -152,6 +156,7 @@ function usePanchayatReports() {
     retry: false,
     staleTime: 60_000,
     refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -197,9 +202,14 @@ export default function MasterDashboard() {
       setIsRefreshing(false);
     }
   }
-  const { data: officersData, isLoading: isLoadingOfficers } = usePanchayatOfficers();
-  const { data: stats, isLoading: isLoadingStats } = usePanchayatStats();
-  const { data: reportsData } = usePanchayatReports();
+  const { data: officersData, isLoading: isLoadingOfficers, dataUpdatedAt: officersUpdatedAt } = usePanchayatOfficers();
+  const { data: stats, isLoading: isLoadingStats, dataUpdatedAt: statsUpdatedAt } = usePanchayatStats();
+  const { data: reportsData, dataUpdatedAt: reportsUpdatedAt } = usePanchayatReports();
+
+  useEffect(() => {
+    const latest = Math.max(officersUpdatedAt || 0, statsUpdatedAt || 0, reportsUpdatedAt || 0);
+    if (latest > 0) setLastRefreshed(new Date(latest));
+  }, [officersUpdatedAt, statsUpdatedAt, reportsUpdatedAt]);
   const createOfficer = useCreateOfficer();
   const deleteOfficer = useDeleteOfficer();
   const updateOfficer = useUpdateOfficer();

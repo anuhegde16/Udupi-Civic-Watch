@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
@@ -131,6 +131,8 @@ function useAnalytics() {
       }>("/api/admin/reports/analytics"),
     retry: false,
     staleTime: 5 * 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   });
 }
 
@@ -217,11 +219,45 @@ export default function AdminDashboard() {
   const [paEditOpen, setPaEditOpen] = useState(false);
   const [editingPa, setEditingPa] = useState<PanchayatAdminItem | null>(null);
 
-  const { data: summary, isLoading: isLoadingSummary } = useGetReportsSummary({ query: { queryKey: getGetReportsSummaryQueryKey(), staleTime: 2 * 60_000 } });
-  const { data: officersData, isLoading: isLoadingOfficers } = useListOfficers({ query: { queryKey: getListOfficersQueryKey(), staleTime: 5 * 60_000 } });
-  const { data: analytics, isLoading: isLoadingAnalytics } = useAnalytics();
-  const { data: allReportsData, isLoading: isLoadingReports } = useAdminListReports({ limit: 200 }, { query: { queryKey: getAdminListReportsQueryKey({ limit: 200 }), staleTime: 60_000 } });
+  const { data: summary, isLoading: isLoadingSummary, dataUpdatedAt: summaryUpdatedAt } = useGetReportsSummary({
+    query: {
+      queryKey: getGetReportsSummaryQueryKey(),
+      staleTime: 2 * 60_000,
+      refetchInterval: 120_000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const { data: officersData, isLoading: isLoadingOfficers, dataUpdatedAt: officersUpdatedAt } = useListOfficers({
+    query: {
+      queryKey: getListOfficersQueryKey(),
+      staleTime: 5 * 60_000,
+      refetchInterval: 120_000,
+      refetchIntervalInBackground: false,
+    },
+  });
+  const { data: analytics, isLoading: isLoadingAnalytics, dataUpdatedAt: analyticsUpdatedAt } = useAnalytics();
+  const { data: allReportsData, isLoading: isLoadingReports, dataUpdatedAt: reportsUpdatedAt } = useAdminListReports(
+    { limit: 200 },
+    {
+      query: {
+        queryKey: getAdminListReportsQueryKey({ limit: 200 }),
+        staleTime: 60_000,
+        refetchInterval: 120_000,
+        refetchIntervalInBackground: false,
+      },
+    },
+  );
   const { data: panchayatAdminsData } = usePanchayatAdmins();
+
+  useEffect(() => {
+    const latest = Math.max(
+      summaryUpdatedAt || 0,
+      officersUpdatedAt || 0,
+      analyticsUpdatedAt || 0,
+      reportsUpdatedAt || 0,
+    );
+    if (latest > 0) setLastRefreshed(new Date(latest));
+  }, [summaryUpdatedAt, officersUpdatedAt, analyticsUpdatedAt, reportsUpdatedAt]);
 
   const { data: testModeData } = useQuery<{ testMode: boolean }>({
     queryKey: ["test-mode"],

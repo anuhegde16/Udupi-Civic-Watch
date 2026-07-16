@@ -4,7 +4,7 @@ import { getGreeting } from "@/lib/greeting";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,15 +63,34 @@ export default function OfficerDashboard() {
     }
   }
 
-  const { data: allData, isLoading } = useGetOfficerReports(
+  const { data: allData, isLoading, dataUpdatedAt: reportsUpdatedAt } = useGetOfficerReports(
     officerId,
     { days: 90, limit: 500 },
-    { query: { queryKey: getGetOfficerReportsQueryKey(officerId, { days: 90, limit: 500 }), enabled: !!officerId, staleTime: 60_000 } },
+    {
+      query: {
+        queryKey: getGetOfficerReportsQueryKey(officerId, { days: 90, limit: 500 }),
+        enabled: !!officerId,
+        staleTime: 60_000,
+        refetchInterval: 120_000,
+        refetchIntervalInBackground: false,
+      },
+    },
   );
 
-  const { data: officerData } = useGetOfficer(officerId, {
-    query: { queryKey: getGetOfficerQueryKey(officerId), enabled: !!officerId, staleTime: 5 * 60_000 },
+  const { data: officerData, dataUpdatedAt: officerUpdatedAt } = useGetOfficer(officerId, {
+    query: {
+      queryKey: getGetOfficerQueryKey(officerId),
+      enabled: !!officerId,
+      staleTime: 5 * 60_000,
+      refetchInterval: 120_000,
+      refetchIntervalInBackground: false,
+    },
   });
+
+  useEffect(() => {
+    const latest = Math.max(reportsUpdatedAt || 0, officerUpdatedAt || 0);
+    if (latest > 0) setLastRefreshed(new Date(latest));
+  }, [reportsUpdatedAt, officerUpdatedAt]);
 
   const allReports = allData?.reports || [];
 
