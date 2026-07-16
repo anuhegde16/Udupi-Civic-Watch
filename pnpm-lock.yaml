@@ -456,6 +456,9 @@ importers:
       vite-plugin-pwa:
         specifier: ^0.21.1
         version: 0.21.2(@types/babel__core@7.20.5)(vite@7.3.2(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.31.1)(terser@5.48.0)(tsx@4.21.0)(yaml@2.8.2))
+      workbox-expiration:
+        specifier: ^7.4.1
+        version: 7.4.1
       workbox-precaching:
         specifier: ^7.4.1
         version: 7.4.1

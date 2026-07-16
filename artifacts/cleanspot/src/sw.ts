@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { NetworkFirst } from "workbox-strategies";
+import { NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { ExpirationPlugin } from "workbox-expiration";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -21,14 +22,34 @@ registerRoute(
   )
 );
 
+// Auth endpoints must NEVER be served from cache — always go to the network.
+// Registered before the general /api/ route so it takes precedence.
+registerRoute(
+  ({ url }) => url.pathname.startsWith("/api/auth/"),
+  new NetworkOnly()
+);
+
 registerRoute(
   ({ url }) => url.pathname.startsWith("/api/"),
   new NetworkFirst({
     cacheName: "api-cache",
     networkTimeoutSeconds: 5,
-    plugins: [{ cacheWillUpdate: async ({ response }) => (response.status === 200 ? response : null) }],
+    plugins: [
+      { cacheWillUpdate: async ({ response }) => (response.status === 200 ? response : null) },
+      new ExpirationPlugin({
+        maxAgeSeconds: 120,
+        maxEntries: 200,
+      }),
+    ],
   })
 );
+
+// Handle messages from the app — currently used to wipe api-cache on logout.
+self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  if (event.data?.type === "CLEAR_API_CACHE") {
+    event.waitUntil(caches.delete("api-cache"));
+  }
+});
 
 self.addEventListener("push", (event: PushEvent) => {
   if (!event.data) return;
