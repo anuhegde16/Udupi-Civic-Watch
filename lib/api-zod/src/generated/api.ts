@@ -948,6 +948,152 @@ export const PermanentDeleteReportResponse = zod.object({
 });
 
 /**
+ * Returns peak-hour distribution, day-of-week breakdown, SLA compliance buckets, week-over-week report count, waste keyword chips, photo-submission rate, unassigned rate, and an AI-generated narrative summary.
+
+ * @summary AI-powered smart insights for the Control Center analytics page
+ */
+export const GetAdminSmartInsightsResponse = zod.object({
+  narrative: zod
+    .array(zod.string())
+    .nullable()
+    .describe(
+      "AI-generated insight bullet points (null if AI call timed out or failed)",
+    ),
+  narrativeGeneratedAt: zod.coerce
+    .date()
+    .nullable()
+    .describe("Timestamp when the AI narrative was generated"),
+  peakHours: zod
+    .array(
+      zod.object({
+        hour: zod.number().describe("Hour 0–23"),
+        count: zod.number(),
+      }),
+    )
+    .describe(
+      "Report submission count bucketed by hour of day (0–23), last 90 days",
+    ),
+  dayOfWeek: zod
+    .array(
+      zod.object({
+        day: zod.string().describe("Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
+        count: zod.number(),
+      }),
+    )
+    .describe("Report submission count by day of week (Sun–Sat), last 90 days"),
+  sla: zod
+    .object({
+      within24h: zod.number(),
+      within48h: zod.number(),
+      within72h: zod.number(),
+      beyond72h: zod.number(),
+      totalCleaned: zod.number(),
+    })
+    .describe(
+      "SLA compliance buckets based on time from report creation to cleaned_at",
+    ),
+  weekOverWeek: zod.object({
+    thisWeek: zod.number(),
+    lastWeek: zod.number(),
+    changePct: zod
+      .number()
+      .nullable()
+      .describe(
+        "Percentage change vs last week; null if last week had zero reports",
+      ),
+  }),
+  wasteKeywords: zod
+    .array(
+      zod.object({
+        keyword: zod.string(),
+        count: zod.number(),
+      }),
+    )
+    .describe("Top waste type keywords from AI-analysed reports"),
+  photoSubmissionRate: zod
+    .number()
+    .describe(
+      "Percentage of active reports that include at least one photo (0–100)",
+    ),
+  unassignedRate: zod
+    .number()
+    .describe("Percentage of active reports with no assigned officer (0–100)"),
+});
+
+/**
+ * Same shape as the admin smart-insights endpoint but scoped to the requesting panchayat admin's officers and reports.
+
+ * @summary AI-powered smart insights scoped to the panchayat admin's area
+ */
+export const GetPanchayatSmartInsightsResponse = zod.object({
+  narrative: zod
+    .array(zod.string())
+    .nullable()
+    .describe(
+      "AI-generated insight bullet points (null if AI call timed out or failed)",
+    ),
+  narrativeGeneratedAt: zod.coerce
+    .date()
+    .nullable()
+    .describe("Timestamp when the AI narrative was generated"),
+  peakHours: zod
+    .array(
+      zod.object({
+        hour: zod.number().describe("Hour 0–23"),
+        count: zod.number(),
+      }),
+    )
+    .describe(
+      "Report submission count bucketed by hour of day (0–23), last 90 days",
+    ),
+  dayOfWeek: zod
+    .array(
+      zod.object({
+        day: zod.string().describe("Sun, Mon, Tue, Wed, Thu, Fri, Sat"),
+        count: zod.number(),
+      }),
+    )
+    .describe("Report submission count by day of week (Sun–Sat), last 90 days"),
+  sla: zod
+    .object({
+      within24h: zod.number(),
+      within48h: zod.number(),
+      within72h: zod.number(),
+      beyond72h: zod.number(),
+      totalCleaned: zod.number(),
+    })
+    .describe(
+      "SLA compliance buckets based on time from report creation to cleaned_at",
+    ),
+  weekOverWeek: zod.object({
+    thisWeek: zod.number(),
+    lastWeek: zod.number(),
+    changePct: zod
+      .number()
+      .nullable()
+      .describe(
+        "Percentage change vs last week; null if last week had zero reports",
+      ),
+  }),
+  wasteKeywords: zod
+    .array(
+      zod.object({
+        keyword: zod.string(),
+        count: zod.number(),
+      }),
+    )
+    .describe("Top waste type keywords from AI-analysed reports"),
+  photoSubmissionRate: zod
+    .number()
+    .describe(
+      "Percentage of active reports that include at least one photo (0–100)",
+    ),
+  unassignedRate: zod
+    .number()
+    .describe("Percentage of active reports with no assigned officer (0–100)"),
+});
+
+/**
  * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet
  */
 export const BackfillPhotoAnalysisResponse = zod.object({

@@ -341,6 +341,61 @@ export interface UpdateReportBody {
   cleanupImageUrls?: PhotoItem[] | null;
 }
 
+export type SmartInsightsResponsePeakHoursItem = {
+  /** Hour 0–23 */
+  hour: number;
+  count: number;
+};
+
+export type SmartInsightsResponseDayOfWeekItem = {
+  /** Sun, Mon, Tue, Wed, Thu, Fri, Sat */
+  day: string;
+  count: number;
+};
+
+/**
+ * SLA compliance buckets based on time from report creation to cleaned_at
+ */
+export type SmartInsightsResponseSla = {
+  within24h: number;
+  within48h: number;
+  within72h: number;
+  beyond72h: number;
+  totalCleaned: number;
+};
+
+export type SmartInsightsResponseWeekOverWeek = {
+  thisWeek: number;
+  lastWeek: number;
+  /** Percentage change vs last week; null if last week had zero reports */
+  changePct: number | null;
+};
+
+export type SmartInsightsResponseWasteKeywordsItem = {
+  keyword: string;
+  count: number;
+};
+
+export interface SmartInsightsResponse {
+  /** AI-generated insight bullet points (null if AI call timed out or failed) */
+  narrative: string[] | null;
+  /** Timestamp when the AI narrative was generated */
+  narrativeGeneratedAt: string | null;
+  /** Report submission count bucketed by hour of day (0–23), last 90 days */
+  peakHours: SmartInsightsResponsePeakHoursItem[];
+  /** Report submission count by day of week (Sun–Sat), last 90 days */
+  dayOfWeek: SmartInsightsResponseDayOfWeekItem[];
+  /** SLA compliance buckets based on time from report creation to cleaned_at */
+  sla: SmartInsightsResponseSla;
+  weekOverWeek: SmartInsightsResponseWeekOverWeek;
+  /** Top waste type keywords from AI-analysed reports */
+  wasteKeywords: SmartInsightsResponseWasteKeywordsItem[];
+  /** Percentage of active reports that include at least one photo (0–100) */
+  photoSubmissionRate: number;
+  /** Percentage of active reports with no assigned officer (0–100) */
+  unassignedRate: number;
+}
+
 export interface BackfillPhotoAnalysisResponse {
   /** Number of reports successfully analysed */
   processed: number;

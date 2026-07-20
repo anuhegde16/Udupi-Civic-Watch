@@ -28,6 +28,7 @@ import {
   PackageSearch,
   Tag,
   Zap,
+  Sparkles,
 } from "lucide-react";
 
 type DayTrend = {
@@ -117,6 +118,18 @@ type DistrictAnalytics = {
   };
 };
 
+type SmartInsights = {
+  narrative: string[] | null;
+  narrativeGeneratedAt: string | null;
+  peakHours: { hour: number; count: number }[];
+  dayOfWeek: { day: string; count: number }[];
+  sla: { within24h: number; within48h: number; within72h: number; beyond72h: number; totalCleaned: number };
+  weekOverWeek: { thisWeek: number; lastWeek: number; changePct: number | null };
+  wasteKeywords: { keyword: string; count: number }[];
+  photoSubmissionRate: number;
+  unassignedRate: number;
+};
+
 function useDistrictAnalytics() {
   return useQuery<DistrictAnalytics>({
     queryKey: ["district-analytics"],
@@ -124,6 +137,55 @@ function useDistrictAnalytics() {
     retry: false,
     refetchInterval: 60_000,
   });
+}
+
+function useSmartInsights() {
+  return useQuery<SmartInsights>({
+    queryKey: ["admin-smart-insights"],
+    queryFn: () => customFetch("/api/admin/smart-insights"),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+function PeakHoursChart({ data }: { data: { hour: number; count: number }[] }) {
+  const max = Math.max(...data.map((d) => d.count), 1);
+  return (
+    <div className="flex items-end gap-px h-14">
+      {data.map((d) => (
+        <div key={d.hour} className="flex-1 flex flex-col items-center justify-end group relative" style={{ height: "100%" }}>
+          <div
+            className="w-full rounded-t-sm bg-violet-400 hover:bg-violet-600 transition-colors cursor-default"
+            style={{ height: `${Math.max((d.count / max) * 100, d.count > 0 ? 4 : 0)}%` }}
+            title={`${d.hour}:00 — ${d.count}`}
+          />
+          {d.hour % 6 === 0 && (
+            <span className="absolute -bottom-4 text-[8px] font-bold text-muted-foreground">{d.hour}h</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DayOfWeekChart({ data }: { data: { day: string; count: number }[] }) {
+  const max = Math.max(...data.map((d) => d.count), 1);
+  return (
+    <div className="space-y-1.5">
+      {data.map((d) => (
+        <div key={d.day} className="flex items-center gap-2">
+          <span className="text-[11px] font-bold text-muted-foreground w-7 shrink-0">{d.day}</span>
+          <div className="flex-1 bg-muted/60 rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full bg-violet-400 rounded-full transition-all duration-500"
+              style={{ width: `${(d.count / max) * 100}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-black text-foreground w-5 text-right shrink-0">{d.count}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatHours(hours: number | null): string {
@@ -451,9 +513,21 @@ function TrendChart({ data }: { data: DayTrend[] }) {
   );
 }
 
+const KEYWORD_CHIP_COLORS = [
+  "bg-violet-50 text-violet-700 border-violet-200",
+  "bg-blue-50 text-blue-700 border-blue-200",
+  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "bg-orange-50 text-orange-700 border-orange-200",
+  "bg-pink-50 text-pink-700 border-pink-200",
+  "bg-amber-50 text-amber-700 border-amber-200",
+  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-teal-50 text-teal-700 border-teal-200",
+];
+
 export default function ControlCenterAnalytics() {
   const { user } = useAuth();
   const { data, isLoading } = useDistrictAnalytics();
+  const { data: insights, isLoading: isLoadingInsights } = useSmartInsights();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const backfill = useBackfillPhotoAnalysis({
@@ -572,6 +646,151 @@ export default function ControlCenterAnalytics() {
           <div className="mt-6 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-sm font-medium">Loading district analytics…</span>
+          </div>
+        )}
+      </div>
+
+      {/* Smart Insights */}
+      <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+          <div>
+            <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-500" /> Smart Insights
+            </h2>
+            <p className="text-sm text-muted-foreground font-medium mt-0.5">AI analysis · last 90 days</p>
+          </div>
+          {!isLoadingInsights && insights?.weekOverWeek && (
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-black border ${
+              insights.weekOverWeek.changePct === null
+                ? "bg-muted/60 text-muted-foreground border-border/40"
+                : insights.weekOverWeek.changePct > 0
+                  ? "bg-destructive/10 text-destructive border-destructive/20"
+                  : insights.weekOverWeek.changePct < 0
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-muted/60 text-muted-foreground border-border/40"
+            }`}>
+              {insights.weekOverWeek.changePct === null ? "—" :
+                insights.weekOverWeek.changePct > 0 ? `↑ ${insights.weekOverWeek.changePct}% this week` :
+                insights.weekOverWeek.changePct < 0 ? `↓ ${Math.abs(insights.weekOverWeek.changePct)}% this week` :
+                "→ No change this week"}
+            </div>
+          )}
+        </div>
+
+        {isLoadingInsights ? (
+          <div className="flex items-center justify-center py-10 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            <span className="text-sm font-medium">Generating insights…</span>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* AI Narrative */}
+            {insights?.narrative && insights.narrative.length > 0 && (
+              <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                  <span className="text-[11px] font-black text-violet-600 uppercase tracking-wide">AI Summary</span>
+                </div>
+                <ul className="space-y-2">
+                  {insights.narrative.map((bullet, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-foreground leading-relaxed">
+                      <span className="text-violet-400 font-black mt-0.5 shrink-0">●</span>
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {!insights?.narrative && (
+              <div className="bg-muted/30 border border-border/40 rounded-2xl p-4 text-center">
+                <p className="text-sm text-muted-foreground font-medium">AI narrative unavailable — check back shortly</p>
+              </div>
+            )}
+
+            {/* Quick metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-blue-50 rounded-2xl p-3.5 text-center border border-blue-100">
+                <div className="text-2xl font-black text-blue-700">{insights?.photoSubmissionRate ?? 0}%</div>
+                <div className="text-xs font-bold text-blue-600/80 mt-0.5">Photo Rate</div>
+              </div>
+              <div className={`rounded-2xl p-3.5 text-center border ${(insights?.unassignedRate ?? 0) > 20 ? "bg-destructive/10 border-destructive/20" : "bg-muted/40 border-border/40"}`}>
+                <div className={`text-2xl font-black ${(insights?.unassignedRate ?? 0) > 20 ? "text-destructive" : "text-foreground"}`}>
+                  {insights?.unassignedRate ?? 0}%
+                </div>
+                <div className="text-xs font-bold text-muted-foreground mt-0.5">Unassigned</div>
+              </div>
+              <div className="bg-muted/40 rounded-2xl p-3.5 text-center border border-border/40">
+                <div className="text-2xl font-black text-foreground">{insights?.weekOverWeek.thisWeek ?? 0}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-0.5">This Week</div>
+              </div>
+              <div className="bg-muted/40 rounded-2xl p-3.5 text-center border border-border/40">
+                <div className="text-2xl font-black text-muted-foreground">{insights?.weekOverWeek.lastWeek ?? 0}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-0.5">Last Week</div>
+              </div>
+            </div>
+
+            {/* SLA compliance */}
+            {insights && insights.sla.totalCleaned > 0 && (
+              <div>
+                <h3 className="text-sm font-black text-foreground mb-3">
+                  SLA Compliance
+                  <span className="ml-2 text-xs font-bold text-muted-foreground">({insights.sla.totalCleaned} resolved reports)</span>
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[
+                    { label: "≤ 24h", count: insights.sla.within24h, cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                    { label: "24 – 48h", count: insights.sla.within48h, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                    { label: "48 – 72h", count: insights.sla.within72h, cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                    { label: "> 72h", count: insights.sla.beyond72h, cls: "bg-destructive/10 text-destructive border-destructive/20" },
+                  ].map(({ label, count, cls }) => (
+                    <div key={label} className={`rounded-2xl border p-3 text-center ${cls}`}>
+                      <div className="text-2xl font-black">{count}</div>
+                      <div className="text-xs font-bold">{label}</div>
+                      <div className="text-[10px] font-bold opacity-70">
+                        {Math.round((count / insights.sla.totalCleaned) * 100)}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Peak hours chart */}
+              {insights && (
+                <div>
+                  <h3 className="text-sm font-black text-foreground mb-4">Report Timing by Hour</h3>
+                  <PeakHoursChart data={insights.peakHours} />
+                  <div className="mt-5" />
+                </div>
+              )}
+
+              {/* Day of week */}
+              {insights && (
+                <div>
+                  <h3 className="text-sm font-black text-foreground mb-3">Reports by Day of Week</h3>
+                  <DayOfWeekChart data={insights.dayOfWeek} />
+                </div>
+              )}
+            </div>
+
+            {/* Waste keyword chips */}
+            {insights && insights.wasteKeywords.length > 0 && (
+              <div>
+                <h3 className="text-sm font-black text-foreground mb-3">Top Waste Categories (AI-identified)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {insights.wasteKeywords.map((kw, i) => (
+                    <span
+                      key={kw.keyword}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${KEYWORD_CHIP_COLORS[i % KEYWORD_CHIP_COLORS.length]}`}
+                    >
+                      {kw.keyword}
+                      <span className="font-black opacity-60">{kw.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

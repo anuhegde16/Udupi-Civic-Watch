@@ -5,6 +5,7 @@ import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
 import { analyseWastePhoto } from "../lib/waste-analysis";
+import { generateInsightNarrative } from "../lib/smart-insights";
 import {
   sendAssignmentEmail,
   sendWelcomeEmail,
@@ -758,6 +759,126 @@ router.delete("/admin/panchayat-admins/:id", requireControlCenter, async (req, r
 
   logger.info({ userId: id }, "Panchayat admin deleted by control center");
   res.json({ success: true, message: "Panchayat Admin removed" });
+});
+
+// ── Smart Insights (Control Center only) ─────────────────────────────────────
+
+router.get("/admin/smart-insights", requireControlCenter, async (req, res): Promise<void> => {
+  const rows = (r: any): any[] => (r as any).rows ?? (r as unknown as any[]);
+
+  const [peakHoursRows, dowRows, slaRows, wowRows, wasteKwRows, rateRows] = await Promise.all([
+    db.execute(sql`
+      SELECT EXTRACT(HOUR FROM created_at)::int AS hour, COUNT(*)::int AS count
+      FROM reports
+      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '90 days'
+      GROUP BY hour ORDER BY hour
+    `),
+    db.execute(sql`
+      SELECT EXTRACT(DOW FROM created_at)::int AS dow, COUNT(*)::int AS count
+      FROM reports
+      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '90 days'
+      GROUP BY dow ORDER BY dow
+    `),
+    db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 <= 24)::int AS within_24h,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 > 24
+                           AND EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 <= 48)::int AS within_48h,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 > 48
+                           AND EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 <= 72)::int AS within_72h,
+        COUNT(*) FILTER (WHERE EXTRACT(EPOCH FROM (cleaned_at - created_at)) / 3600 > 72)::int AS beyond_72h,
+        COUNT(*)::int AS total_cleaned
+      FROM reports
+      WHERE deleted_at IS NULL AND status = 'cleaned' AND cleaned_at IS NOT NULL
+    `),
+    db.execute(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS this_week,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '14 days'
+                           AND created_at < NOW() - INTERVAL '7 days')::int AS last_week
+      FROM reports
+      WHERE deleted_at IS NULL
+    `),
+    db.execute(sql`
+      SELECT wt.waste_type AS keyword, COUNT(*)::int AS count
+      FROM reports r,
+      LATERAL jsonb_array_elements_text(r.waste_types) AS wt(waste_type)
+      WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
+      GROUP BY keyword ORDER BY count DESC LIMIT 10
+    `),
+    db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE image_url IS NOT NULL
+                           OR (image_urls IS NOT NULL AND jsonb_array_length(image_urls) > 0))::int AS with_photo,
+        COUNT(*) FILTER (WHERE assigned_officer_id IS NULL)::int AS unassigned
+      FROM reports
+      WHERE deleted_at IS NULL
+    `),
+  ]);
+
+  const DOW_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+  const peakHours = Array.from({ length: 24 }, (_, h) => {
+    const row = rows(peakHoursRows).find((r: any) => r.hour === h);
+    return { hour: h, count: (row?.count as number) ?? 0 };
+  });
+
+  const dayOfWeek = Array.from({ length: 7 }, (_, d) => {
+    const row = rows(dowRows).find((r: any) => r.dow === d);
+    return { day: DOW_NAMES[d]!, count: (row?.count as number) ?? 0 };
+  });
+
+  const slaRow = rows(slaRows)[0] ?? {};
+  const sla = {
+    within24h: (slaRow.within_24h as number) ?? 0,
+    within48h: (slaRow.within_48h as number) ?? 0,
+    within72h: (slaRow.within_72h as number) ?? 0,
+    beyond72h: (slaRow.beyond_72h as number) ?? 0,
+    totalCleaned: (slaRow.total_cleaned as number) ?? 0,
+  };
+
+  const wowRow = rows(wowRows)[0] ?? {};
+  const thisWeek = (wowRow.this_week as number) ?? 0;
+  const lastWeek = (wowRow.last_week as number) ?? 0;
+  const weekOverWeek = {
+    thisWeek,
+    lastWeek,
+    changePct: lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : null,
+  };
+
+  const wasteKeywords: { keyword: string; count: number }[] = rows(wasteKwRows).map((r: any) => ({
+    keyword: r.keyword as string,
+    count: r.count as number,
+  }));
+
+  const rateRow = rows(rateRows)[0] ?? {};
+  const total = (rateRow.total as number) ?? 0;
+  const photoSubmissionRate = total > 0 ? Math.round(((rateRow.with_photo as number) / total) * 100) : 0;
+  const unassignedRate = total > 0 ? Math.round(((rateRow.unassigned as number) / total) * 100) : 0;
+
+  const narrative = await generateInsightNarrative({
+    totalReports: total,
+    photoRate: photoSubmissionRate,
+    unassignedRate,
+    weekOverWeek,
+    sla,
+    topWasteKeywords: wasteKeywords,
+  });
+
+  req.log.info({ thisWeek, lastWeek, photoSubmissionRate, unassignedRate }, "Smart insights generated");
+
+  res.json({
+    narrative,
+    narrativeGeneratedAt: narrative ? new Date().toISOString() : null,
+    peakHours,
+    dayOfWeek,
+    sla,
+    weekOverWeek,
+    wasteKeywords,
+    photoSubmissionRate,
+    unassignedRate,
+  });
 });
 
 // ── Manual weekly digest trigger (control center only) ──────────────────────────

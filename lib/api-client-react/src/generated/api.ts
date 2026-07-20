@@ -46,6 +46,7 @@ import type {
   ReportList,
   ReportStatus,
   ReportsSummary,
+  SmartInsightsResponse,
   SuccessResponse,
   TestPushResponse,
   UpdateOfficerBody,
@@ -1945,6 +1946,161 @@ export const usePermanentDeleteReport = <
 > => {
   return useMutation(getPermanentDeleteReportMutationOptions(options));
 };
+
+/**
+ * Returns peak-hour distribution, day-of-week breakdown, SLA compliance buckets, week-over-week report count, waste keyword chips, photo-submission rate, unassigned rate, and an AI-generated narrative summary.
+
+ * @summary AI-powered smart insights for the Control Center analytics page
+ */
+export const getGetAdminSmartInsightsUrl = () => {
+  return `/api/admin/smart-insights`;
+};
+
+export const getAdminSmartInsights = async (
+  options?: RequestInit,
+): Promise<SmartInsightsResponse> => {
+  return customFetch<SmartInsightsResponse>(getGetAdminSmartInsightsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminSmartInsightsQueryKey = () => {
+  return [`/api/admin/smart-insights`] as const;
+};
+
+export const getGetAdminSmartInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminSmartInsights>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSmartInsights>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminSmartInsightsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminSmartInsights>>
+  > = ({ signal }) => getAdminSmartInsights({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSmartInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminSmartInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminSmartInsights>>
+>;
+export type GetAdminSmartInsightsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary AI-powered smart insights for the Control Center analytics page
+ */
+
+export function useGetAdminSmartInsights<
+  TData = Awaited<ReturnType<typeof getAdminSmartInsights>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminSmartInsights>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminSmartInsightsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Same shape as the admin smart-insights endpoint but scoped to the requesting panchayat admin's officers and reports.
+
+ * @summary AI-powered smart insights scoped to the panchayat admin's area
+ */
+export const getGetPanchayatSmartInsightsUrl = () => {
+  return `/api/panchayat/smart-insights`;
+};
+
+export const getPanchayatSmartInsights = async (
+  options?: RequestInit,
+): Promise<SmartInsightsResponse> => {
+  return customFetch<SmartInsightsResponse>(getGetPanchayatSmartInsightsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPanchayatSmartInsightsQueryKey = () => {
+  return [`/api/panchayat/smart-insights`] as const;
+};
+
+export const getGetPanchayatSmartInsightsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPanchayatSmartInsights>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPanchayatSmartInsights>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPanchayatSmartInsightsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPanchayatSmartInsights>>
+  > = ({ signal }) => getPanchayatSmartInsights({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPanchayatSmartInsights>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPanchayatSmartInsightsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPanchayatSmartInsights>>
+>;
+export type GetPanchayatSmartInsightsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary AI-powered smart insights scoped to the panchayat admin's area
+ */
+
+export function useGetPanchayatSmartInsights<
+  TData = Awaited<ReturnType<typeof getPanchayatSmartInsights>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPanchayatSmartInsights>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPanchayatSmartInsightsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet

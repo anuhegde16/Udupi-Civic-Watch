@@ -20,6 +20,8 @@ tags:
     description: Authentication operations
   - name: notifications
     description: In-app and push notification operations
+  - name: panchayat
+    description: Panchayat admin operations
 paths:
   /healthz:
     get:
@@ -484,6 +486,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/smart-insights:
+    get:
+      operationId: getAdminSmartInsights
+      tags: [admin]
+      summary: AI-powered smart insights for the Control Center analytics page
+      description: >
+        Returns peak-hour distribution, day-of-week breakdown, SLA compliance buckets,
+        week-over-week report count, waste keyword chips, photo-submission rate,
+        unassigned rate, and an AI-generated narrative summary.
+      responses:
+        "200":
+          description: Smart insights snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartInsightsResponse"
+
+  /panchayat/smart-insights:
+    get:
+      operationId: getPanchayatSmartInsights
+      tags: [panchayat]
+      summary: AI-powered smart insights scoped to the panchayat admin's area
+      description: >
+        Same shape as the admin smart-insights endpoint but scoped to the
+        requesting panchayat admin's officers and reports.
+      responses:
+        "200":
+          description: Panchayat smart insights snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartInsightsResponse"
 
   /admin/backfill-photo-analysis:
     post:
@@ -1137,6 +1172,72 @@ components:
             $ref: "#/components/schemas/PhotoItem"
           nullable: true
           description: Up to 5 cleanup photos with timestamps
+
+    SmartInsightsResponse:
+      type: object
+      properties:
+        narrative:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: AI-generated insight bullet points (null if AI call timed out or failed)
+        narrativeGeneratedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the AI narrative was generated
+        peakHours:
+          type: array
+          description: Report submission count bucketed by hour of day (0–23), last 90 days
+          items:
+            type: object
+            properties:
+              hour: { type: integer, description: "Hour 0–23" }
+              count: { type: integer }
+            required: [hour, count]
+        dayOfWeek:
+          type: array
+          description: Report submission count by day of week (Sun–Sat), last 90 days
+          items:
+            type: object
+            properties:
+              day: { type: string, description: "Sun, Mon, Tue, Wed, Thu, Fri, Sat" }
+              count: { type: integer }
+            required: [day, count]
+        sla:
+          type: object
+          description: SLA compliance buckets based on time from report creation to cleaned_at
+          properties:
+            within24h: { type: integer }
+            within48h: { type: integer }
+            within72h: { type: integer }
+            beyond72h: { type: integer }
+            totalCleaned: { type: integer }
+          required: [within24h, within48h, within72h, beyond72h, totalCleaned]
+        weekOverWeek:
+          type: object
+          properties:
+            thisWeek: { type: integer }
+            lastWeek: { type: integer }
+            changePct: { type: integer, nullable: true, description: "Percentage change vs last week; null if last week had zero reports" }
+          required: [thisWeek, lastWeek, changePct]
+        wasteKeywords:
+          type: array
+          description: Top waste type keywords from AI-analysed reports
+          items:
+            type: object
+            properties:
+              keyword: { type: string }
+              count: { type: integer }
+            required: [keyword, count]
+        photoSubmissionRate:
+          type: integer
+          description: Percentage of active reports that include at least one photo (0–100)
+        unassignedRate:
+          type: integer
+          description: Percentage of active reports with no assigned officer (0–100)
+      required: [narrative, narrativeGeneratedAt, peakHours, dayOfWeek, sla, weekOverWeek, wasteKeywords, photoSubmissionRate, unassignedRate]
 
     BackfillPhotoAnalysisResponse:
       type: object
