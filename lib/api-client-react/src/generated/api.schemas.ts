@@ -121,6 +121,41 @@ export type DistrictAnalyticsResponseOldestOpenReportsItem = {
   assignedOfficer?: DistrictAnalyticsResponseOldestOpenReportsItemAssignedOfficer;
 };
 
+export type DistrictAnalyticsResponseWasteCompositionTypesItem = {
+  type: string;
+  count: number;
+  /** Percentage share of total waste type occurrences */
+  pct: number;
+};
+
+export type DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItemSeverity =
+  (typeof DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItemSeverity)[keyof typeof DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItemSeverity];
+
+export const DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItemSeverity =
+  {
+    low: "low",
+    medium: "medium",
+    high: "high",
+  } as const;
+
+export type DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItem = {
+  severity: DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItemSeverity;
+  count: number;
+};
+
+export type DistrictAnalyticsResponseWasteCompositionTopBrandsItem = {
+  brand: string;
+  count: number;
+};
+
+export type DistrictAnalyticsResponseWasteComposition = {
+  types: DistrictAnalyticsResponseWasteCompositionTypesItem[];
+  severityBreakdown: DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItem[];
+  topBrands: DistrictAnalyticsResponseWasteCompositionTopBrandsItem[];
+  aiAnalysedCount: number;
+  unanalysedCount: number;
+};
+
 export interface DistrictAnalyticsResponse {
   kpis: DistrictAnalyticsResponseKpis;
   dailyTrend: DistrictAnalyticsResponseDailyTrendItem[];
@@ -128,6 +163,7 @@ export interface DistrictAnalyticsResponse {
   hotspots: DistrictAnalyticsResponseHotspotsItem[];
   delayMetrics: DistrictAnalyticsResponseDelayMetrics;
   oldestOpenReports: DistrictAnalyticsResponseOldestOpenReportsItem[];
+  wasteComposition?: DistrictAnalyticsResponseWasteComposition;
 }
 
 export interface LoginBody {
@@ -305,9 +341,10 @@ export interface UpdateReportBody {
 }
 
 export interface BackfillPhotoAnalysisResponse {
-  /** Number of reports queued for AI analysis */
-  queued: number;
-  message: string;
+  /** Number of reports successfully analysed */
+  processed: number;
+  /** Number of reports that failed analysis */
+  failed: number;
 }
 
 export interface ReassignReportBody {

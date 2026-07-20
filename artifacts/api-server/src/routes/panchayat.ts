@@ -325,7 +325,85 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
     assignedOfficer: officer ? { id: officer.id, name: officer.name, areaName: officer.areaName } : null,
   }));
 
-  res.json({ dailyTrend, officerLeaderboard, hotspots, recentReports });
+  // Waste composition — scoped to this panchayat's officers
+  const inOfficersExpr = sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map((id) => sql`${id}::int`), sql`, `)}])`;
+
+  const wasteTypeRows = await db.execute(sql`
+    SELECT
+      wt.waste_type,
+      COUNT(*)::int AS count
+    FROM ${reportsTable} r,
+    LATERAL jsonb_array_elements_text(r.waste_types) AS wt(waste_type)
+    WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
+      AND ${inOfficersExpr}
+    GROUP BY wt.waste_type
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+  const wasteTypes = ((wasteTypeRows as any).rows ?? (wasteTypeRows as unknown as any[])).map((r: any) => ({
+    type: r.waste_type as string,
+    count: r.count as number,
+  }));
+  const totalWasteCount = wasteTypes.reduce((s: number, r: { count: number }) => s + r.count, 0);
+
+  const severityRows = await db.execute(sql`
+    SELECT
+      waste_severity,
+      COUNT(*)::int AS count
+    FROM ${reportsTable}
+    WHERE deleted_at IS NULL AND waste_severity IS NOT NULL
+      AND ${inOfficersExpr}
+    GROUP BY waste_severity
+    ORDER BY count DESC
+  `);
+  const severityBreakdown = ((severityRows as any).rows ?? (severityRows as unknown as any[])).map((r: any) => ({
+    severity: r.waste_severity as string,
+    count: r.count as number,
+  }));
+
+  const brandRows = await db.execute(sql`
+    SELECT
+      bn.brand_name,
+      COUNT(*)::int AS count
+    FROM ${reportsTable} r,
+    LATERAL jsonb_array_elements_text(r.brand_names) AS bn(brand_name)
+    WHERE r.deleted_at IS NULL AND r.brand_names IS NOT NULL AND jsonb_array_length(r.brand_names) > 0
+      AND ${inOfficersExpr}
+    GROUP BY bn.brand_name
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+  const topBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
+    brand: r.brand_name as string,
+    count: r.count as number,
+  }));
+
+  const [aiAnalysedRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reportsTable)
+    .where(and(isNull(reportsTable.deletedAt), isNotNull(reportsTable.photoAiAnalysedAt), inOfficersExpr));
+
+  const [totalRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reportsTable)
+    .where(and(isNull(reportsTable.deletedAt), inOfficersExpr));
+
+  res.json({
+    dailyTrend,
+    officerLeaderboard,
+    hotspots,
+    recentReports,
+    wasteComposition: {
+      types: wasteTypes.map((t: { type: string; count: number }) => ({
+        ...t,
+        pct: totalWasteCount > 0 ? Math.round((t.count / totalWasteCount) * 100) : 0,
+      })),
+      severityBreakdown,
+      topBrands,
+      aiAnalysedCount: aiAnalysedRow?.count ?? 0,
+      unanalysedCount: (totalRow?.count ?? 0) - (aiAnalysedRow?.count ?? 0),
+    },
+  });
 });
 
 export default router;

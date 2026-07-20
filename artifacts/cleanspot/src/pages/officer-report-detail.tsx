@@ -310,40 +310,48 @@ export default function OfficerReportDetail() {
           )}
 
           {/* AI Waste Analysis */}
-          {(report as any).wasteSeverity || ((report as any).wasteTypes?.length > 0) ? (
+          {reportPhotos.length > 0 && (
             <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Cpu className="w-3.5 h-3.5" /> AI Photo Analysis
               </p>
-              {(report as any).wasteSeverity && (
-                <div className="mb-3">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full ${
-                    (report as any).wasteSeverity === "critical" ? "bg-destructive/10 text-destructive" :
-                    (report as any).wasteSeverity === "high" ? "bg-orange-50 text-orange-600" :
-                    (report as any).wasteSeverity === "medium" ? "bg-amber-50 text-amber-600" :
-                    "bg-emerald-50 text-emerald-600"
-                  }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                    {((report as any).wasteSeverity as string).charAt(0).toUpperCase() + ((report as any).wasteSeverity as string).slice(1)} Severity
-                  </span>
-                </div>
-              )}
-              {(report as any).wasteTypes?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {((report as any).wasteTypes as string[]).map((t) => (
-                    <span key={t} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      <Tag className="w-2.5 h-2.5" />{t}
-                    </span>
-                  ))}
-                  {((report as any).brandNames as string[] | undefined)?.map((b) => (
-                    <span key={b} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                      {b}
-                    </span>
-                  ))}
-                </div>
+              {!(report as any).photoAiAnalysedAt ? (
+                <p className="text-xs text-muted-foreground font-medium">Analysis pending — will update shortly after photo is processed.</p>
+              ) : (
+                <>
+                  {(report as any).wasteSeverity && (
+                    <div className="mb-3">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full ${
+                        (report as any).wasteSeverity === "high" ? "bg-destructive/10 text-destructive" :
+                        (report as any).wasteSeverity === "medium" ? "bg-amber-50 text-amber-600" :
+                        "bg-emerald-50 text-emerald-600"
+                      }`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                        {((report as any).wasteSeverity as string).charAt(0).toUpperCase() + ((report as any).wasteSeverity as string).slice(1)} Severity
+                      </span>
+                    </div>
+                  )}
+                  {(report as any).wasteTypes?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {((report as any).wasteTypes as string[]).map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <Tag className="w-2.5 h-2.5" />{t}
+                        </span>
+                      ))}
+                      {((report as any).brandNames as string[] | undefined)?.map((b) => (
+                        <span key={b} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {!(report as any).wasteSeverity && !((report as any).wasteTypes?.length) && (
+                    <p className="text-xs text-muted-foreground font-medium">No waste detected in photo, or analysis returned no data.</p>
+                  )}
+                </>
               )}
             </div>
-          ) : null}
+          )}
 
           {/* Action Area */}
           <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 space-y-4">

@@ -5,7 +5,6 @@ import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
 import { analyseWastePhoto } from "../lib/waste-analysis";
-import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 import {
   sendAssignmentEmail,
   sendWelcomeEmail,
@@ -560,39 +559,42 @@ router.post("/admin/backfill-photo-analysis", requireControlCenter, async (req, 
         sql`${reportsTable.imageUrl} IS NOT NULL`
       )
     )
-    .orderBy(reportsTable.createdAt)
-    .limit(200);
+    .orderBy(reportsTable.createdAt);
 
-  if (unanalysed.length === 0) {
-    res.json({ queued: 0, message: "No unanalysed reports found." });
-    return;
+  let processed = 0;
+  let failed = 0;
+
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < unanalysed.length; i += BATCH_SIZE) {
+    const batch = unanalysed.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      batch.map(async (row) => {
+        try {
+          const result = await analyseWastePhoto(row.imageUrl!);
+          if (!result) { failed++; return; }
+          await db
+            .update(reportsTable)
+            .set({
+              wasteTypes: result.wasteTypes,
+              brandNames: result.brandNames,
+              wasteSeverity: result.severity,
+              photoAiAnalysedAt: new Date(),
+            })
+            .where(eq(reportsTable.id, row.id));
+          processed++;
+        } catch (err) {
+          logger.warn({ err, reportId: row.id }, "Backfill: analysis failed for report");
+          failed++;
+        }
+      })
+    );
+    if (i + BATCH_SIZE < unanalysed.length) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
   }
 
-  res.json({ queued: unanalysed.length, message: `Analysing ${unanalysed.length} reports in the background.` });
-
-  batchProcess(
-    unanalysed,
-    async (row) => {
-      const result = await analyseWastePhoto(row.imageUrl!);
-      if (!result) return null;
-      await db
-        .update(reportsTable)
-        .set({
-          wasteTypes: result.wasteTypes,
-          brandNames: result.brandNames,
-          wasteSeverity: result.severity,
-          photoAiAnalysedAt: new Date(),
-        })
-        .where(eq(reportsTable.id, row.id));
-      return result;
-    },
-    { concurrency: 2, retries: 3 }
-  )
-    .then((results) => {
-      const done = results.filter((r) => r !== null).length;
-      logger.info({ done, total: unanalysed.length }, "AI photo backfill complete");
-    })
-    .catch((err) => logger.warn({ err }, "AI photo backfill error"));
+  logger.info({ processed, failed, total: unanalysed.length }, "AI photo backfill complete");
+  res.json({ processed, failed });
 });
 
 // ── Panchayat Admin Management (Control Center only) ──────────────────────────

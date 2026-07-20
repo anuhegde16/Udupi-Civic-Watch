@@ -874,6 +874,33 @@ export const GetDistrictAnalyticsResponse = zod.object({
         .nullish(),
     }),
   ),
+  wasteComposition: zod
+    .object({
+      types: zod.array(
+        zod.object({
+          type: zod.string(),
+          count: zod.number(),
+          pct: zod
+            .number()
+            .describe("Percentage share of total waste type occurrences"),
+        }),
+      ),
+      severityBreakdown: zod.array(
+        zod.object({
+          severity: zod.enum(["low", "medium", "high"]),
+          count: zod.number(),
+        }),
+      ),
+      topBrands: zod.array(
+        zod.object({
+          brand: zod.string(),
+          count: zod.number(),
+        }),
+      ),
+      aiAnalysedCount: zod.number(),
+      unanalysedCount: zod.number(),
+    })
+    .optional(),
 });
 
 /**
@@ -931,8 +958,8 @@ export const PermanentDeleteReportResponse = zod.object({
  * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet
  */
 export const BackfillPhotoAnalysisResponse = zod.object({
-  queued: zod.number().describe("Number of reports queued for AI analysis"),
-  message: zod.string(),
+  processed: zod.number().describe("Number of reports successfully analysed"),
+  failed: zod.number().describe("Number of reports that failed analysis"),
 });
 
 /**

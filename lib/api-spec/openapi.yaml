@@ -844,6 +844,37 @@ components:
                   name: { type: string }
                   areaName: { type: string, nullable: true }
             required: [id, status, latitude, longitude, createdAt, hoursOpen]
+        wasteComposition:
+          type: object
+          properties:
+            types:
+              type: array
+              items:
+                type: object
+                properties:
+                  type: { type: string }
+                  count: { type: integer }
+                  pct: { type: integer, description: "Percentage share of total waste type occurrences" }
+                required: [type, count, pct]
+            severityBreakdown:
+              type: array
+              items:
+                type: object
+                properties:
+                  severity: { type: string, enum: [low, medium, high] }
+                  count: { type: integer }
+                required: [severity, count]
+            topBrands:
+              type: array
+              items:
+                type: object
+                properties:
+                  brand: { type: string }
+                  count: { type: integer }
+                required: [brand, count]
+            aiAnalysedCount: { type: integer }
+            unanalysedCount: { type: integer }
+          required: [types, severityBreakdown, topBrands, aiAnalysedCount, unanalysedCount]
       required: [kpis, dailyTrend, officerLeaderboard, hotspots, delayMetrics, oldestOpenReports]
 
     LoginBody:
@@ -1109,12 +1140,13 @@ components:
     BackfillPhotoAnalysisResponse:
       type: object
       properties:
-        queued:
+        processed:
           type: integer
-          description: Number of reports queued for AI analysis
-        message:
-          type: string
-      required: [queued, message]
+          description: Number of reports successfully analysed
+        failed:
+          type: integer
+          description: Number of reports that failed analysis
+      required: [processed, failed]
 
     ReassignReportBody:
       type: object

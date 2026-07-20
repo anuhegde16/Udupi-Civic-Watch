@@ -21,6 +21,8 @@ import {
   X,
   ChevronRight,
   ImageIcon,
+  Cpu,
+  Tag,
 } from "lucide-react";
 import {
   Sheet,
@@ -68,11 +70,22 @@ type Report = {
   assignedOfficer?: { id: number; name: string; areaName?: string | null } | null;
 };
 
+type WasteTypeCount = { type: string; count: number; pct: number };
+type SeverityCount = { severity: string; count: number };
+type BrandCount = { brand: string; count: number };
+
 type AnalyticsData = {
   dailyTrend: DayTrend[];
   officerLeaderboard: OfficerStat[];
   hotspots: Hotspot[];
   recentReports: Report[];
+  wasteComposition?: {
+    types: WasteTypeCount[];
+    severityBreakdown: SeverityCount[];
+    topBrands: BrandCount[];
+    aiAnalysedCount: number;
+    unanalysedCount: number;
+  };
 };
 
 type PanchayatStats = {
@@ -505,6 +518,74 @@ export default function MasterAnalytics() {
           )}
         </div>
       </div>
+
+      {/* AI Waste Intelligence */}
+      {analytics?.wasteComposition && (analytics.wasteComposition.aiAnalysedCount > 0) && (
+        <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-indigo-500" /> AI Waste Intelligence
+            </h2>
+            <span className="text-xs font-bold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+              {analytics.wasteComposition.aiAnalysedCount} analysed
+            </span>
+          </div>
+
+          {/* Waste types table with % */}
+          {analytics.wasteComposition.types.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Top Waste Types</p>
+              <div className="space-y-2">
+                {analytics.wasteComposition.types.slice(0, 6).map((t) => (
+                  <div key={t.type} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-foreground w-32 truncate shrink-0">{t.type}</span>
+                    <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${t.pct}%` }} />
+                    </div>
+                    <span className="text-xs font-black text-indigo-600 w-10 text-right shrink-0">{t.pct}%</span>
+                    <span className="text-xs text-muted-foreground w-8 text-right shrink-0">{t.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Severity breakdown */}
+          {analytics.wasteComposition.severityBreakdown.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Severity Breakdown</p>
+              <div className="flex flex-wrap gap-2">
+                {analytics.wasteComposition.severityBreakdown.map((s) => {
+                  const cfg =
+                    s.severity === "high" ? "bg-destructive/10 text-destructive" :
+                    s.severity === "medium" ? "bg-amber-50 text-amber-600" :
+                    "bg-emerald-50 text-emerald-600";
+                  return (
+                    <span key={s.severity} className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full ${cfg}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                      {s.severity.charAt(0).toUpperCase() + s.severity.slice(1)} · {s.count}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Top brands */}
+          {analytics.wasteComposition.topBrands.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Top Brands Found</p>
+              <div className="flex flex-wrap gap-1.5">
+                {analytics.wasteComposition.topBrands.map((b) => (
+                  <span key={b.brand} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                    <Tag className="w-2.5 h-2.5" />{b.brand} · {b.count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent complaints feed */}
       <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
