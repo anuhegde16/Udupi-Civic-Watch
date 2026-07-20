@@ -81,7 +81,7 @@ type OldestOpenReport = {
 
 type WasteTypeCount = { type: string; count: number };
 type SeverityCount = { severity: string; count: number };
-type BrandCount = { brand: string; count: number };
+type BrandCount = { brand: string; count: number; pct: number };
 
 type DistrictAnalytics = {
   kpis: {
@@ -880,14 +880,13 @@ export default function ControlCenterAnalytics() {
                   <Zap className="w-4 h-4 text-orange-500" /> Severity Breakdown
                 </h3>
                 <div className="space-y-2.5">
-                  {(["critical", "high", "medium", "low"] as const).map((sev) => {
+                  {(["high", "medium", "low"] as const).map((sev) => {
                     const row = data.wasteComposition!.severityBreakdown.find((s) => s.severity === sev);
                     const count = row?.count ?? 0;
                     const total = data.wasteComposition!.severityBreakdown.reduce((s, r) => s + r.count, 0);
                     const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                     const cfg = {
-                      critical: { label: "Critical", color: "bg-destructive", text: "text-destructive", bg: "bg-destructive/10" },
-                      high: { label: "High", color: "bg-orange-500", text: "text-orange-600", bg: "bg-orange-50" },
+                      high: { label: "High", color: "bg-destructive", text: "text-destructive", bg: "bg-destructive/10" },
                       medium: { label: "Medium", color: "bg-amber-400", text: "text-amber-600", bg: "bg-amber-50" },
                       low: { label: "Low", color: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" },
                     }[sev];
@@ -903,7 +902,7 @@ export default function ControlCenterAnalytics() {
                 </div>
               </div>
 
-              {/* Top brands */}
+              {/* Top brands with % share */}
               <div>
                 <h3 className="text-sm font-black text-foreground flex items-center gap-1.5 mb-3">
                   <Tag className="w-4 h-4 text-purple-500" /> Frequent Brands
@@ -911,15 +910,16 @@ export default function ControlCenterAnalytics() {
                 {data.wasteComposition.topBrands.length === 0 ? (
                   <p className="text-xs text-muted-foreground font-medium py-4">No brand data yet</p>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-2">
                     {data.wasteComposition.topBrands.map((b) => (
-                      <span
-                        key={b.brand}
-                        className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200"
-                      >
-                        {b.brand}
-                        <span className="text-[10px] font-black text-purple-500 ml-0.5">×{b.count}</span>
-                      </span>
+                      <div key={b.brand} className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-foreground w-28 truncate shrink-0">{b.brand}</span>
+                        <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${b.pct}%` }} />
+                        </div>
+                        <span className="text-xs font-black text-purple-600 w-10 text-right shrink-0">{b.pct}%</span>
+                        <span className="text-xs text-muted-foreground w-6 text-right shrink-0">{b.count}</span>
+                      </div>
                     ))}
                   </div>
                 )}

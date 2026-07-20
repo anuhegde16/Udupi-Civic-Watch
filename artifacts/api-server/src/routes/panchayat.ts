@@ -373,9 +373,14 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
     ORDER BY count DESC
     LIMIT 10
   `);
-  const topBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
+  const rawTopBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
     brand: r.brand_name as string,
     count: r.count as number,
+  }));
+  const totalBrandCount = rawTopBrands.reduce((s: number, r: { count: number }) => s + r.count, 0);
+  const topBrands = rawTopBrands.map((r: { brand: string; count: number }) => ({
+    ...r,
+    pct: totalBrandCount > 0 ? Math.round((r.count / totalBrandCount) * 100) : 0,
   }));
 
   const [aiAnalysedRow] = await db

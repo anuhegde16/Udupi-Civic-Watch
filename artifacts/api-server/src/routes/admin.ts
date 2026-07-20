@@ -468,11 +468,16 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
     GROUP BY wt.waste_type
     ORDER BY count DESC
-    LIMIT 15
+    LIMIT 10
   `);
-  const wasteComposition = ((wasteCompositionRows as any).rows ?? (wasteCompositionRows as unknown as any[])).map((r: any) => ({
+  const rawWasteComposition = ((wasteCompositionRows as any).rows ?? (wasteCompositionRows as unknown as any[])).map((r: any) => ({
     type: r.waste_type as string,
     count: r.count as number,
+  }));
+  const totalWasteTypeCount = rawWasteComposition.reduce((s: number, r: { count: number }) => s + r.count, 0);
+  const wasteComposition = rawWasteComposition.map((r: { type: string; count: number }) => ({
+    ...r,
+    pct: totalWasteTypeCount > 0 ? Math.round((r.count / totalWasteTypeCount) * 100) : 0,
   }));
 
   const severityRows = await db.execute(sql`
@@ -500,9 +505,14 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     ORDER BY count DESC
     LIMIT 10
   `);
-  const topBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
+  const rawTopBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
     brand: r.brand_name as string,
     count: r.count as number,
+  }));
+  const totalBrandCount = rawTopBrands.reduce((s: number, r: { count: number }) => s + r.count, 0);
+  const topBrands = rawTopBrands.map((r: { brand: string; count: number }) => ({
+    ...r,
+    pct: totalBrandCount > 0 ? Math.round((r.count / totalBrandCount) * 100) : 0,
   }));
 
   const [aiAnalysedCount] = await db

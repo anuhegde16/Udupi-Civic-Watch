@@ -154,11 +154,9 @@ export const ListReportsResponse = zod.object({
         .nullish()
         .describe("AI-identified brand names visible on packaging"),
       wasteSeverity: zod
-        .enum(["low", "medium", "high", "critical"])
+        .enum(["low", "medium", "high"])
         .nullish()
-        .describe(
-          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-        ),
+        .describe("AI-assessed severity of the waste (low\/medium\/high)"),
       photoAiAnalysedAt: zod.coerce
         .date()
         .nullish()
@@ -280,11 +278,9 @@ export const GetReportResponse = zod.object({
     .nullish()
     .describe("AI-identified brand names visible on packaging"),
   wasteSeverity: zod
-    .enum(["low", "medium", "high", "critical"])
+    .enum(["low", "medium", "high"])
     .nullish()
-    .describe(
-      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-    ),
+    .describe("AI-assessed severity of the waste (low\/medium\/high)"),
   photoAiAnalysedAt: zod.coerce
     .date()
     .nullish()
@@ -390,11 +386,9 @@ export const UpdateReportResponse = zod.object({
     .nullish()
     .describe("AI-identified brand names visible on packaging"),
   wasteSeverity: zod
-    .enum(["low", "medium", "high", "critical"])
+    .enum(["low", "medium", "high"])
     .nullish()
-    .describe(
-      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-    ),
+    .describe("AI-assessed severity of the waste (low\/medium\/high)"),
   photoAiAnalysedAt: zod.coerce
     .date()
     .nullish()
@@ -661,11 +655,9 @@ export const GetOfficerReportsResponse = zod.object({
         .nullish()
         .describe("AI-identified brand names visible on packaging"),
       wasteSeverity: zod
-        .enum(["low", "medium", "high", "critical"])
+        .enum(["low", "medium", "high"])
         .nullish()
-        .describe(
-          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-        ),
+        .describe("AI-assessed severity of the waste (low\/medium\/high)"),
       photoAiAnalysedAt: zod.coerce
         .date()
         .nullish()
@@ -769,11 +761,9 @@ export const AdminListReportsResponse = zod.object({
         .nullish()
         .describe("AI-identified brand names visible on packaging"),
       wasteSeverity: zod
-        .enum(["low", "medium", "high", "critical"])
+        .enum(["low", "medium", "high"])
         .nullish()
-        .describe(
-          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-        ),
+        .describe("AI-assessed severity of the waste (low\/medium\/high)"),
       photoAiAnalysedAt: zod.coerce
         .date()
         .nullish()
@@ -895,6 +885,9 @@ export const GetDistrictAnalyticsResponse = zod.object({
         zod.object({
           brand: zod.string(),
           count: zod.number(),
+          pct: zod
+            .number()
+            .describe("Percentage share of total brand occurrences"),
         }),
       ),
       aiAnalysedCount: zod.number(),
@@ -1046,11 +1039,9 @@ export const ReassignReportResponse = zod.object({
     .nullish()
     .describe("AI-identified brand names visible on packaging"),
   wasteSeverity: zod
-    .enum(["low", "medium", "high", "critical"])
+    .enum(["low", "medium", "high"])
     .nullish()
-    .describe(
-      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
-    ),
+    .describe("AI-assessed severity of the waste (low\/medium\/high)"),
   photoAiAnalysedAt: zod.coerce
     .date()
     .nullish()

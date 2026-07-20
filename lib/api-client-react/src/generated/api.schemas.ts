@@ -146,6 +146,8 @@ export type DistrictAnalyticsResponseWasteCompositionSeverityBreakdownItem = {
 export type DistrictAnalyticsResponseWasteCompositionTopBrandsItem = {
   brand: string;
   count: number;
+  /** Percentage share of total brand occurrences */
+  pct: number;
 };
 
 export type DistrictAnalyticsResponseWasteComposition = {
@@ -205,7 +207,7 @@ export const ReportStatusProperty = {
 } as const;
 
 /**
- * AI-assessed severity of the waste (low/medium/high/critical)
+ * AI-assessed severity of the waste (low/medium/high)
  */
 export type ReportWasteSeverity =
   | (typeof ReportWasteSeverity)[keyof typeof ReportWasteSeverity]
@@ -215,7 +217,6 @@ export const ReportWasteSeverity = {
   low: "low",
   medium: "medium",
   high: "high",
-  critical: "critical",
 } as const;
 
 export interface OfficerBasic {
@@ -256,7 +257,7 @@ export interface Report {
   wasteTypes?: string[] | null;
   /** AI-identified brand names visible on packaging */
   brandNames?: string[] | null;
-  /** AI-assessed severity of the waste (low/medium/high/critical) */
+  /** AI-assessed severity of the waste (low/medium/high) */
   wasteSeverity?: ReportWasteSeverity;
   /** Timestamp when AI photo analysis was completed */
   photoAiAnalysedAt?: string | null;

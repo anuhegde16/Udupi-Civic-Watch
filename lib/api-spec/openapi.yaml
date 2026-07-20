@@ -871,7 +871,8 @@ components:
                 properties:
                   brand: { type: string }
                   count: { type: integer }
-                required: [brand, count]
+                  pct: { type: integer, description: "Percentage share of total brand occurrences" }
+                required: [brand, count, pct]
             aiAnalysedCount: { type: integer }
             unanalysedCount: { type: integer }
           required: [types, severityBreakdown, topBrands, aiAnalysedCount, unanalysedCount]
@@ -995,9 +996,9 @@ components:
           description: AI-identified brand names visible on packaging
         wasteSeverity:
           type: string
-          enum: [low, medium, high, critical]
+          enum: [low, medium, high]
           nullable: true
-          description: AI-assessed severity of the waste (low/medium/high/critical)
+          description: AI-assessed severity of the waste (low/medium/high)
         photoAiAnalysedAt:
           type: string
           format: date-time

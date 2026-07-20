@@ -72,7 +72,7 @@ type Report = {
 
 type WasteTypeCount = { type: string; count: number; pct: number };
 type SeverityCount = { severity: string; count: number };
-type BrandCount = { brand: string; count: number };
+type BrandCount = { brand: string; count: number; pct: number };
 
 type AnalyticsData = {
   dailyTrend: DayTrend[];
@@ -554,32 +554,44 @@ export default function MasterAnalytics() {
           {analytics.wasteComposition.severityBreakdown.length > 0 && (
             <div className="mb-5">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Severity Breakdown</p>
-              <div className="flex flex-wrap gap-2">
-                {analytics.wasteComposition.severityBreakdown.map((s) => {
-                  const cfg =
-                    s.severity === "high" ? "bg-destructive/10 text-destructive" :
-                    s.severity === "medium" ? "bg-amber-50 text-amber-600" :
-                    "bg-emerald-50 text-emerald-600";
+              <div className="space-y-2">
+                {(["high", "medium", "low"] as const).map((sev) => {
+                  const row = analytics.wasteComposition!.severityBreakdown.find((s) => s.severity === sev);
+                  const count = row?.count ?? 0;
+                  const total = analytics.wasteComposition!.severityBreakdown.reduce((s, r) => s + r.count, 0);
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  const cfg = {
+                    high: { label: "High", color: "bg-destructive", text: "text-destructive", bg: "bg-destructive/10" },
+                    medium: { label: "Medium", color: "bg-amber-400", text: "text-amber-600", bg: "bg-amber-50" },
+                    low: { label: "Low", color: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" },
+                  }[sev];
                   return (
-                    <span key={s.severity} className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full ${cfg}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      {s.severity.charAt(0).toUpperCase() + s.severity.slice(1)} · {s.count}
-                    </span>
+                    <div key={sev} className={`flex items-center gap-3 p-2 rounded-xl ${cfg.bg}`}>
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${cfg.color}`} />
+                      <span className={`text-xs font-black flex-1 ${cfg.text}`}>{cfg.label}</span>
+                      <span className="text-xs font-black text-foreground">{count}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground w-8 text-right">{pct}%</span>
+                    </div>
                   );
                 })}
               </div>
             </div>
           )}
 
-          {/* Top brands */}
+          {/* Top brands with % share */}
           {analytics.wasteComposition.topBrands.length > 0 && (
             <div>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Top Brands Found</p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-2">
                 {analytics.wasteComposition.topBrands.map((b) => (
-                  <span key={b.brand} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                    <Tag className="w-2.5 h-2.5" />{b.brand} · {b.count}
-                  </span>
+                  <div key={b.brand} className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-foreground w-28 truncate shrink-0">{b.brand}</span>
+                    <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${b.pct}%` }} />
+                    </div>
+                    <span className="text-xs font-black text-purple-600 w-10 text-right shrink-0">{b.pct}%</span>
+                    <span className="text-xs text-muted-foreground w-6 text-right shrink-0">{b.count}</span>
+                  </div>
                 ))}
               </div>
             </div>
