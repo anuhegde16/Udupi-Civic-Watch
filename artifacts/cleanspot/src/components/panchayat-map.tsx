@@ -88,9 +88,10 @@ interface PanchayatMapProps {
   officers: PanchayatMapOfficer[];
   reports: PanchayatMapReport[];
   highlightedWard?: string | null;
+  onReportClick?: (report: PanchayatMapReport) => void;
 }
 
-export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMapProps) {
+export function PanchayatMap({ officers, reports, highlightedWard, onReportClick }: PanchayatMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -257,11 +258,10 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
             ? (report.cleanupImageUrls && report.cleanupImageUrls[0]?.url) || report.cleanupImageUrl || null
             : null;
 
-        if (beforeUrl) {
+        const hasImages = beforeUrl || afterUrl;
+
+        if (hasImages) {
           const imgRow = document.createElement("div");
-          imgRow.style.cssText = afterUrl
-            ? "display:flex;gap:3px;margin:-4px -4px 8px -4px;"
-            : "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
 
           const buildThumb = (src: string, label: string, side: "left" | "right" | "full") => {
             const wrap = document.createElement("div");
@@ -280,12 +280,18 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
             return wrap;
           };
 
-          if (afterUrl) {
+          if (beforeUrl && afterUrl) {
+            imgRow.style.cssText = "display:flex;gap:3px;margin:-4px -4px 8px -4px;";
             imgRow.appendChild(buildThumb(beforeUrl, "Before", "left"));
             imgRow.appendChild(buildThumb(afterUrl, "After", "right"));
-          } else {
+          } else if (afterUrl) {
+            imgRow.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+            imgRow.appendChild(buildThumb(afterUrl, "Cleaned", "full"));
+          } else if (beforeUrl) {
+            imgRow.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
             imgRow.appendChild(buildThumb(beforeUrl, "Photo", "full"));
           }
+
           popup.appendChild(imgRow);
         }
 
@@ -309,6 +315,16 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
           `${report.latitude.toFixed(4)}° N, ${report.longitude.toFixed(4)}° E`;
         popup.appendChild(addr);
 
+        if (onReportClick) {
+          const btn = document.createElement("button");
+          btn.textContent = "View details →";
+          btn.style.cssText =
+            "margin-top:8px;display:block;width:100%;text-align:center;font-size:11px;font-weight:700;" +
+            "color:#4f46e5;background:#eef2ff;border:none;border-radius:8px;padding:5px 8px;cursor:pointer;";
+          btn.addEventListener("click", () => onReportClick(report));
+          popup.appendChild(btn);
+        }
+
         marker.bindPopup(popup).addTo(map);
       });
     });
@@ -317,7 +333,7 @@ export function PanchayatMap({ officers, reports, highlightedWard }: PanchayatMa
       cancelled = true;
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [officers, reports, mapReady, highlightedWard]);
+  }, [officers, reports, mapReady, highlightedWard, onReportClick]);
 
   return (
     <div

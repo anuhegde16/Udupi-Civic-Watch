@@ -659,6 +659,7 @@ export default function MasterDashboard() {
           officers={officers}
           reports={reportsData?.reports ?? []}
           highlightedWard={selectedWard}
+          onReportClick={(r) => openReport(r)}
         />
       </div>
 
