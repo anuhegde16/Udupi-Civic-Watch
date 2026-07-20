@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Loader2, Search, FileWarning, CheckCircle2, HardHat, MapPin, Anchor, Map,
   Trash2, AlertTriangle, Camera, Globe2, Building2, TrendingUp, Archive,
-  ArchiveX, Clock,
+  ArchiveX, Clock, Cpu, Tag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
@@ -42,6 +42,10 @@ type Report = {
   reporterEmail?: string | null;
   assignedOfficer?: { name: string; areaName?: string | null } | null;
   assignedOfficerId?: number | null;
+  wasteTypes?: string[] | null;
+  brandNames?: string[] | null;
+  wasteSeverity?: string | null;
+  photoAiAnalysedAt?: string | null;
 };
 
 const STATUS_CONFIG: Record<string, { label: string; border: string; bg: string; badge: string; icon: typeof FileWarning }> = {
@@ -770,6 +774,48 @@ export default function AdminReports() {
                   >
                     {mapReport.reporterEmail}
                   </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI Waste Analysis */}
+          {mapReport && (mapReport.imageUrl || mapReport.imageUrls?.length) && (
+            <div className="px-6 sm:px-8 py-4 border-t border-border/50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+                <Cpu className="w-3 h-3" /> AI Photo Analysis
+              </p>
+              {!mapReport.photoAiAnalysedAt ? (
+                <p className="text-xs text-muted-foreground font-medium">Analysis pending — will update shortly after photo is processed.</p>
+              ) : (
+                <div className="space-y-2">
+                  {mapReport.wasteSeverity && (
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full ${
+                      mapReport.wasteSeverity === "high" ? "bg-destructive/10 text-destructive" :
+                      mapReport.wasteSeverity === "medium" ? "bg-amber-50 text-amber-600" :
+                      "bg-emerald-50 text-emerald-600"
+                    }`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                      {mapReport.wasteSeverity.charAt(0).toUpperCase() + mapReport.wasteSeverity.slice(1)} Severity
+                    </span>
+                  )}
+                  {mapReport.wasteTypes && mapReport.wasteTypes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {mapReport.wasteTypes.map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          <Tag className="w-2.5 h-2.5" />{t}
+                        </span>
+                      ))}
+                      {mapReport.brandNames?.map((b) => (
+                        <span key={b} className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {!mapReport.wasteSeverity && !mapReport.wasteTypes?.length && (
+                    <p className="text-xs text-muted-foreground font-medium">No waste detected or analysis returned no data.</p>
+                  )}
                 </div>
               )}
             </div>

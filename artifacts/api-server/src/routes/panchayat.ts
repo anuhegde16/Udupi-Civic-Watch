@@ -326,16 +326,18 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
   }));
 
   // Waste composition — scoped to this panchayat's officers
-  const inOfficersExpr = sql`${reportsTable.assignedOfficerId} = ANY(ARRAY[${sql.join(officerIds.map((id) => sql`${id}::int`), sql`, `)}])`;
+  // Use a subquery filter to avoid table-alias conflicts in raw SQL templates
+  const officerIdList = officerIds.map((id) => sql`${id}::int`);
+  const officerSubfilter = sql`assigned_officer_id = ANY(ARRAY[${sql.join(officerIdList, sql`, `)}])`;
 
   const wasteTypeRows = await db.execute(sql`
     SELECT
       wt.waste_type,
       COUNT(*)::int AS count
-    FROM ${reportsTable} r,
-    LATERAL jsonb_array_elements_text(r.waste_types) AS wt(waste_type)
-    WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
-      AND ${inOfficersExpr}
+    FROM reports rpt,
+    LATERAL jsonb_array_elements_text(rpt.waste_types) AS wt(waste_type)
+    WHERE rpt.deleted_at IS NULL AND rpt.waste_types IS NOT NULL
+      AND rpt.assigned_officer_id = ANY(ARRAY[${sql.join(officerIdList, sql`, `)}])
     GROUP BY wt.waste_type
     ORDER BY count DESC
     LIMIT 10
@@ -350,9 +352,9 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
     SELECT
       waste_severity,
       COUNT(*)::int AS count
-    FROM ${reportsTable}
+    FROM reports
     WHERE deleted_at IS NULL AND waste_severity IS NOT NULL
-      AND ${inOfficersExpr}
+      AND ${officerSubfilter}
     GROUP BY waste_severity
     ORDER BY count DESC
   `);
@@ -365,10 +367,10 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
     SELECT
       bn.brand_name,
       COUNT(*)::int AS count
-    FROM ${reportsTable} r,
-    LATERAL jsonb_array_elements_text(r.brand_names) AS bn(brand_name)
-    WHERE r.deleted_at IS NULL AND r.brand_names IS NOT NULL AND jsonb_array_length(r.brand_names) > 0
-      AND ${inOfficersExpr}
+    FROM reports rpt,
+    LATERAL jsonb_array_elements_text(rpt.brand_names) AS bn(brand_name)
+    WHERE rpt.deleted_at IS NULL AND rpt.brand_names IS NOT NULL AND jsonb_array_length(rpt.brand_names) > 0
+      AND rpt.assigned_officer_id = ANY(ARRAY[${sql.join(officerIdList, sql`, `)}])
     GROUP BY bn.brand_name
     ORDER BY count DESC
     LIMIT 10
@@ -386,12 +388,12 @@ router.get("/panchayat/analytics", requirePanchayatAdmin, async (req, res): Prom
   const [aiAnalysedRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(reportsTable)
-    .where(and(isNull(reportsTable.deletedAt), isNotNull(reportsTable.photoAiAnalysedAt), inOfficersExpr));
+    .where(and(isNull(reportsTable.deletedAt), isNotNull(reportsTable.photoAiAnalysedAt), sql`${officerSubfilter}`));
 
   const [totalRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(reportsTable)
-    .where(and(isNull(reportsTable.deletedAt), inOfficersExpr));
+    .where(and(isNull(reportsTable.deletedAt), sql`${officerSubfilter}`));
 
   res.json({
     dailyTrend,
