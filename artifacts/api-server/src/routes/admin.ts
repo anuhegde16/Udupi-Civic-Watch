@@ -4,6 +4,8 @@ import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
+import { analyseWastePhoto } from "../lib/waste-analysis";
+import { batchProcess } from "@workspace/integrations-openai-ai-server/batch";
 import {
   sendAssignmentEmail,
   sendWelcomeEmail,
@@ -457,6 +459,58 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
     assignedOfficer: officer ? { id: officer.id, name: officer.name, areaName: officer.areaName } : null,
   }));
 
+  // Waste composition — aggregate AI-tagged waste types and severity distribution
+  const wasteCompositionRows = await db.execute(sql`
+    SELECT
+      wt.waste_type,
+      COUNT(*)::int AS count
+    FROM ${reportsTable} r,
+    LATERAL jsonb_array_elements_text(r.waste_types) AS wt(waste_type)
+    WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
+    GROUP BY wt.waste_type
+    ORDER BY count DESC
+    LIMIT 15
+  `);
+  const wasteComposition = ((wasteCompositionRows as any).rows ?? (wasteCompositionRows as unknown as any[])).map((r: any) => ({
+    type: r.waste_type as string,
+    count: r.count as number,
+  }));
+
+  const severityRows = await db.execute(sql`
+    SELECT
+      waste_severity,
+      COUNT(*)::int AS count
+    FROM ${reportsTable}
+    WHERE deleted_at IS NULL AND waste_severity IS NOT NULL
+    GROUP BY waste_severity
+    ORDER BY count DESC
+  `);
+  const severityBreakdown = ((severityRows as any).rows ?? (severityRows as unknown as any[])).map((r: any) => ({
+    severity: r.waste_severity as string,
+    count: r.count as number,
+  }));
+
+  const brandRows = await db.execute(sql`
+    SELECT
+      bn.brand_name,
+      COUNT(*)::int AS count
+    FROM ${reportsTable} r,
+    LATERAL jsonb_array_elements_text(r.brand_names) AS bn(brand_name)
+    WHERE r.deleted_at IS NULL AND r.brand_names IS NOT NULL AND jsonb_array_length(r.brand_names) > 0
+    GROUP BY bn.brand_name
+    ORDER BY count DESC
+    LIMIT 10
+  `);
+  const topBrands = ((brandRows as any).rows ?? (brandRows as unknown as any[])).map((r: any) => ({
+    brand: r.brand_name as string,
+    count: r.count as number,
+  }));
+
+  const [aiAnalysedCount] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(reportsTable)
+    .where(and(isNull(reportsTable.deletedAt), isNotNull(reportsTable.photoAiAnalysedAt)));
+
   const totalCount = total.count;
   const cleanedCount = cleaned.count;
 
@@ -484,7 +538,61 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
       byWard: wardDelayBreakdown,
     },
     oldestOpenReports,
+    wasteComposition: {
+      types: wasteComposition,
+      severityBreakdown,
+      topBrands,
+      aiAnalysedCount: aiAnalysedCount.count,
+      unanalysedCount: totalCount - aiAnalysedCount.count,
+    },
   });
+});
+
+// ── AI Photo Analysis Backfill (Control Center only) ─────────────────────────
+router.post("/admin/backfill-photo-analysis", requireControlCenter, async (req, res): Promise<void> => {
+  const unanalysed = await db
+    .select({ id: reportsTable.id, imageUrl: reportsTable.imageUrl })
+    .from(reportsTable)
+    .where(
+      and(
+        isNull(reportsTable.deletedAt),
+        isNull(reportsTable.photoAiAnalysedAt),
+        sql`${reportsTable.imageUrl} IS NOT NULL`
+      )
+    )
+    .orderBy(reportsTable.createdAt)
+    .limit(200);
+
+  if (unanalysed.length === 0) {
+    res.json({ queued: 0, message: "No unanalysed reports found." });
+    return;
+  }
+
+  res.json({ queued: unanalysed.length, message: `Analysing ${unanalysed.length} reports in the background.` });
+
+  batchProcess(
+    unanalysed,
+    async (row) => {
+      const result = await analyseWastePhoto(row.imageUrl!);
+      if (!result) return null;
+      await db
+        .update(reportsTable)
+        .set({
+          wasteTypes: result.wasteTypes,
+          brandNames: result.brandNames,
+          wasteSeverity: result.severity,
+          photoAiAnalysedAt: new Date(),
+        })
+        .where(eq(reportsTable.id, row.id));
+      return result;
+    },
+    { concurrency: 2, retries: 3 }
+  )
+    .then((results) => {
+      const done = results.filter((r) => r !== null).length;
+      logger.info({ done, total: unanalysed.length }, "AI photo backfill complete");
+    })
+    .catch((err) => logger.warn({ err }, "AI photo backfill error"));
 });
 
 // ── Panchayat Admin Management (Control Center only) ──────────────────────────

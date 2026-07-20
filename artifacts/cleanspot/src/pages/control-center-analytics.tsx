@@ -23,6 +23,10 @@ import {
   History,
   Download,
   FileText,
+  Cpu,
+  PackageSearch,
+  Tag,
+  Zap,
 } from "lucide-react";
 
 type DayTrend = {
@@ -75,6 +79,10 @@ type OldestOpenReport = {
   assignedOfficer?: { id: number; name: string; areaName?: string | null } | null;
 };
 
+type WasteTypeCount = { type: string; count: number };
+type SeverityCount = { severity: string; count: number };
+type BrandCount = { brand: string; count: number };
+
 type DistrictAnalytics = {
   kpis: {
     totalReports: number;
@@ -99,6 +107,13 @@ type DistrictAnalytics = {
     byWard: WardDelay[];
   };
   oldestOpenReports: OldestOpenReport[];
+  wasteComposition?: {
+    types: WasteTypeCount[];
+    severityBreakdown: SeverityCount[];
+    topBrands: BrandCount[];
+    aiAnalysedCount: number;
+    unanalysedCount: number;
+  };
 };
 
 function useDistrictAnalytics() {
@@ -803,6 +818,116 @@ export default function ControlCenterAnalytics() {
           )}
         </div>
       </div>
+
+      {/* AI Waste Composition */}
+      {!isLoading && !!data?.wasteComposition && (
+        <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">
+          <div className="flex items-start justify-between mb-5 flex-wrap gap-2">
+            <div>
+              <h2 className="text-xl font-black text-foreground flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-indigo-500" /> AI Waste Intelligence
+              </h2>
+              <p className="text-sm text-muted-foreground font-medium mt-0.5">
+                AI-analysed{" "}
+                <span className="font-black text-indigo-600">{data.wasteComposition.aiAnalysedCount}</span>{" "}
+                of {data.kpis.totalReports} reports
+                {data.wasteComposition.unanalysedCount > 0 && (
+                  <span className="ml-1 text-muted-foreground/60">· {data.wasteComposition.unanalysedCount} pending analysis</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {data.wasteComposition.aiAnalysedCount === 0 ? (
+            <div className="flex flex-col items-center py-10 text-center">
+              <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center mb-3">
+                <Cpu className="w-6 h-6 text-indigo-300" />
+              </div>
+              <p className="text-sm font-bold text-muted-foreground">No AI analysis data yet</p>
+              <p className="text-xs text-muted-foreground/70 font-medium mt-1">Submit reports with photos to start getting AI insights</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Waste types */}
+              <div>
+                <h3 className="text-sm font-black text-foreground flex items-center gap-1.5 mb-3">
+                  <PackageSearch className="w-4 h-4 text-indigo-500" /> Waste Types
+                </h3>
+                <div className="space-y-2">
+                  {data.wasteComposition.types.slice(0, 8).map((t) => {
+                    const maxCount = data.wasteComposition!.types[0]?.count ?? 1;
+                    const pct = Math.round((t.count / maxCount) * 100);
+                    return (
+                      <div key={t.type} className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-xs font-bold text-foreground capitalize truncate">{t.type}</span>
+                            <span className="text-xs font-black text-muted-foreground shrink-0 ml-1">{t.count}</span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Severity breakdown */}
+              <div>
+                <h3 className="text-sm font-black text-foreground flex items-center gap-1.5 mb-3">
+                  <Zap className="w-4 h-4 text-orange-500" /> Severity Breakdown
+                </h3>
+                <div className="space-y-2.5">
+                  {(["critical", "high", "medium", "low"] as const).map((sev) => {
+                    const row = data.wasteComposition!.severityBreakdown.find((s) => s.severity === sev);
+                    const count = row?.count ?? 0;
+                    const total = data.wasteComposition!.severityBreakdown.reduce((s, r) => s + r.count, 0);
+                    const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                    const cfg = {
+                      critical: { label: "Critical", color: "bg-destructive", text: "text-destructive", bg: "bg-destructive/10" },
+                      high: { label: "High", color: "bg-orange-500", text: "text-orange-600", bg: "bg-orange-50" },
+                      medium: { label: "Medium", color: "bg-amber-400", text: "text-amber-600", bg: "bg-amber-50" },
+                      low: { label: "Low", color: "bg-emerald-500", text: "text-emerald-600", bg: "bg-emerald-50" },
+                    }[sev];
+                    return (
+                      <div key={sev} className={`flex items-center gap-3 p-2.5 rounded-xl ${cfg.bg}`}>
+                        <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.color}`} />
+                        <span className={`text-xs font-black flex-1 ${cfg.text}`}>{cfg.label}</span>
+                        <span className="text-xs font-black text-foreground">{count}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground w-8 text-right">{pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Top brands */}
+              <div>
+                <h3 className="text-sm font-black text-foreground flex items-center gap-1.5 mb-3">
+                  <Tag className="w-4 h-4 text-purple-500" /> Frequent Brands
+                </h3>
+                {data.wasteComposition.topBrands.length === 0 ? (
+                  <p className="text-xs text-muted-foreground font-medium py-4">No brand data yet</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {data.wasteComposition.topBrands.map((b) => (
+                      <span
+                        key={b.brand}
+                        className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200"
+                      >
+                        {b.brand}
+                        <span className="text-[10px] font-black text-purple-500 ml-0.5">×{b.count}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Longest outstanding reports */}
       <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-6">

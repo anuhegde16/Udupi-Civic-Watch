@@ -168,6 +168,20 @@ export const ReportStatusProperty = {
   cleaned: "cleaned",
 } as const;
 
+/**
+ * AI-assessed severity of the waste (low/medium/high/critical)
+ */
+export type ReportWasteSeverity =
+  | (typeof ReportWasteSeverity)[keyof typeof ReportWasteSeverity]
+  | null;
+
+export const ReportWasteSeverity = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
 export interface OfficerBasic {
   id: number;
   name: string;
@@ -202,6 +216,14 @@ export interface Report {
   updatedAt: string;
   /** Set when the report is archived (soft-deleted). Null means the report is active. */
   deletedAt?: string | null;
+  /** AI-identified waste categories (e.g. plastic bottles, food waste) */
+  wasteTypes?: string[] | null;
+  /** AI-identified brand names visible on packaging */
+  brandNames?: string[] | null;
+  /** AI-assessed severity of the waste (low/medium/high/critical) */
+  wasteSeverity?: ReportWasteSeverity;
+  /** Timestamp when AI photo analysis was completed */
+  photoAiAnalysedAt?: string | null;
 }
 
 export interface ReportList {
@@ -280,6 +302,12 @@ export interface UpdateReportBody {
   cleanupImageUrl?: string | null;
   /** Up to 5 cleanup photos with timestamps */
   cleanupImageUrls?: PhotoItem[] | null;
+}
+
+export interface BackfillPhotoAnalysisResponse {
+  /** Number of reports queued for AI analysis */
+  queued: number;
+  message: string;
 }
 
 export interface ReassignReportBody {

@@ -19,6 +19,7 @@ import type {
 import type {
   AdminListReportsParams,
   AnonymousPushSubscriptionBody,
+  BackfillPhotoAnalysisResponse,
   BulkArchiveBody,
   BulkArchivePreviewResponse,
   BulkArchiveResponse,
@@ -1943,6 +1944,90 @@ export const usePermanentDeleteReport = <
   TContext
 > => {
   return useMutation(getPermanentDeleteReportMutationOptions(options));
+};
+
+/**
+ * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet
+ */
+export const getBackfillPhotoAnalysisUrl = () => {
+  return `/api/admin/backfill-photo-analysis`;
+};
+
+export const backfillPhotoAnalysis = async (
+  options?: RequestInit,
+): Promise<BackfillPhotoAnalysisResponse> => {
+  return customFetch<BackfillPhotoAnalysisResponse>(
+    getBackfillPhotoAnalysisUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getBackfillPhotoAnalysisMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillPhotoAnalysis>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof backfillPhotoAnalysis>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["backfillPhotoAnalysis"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof backfillPhotoAnalysis>>,
+    void
+  > = () => {
+    return backfillPhotoAnalysis(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BackfillPhotoAnalysisMutationResult = NonNullable<
+  Awaited<ReturnType<typeof backfillPhotoAnalysis>>
+>;
+
+export type BackfillPhotoAnalysisMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet
+ */
+export const useBackfillPhotoAnalysis = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillPhotoAnalysis>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof backfillPhotoAnalysis>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getBackfillPhotoAnalysisMutationOptions(options));
 };
 
 /**

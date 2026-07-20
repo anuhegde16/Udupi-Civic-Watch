@@ -485,6 +485,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /admin/backfill-photo-analysis:
+    post:
+      operationId: backfillPhotoAnalysis
+      tags: [admin]
+      summary: Trigger AI photo analysis on reports that have a photo but no AI analysis yet
+      responses:
+        "200":
+          description: Backfill started or completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackfillPhotoAnalysisResponse"
+
   /admin/reports/{id}/reassign:
     post:
       operationId: reassignReport
@@ -937,6 +950,28 @@ components:
           format: date-time
           nullable: true
           description: Set when the report is archived (soft-deleted). Null means the report is active.
+        wasteTypes:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: AI-identified waste categories (e.g. plastic bottles, food waste)
+        brandNames:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: AI-identified brand names visible on packaging
+        wasteSeverity:
+          type: string
+          enum: [low, medium, high, critical]
+          nullable: true
+          description: AI-assessed severity of the waste (low/medium/high/critical)
+        photoAiAnalysedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when AI photo analysis was completed
       required: [id, latitude, longitude, status, createdAt, updatedAt]
 
     ReportList:
@@ -1070,6 +1105,16 @@ components:
             $ref: "#/components/schemas/PhotoItem"
           nullable: true
           description: Up to 5 cleanup photos with timestamps
+
+    BackfillPhotoAnalysisResponse:
+      type: object
+      properties:
+        queued:
+          type: integer
+          description: Number of reports queued for AI analysis
+        message:
+          type: string
+      required: [queued, message]
 
     ReassignReportBody:
       type: object

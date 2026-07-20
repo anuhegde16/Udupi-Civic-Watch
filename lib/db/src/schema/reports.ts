@@ -28,6 +28,10 @@ export const reportsTable = pgTable("reports", {
   cleaningStartedAt: timestamp("cleaning_started_at", { withTimezone: true }),
   cleanedAt: timestamp("cleaned_at", { withTimezone: true }),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  wasteTypes: jsonb("waste_types").$type<string[]>(),
+  brandNames: jsonb("brand_names").$type<string[]>(),
+  wasteSeverity: text("waste_severity"),
+  photoAiAnalysedAt: timestamp("photo_ai_analysed_at", { withTimezone: true }),
 });
 
 export const insertReportSchema = createInsertSchema(reportsTable).omit({

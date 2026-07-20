@@ -143,6 +143,26 @@ export const ListReportsResponse = zod.object({
         .describe(
           "Set when the report is archived (soft-deleted). Null means the report is active.",
         ),
+      wasteTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "AI-identified waste categories (e.g. plastic bottles, food waste)",
+        ),
+      brandNames: zod
+        .array(zod.string())
+        .nullish()
+        .describe("AI-identified brand names visible on packaging"),
+      wasteSeverity: zod
+        .enum(["low", "medium", "high", "critical"])
+        .nullish()
+        .describe(
+          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+        ),
+      photoAiAnalysedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Timestamp when AI photo analysis was completed"),
     }),
   ),
   total: zod.number(),
@@ -249,6 +269,26 @@ export const GetReportResponse = zod.object({
     .describe(
       "Set when the report is archived (soft-deleted). Null means the report is active.",
     ),
+  wasteTypes: zod
+    .array(zod.string())
+    .nullish()
+    .describe(
+      "AI-identified waste categories (e.g. plastic bottles, food waste)",
+    ),
+  brandNames: zod
+    .array(zod.string())
+    .nullish()
+    .describe("AI-identified brand names visible on packaging"),
+  wasteSeverity: zod
+    .enum(["low", "medium", "high", "critical"])
+    .nullish()
+    .describe(
+      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+    ),
+  photoAiAnalysedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Timestamp when AI photo analysis was completed"),
 });
 
 /**
@@ -339,6 +379,26 @@ export const UpdateReportResponse = zod.object({
     .describe(
       "Set when the report is archived (soft-deleted). Null means the report is active.",
     ),
+  wasteTypes: zod
+    .array(zod.string())
+    .nullish()
+    .describe(
+      "AI-identified waste categories (e.g. plastic bottles, food waste)",
+    ),
+  brandNames: zod
+    .array(zod.string())
+    .nullish()
+    .describe("AI-identified brand names visible on packaging"),
+  wasteSeverity: zod
+    .enum(["low", "medium", "high", "critical"])
+    .nullish()
+    .describe(
+      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+    ),
+  photoAiAnalysedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Timestamp when AI photo analysis was completed"),
 });
 
 /**
@@ -590,6 +650,26 @@ export const GetOfficerReportsResponse = zod.object({
         .describe(
           "Set when the report is archived (soft-deleted). Null means the report is active.",
         ),
+      wasteTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "AI-identified waste categories (e.g. plastic bottles, food waste)",
+        ),
+      brandNames: zod
+        .array(zod.string())
+        .nullish()
+        .describe("AI-identified brand names visible on packaging"),
+      wasteSeverity: zod
+        .enum(["low", "medium", "high", "critical"])
+        .nullish()
+        .describe(
+          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+        ),
+      photoAiAnalysedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Timestamp when AI photo analysis was completed"),
     }),
   ),
   total: zod.number(),
@@ -678,6 +758,26 @@ export const AdminListReportsResponse = zod.object({
         .describe(
           "Set when the report is archived (soft-deleted). Null means the report is active.",
         ),
+      wasteTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "AI-identified waste categories (e.g. plastic bottles, food waste)",
+        ),
+      brandNames: zod
+        .array(zod.string())
+        .nullish()
+        .describe("AI-identified brand names visible on packaging"),
+      wasteSeverity: zod
+        .enum(["low", "medium", "high", "critical"])
+        .nullish()
+        .describe(
+          "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+        ),
+      photoAiAnalysedAt: zod.coerce
+        .date()
+        .nullish()
+        .describe("Timestamp when AI photo analysis was completed"),
     }),
   ),
   total: zod.number(),
@@ -828,6 +928,14 @@ export const PermanentDeleteReportResponse = zod.object({
 });
 
 /**
+ * @summary Trigger AI photo analysis on reports that have a photo but no AI analysis yet
+ */
+export const BackfillPhotoAnalysisResponse = zod.object({
+  queued: zod.number().describe("Number of reports queued for AI analysis"),
+  message: zod.string(),
+});
+
+/**
  * @summary Reassign report to a different officer
  */
 export const ReassignReportParams = zod.object({
@@ -900,6 +1008,26 @@ export const ReassignReportResponse = zod.object({
     .describe(
       "Set when the report is archived (soft-deleted). Null means the report is active.",
     ),
+  wasteTypes: zod
+    .array(zod.string())
+    .nullish()
+    .describe(
+      "AI-identified waste categories (e.g. plastic bottles, food waste)",
+    ),
+  brandNames: zod
+    .array(zod.string())
+    .nullish()
+    .describe("AI-identified brand names visible on packaging"),
+  wasteSeverity: zod
+    .enum(["low", "medium", "high", "critical"])
+    .nullish()
+    .describe(
+      "AI-assessed severity of the waste (low\/medium\/high\/critical)",
+    ),
+  photoAiAnalysedAt: zod.coerce
+    .date()
+    .nullish()
+    .describe("Timestamp when AI photo analysis was completed"),
 });
 
 /**

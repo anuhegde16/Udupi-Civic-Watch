@@ -14,6 +14,7 @@ import {
 import { requireAuth, getSessionUser } from "../lib/auth";
 import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
 import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
+import { analyseWastePhoto } from "../lib/waste-analysis";
 
 const router: IRouter = Router();
 
@@ -294,6 +295,25 @@ router.post("/reports", async (req, res): Promise<void> => {
     sendReporterAcknowledgement(report, reporterEmail).catch((err) =>
       logger.warn({ err, reportId: report.id }, "Reporter acknowledgement email failed")
     );
+  }
+
+  // Fire-and-forget AI photo analysis — does not block the response
+  if (resolvedImageUrl) {
+    analyseWastePhoto(resolvedImageUrl)
+      .then(async (result) => {
+        if (!result) return;
+        await db
+          .update(reportsTable)
+          .set({
+            wasteTypes: result.wasteTypes,
+            brandNames: result.brandNames,
+            wasteSeverity: result.severity,
+            photoAiAnalysedAt: new Date(),
+          })
+          .where(eq(reportsTable.id, report.id));
+        logger.info({ reportId: report.id, severity: result.severity, wasteTypes: result.wasteTypes }, "AI photo analysis complete");
+      })
+      .catch((err) => logger.warn({ err, reportId: report.id }, "AI photo analysis fire-and-forget failed"));
   }
 
   res.status(201).json({ ...sanitizeReport(report), assignedOfficer });
