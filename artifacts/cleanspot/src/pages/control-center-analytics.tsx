@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
-import { customFetch } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { customFetch, useBackfillPhotoAnalysis } from "@workspace/api-client-react";
+import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
 import {
@@ -453,6 +454,22 @@ function TrendChart({ data }: { data: DayTrend[] }) {
 export default function ControlCenterAnalytics() {
   const { user } = useAuth();
   const { data, isLoading } = useDistrictAnalytics();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const backfill = useBackfillPhotoAnalysis({
+    mutation: {
+      onSuccess: (result) => {
+        toast({
+          title: "AI analysis complete",
+          description: `Processed ${result.processed ?? 0} photo${(result.processed ?? 0) !== 1 ? "s" : ""}${(result.failed ?? 0) > 0 ? `, ${result.failed} failed` : ""}.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["district-analytics"] });
+      },
+      onError: () => {
+        toast({ title: "Backfill failed", description: "Could not run analysis. Please try again.", variant: "destructive" });
+      },
+    },
+  });
 
   const kpiCards = [
     {
@@ -832,10 +849,27 @@ export default function ControlCenterAnalytics() {
                 <span className="font-black text-indigo-600">{data.wasteComposition.aiAnalysedCount}</span>{" "}
                 of {data.kpis.totalReports} reports
                 {data.wasteComposition.unanalysedCount > 0 && (
-                  <span className="ml-1 text-muted-foreground/60">· {data.wasteComposition.unanalysedCount} pending analysis</span>
+                  <span className="ml-1 text-muted-foreground/60">· {data.wasteComposition.unanalysedCount} pending</span>
                 )}
               </p>
             </div>
+            {data.wasteComposition.unanalysedCount > 0 ? (
+              <button
+                onClick={() => backfill.mutate()}
+                disabled={backfill.isPending}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              >
+                {backfill.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Analysing…</>
+                ) : (
+                  <><Cpu className="w-4 h-4" /> Analyse {data.wasteComposition.unanalysedCount} existing photo{data.wasteComposition.unanalysedCount !== 1 ? "s" : ""}</>
+                )}
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" /> All photos analysed
+              </span>
+            )}
           </div>
 
           {data.wasteComposition.aiAnalysedCount === 0 ? (
