@@ -800,11 +800,30 @@ router.get("/admin/smart-insights", requireControlCenter, async (req, res): Prom
       WHERE deleted_at IS NULL
     `),
     db.execute(sql`
-      SELECT wt.waste_type AS keyword, COUNT(*)::int AS count
-      FROM reports r,
-      LATERAL jsonb_array_elements_text(r.waste_types) AS wt(waste_type)
-      WHERE r.deleted_at IS NULL AND r.waste_types IS NOT NULL
-      GROUP BY keyword ORDER BY count DESC LIMIT 10
+      SELECT keyword, COUNT(*)::int AS count
+      FROM (
+        SELECT
+          CASE
+            WHEN description ILIKE '%plastic%' OR description ILIKE '%polythene%' OR description ILIKE '%wrapper%' THEN 'Plastic'
+            WHEN description ILIKE '%food%' OR description ILIKE '%vegetable%' OR description ILIKE '%organic%'
+              OR description ILIKE '%leaves%' OR description ILIKE '%leaf%' THEN 'Organic'
+            WHEN description ILIKE '%construction%' OR description ILIKE '%rubble%' OR description ILIKE '%debris%'
+              OR description ILIKE '%brick%' OR description ILIKE '%sand%' THEN 'Construction'
+            WHEN description ILIKE '%garbage%' OR description ILIKE '%dump%' OR description ILIKE '%litter%'
+              OR description ILIKE '%rubbish%' OR description ILIKE '%trash%' THEN 'Garbage'
+            WHEN description ILIKE '%drain%' OR description ILIKE '%sewage%' OR description ILIKE '%stagnant%' THEN 'Drainage'
+            WHEN description ILIKE '%metal%' OR description ILIKE '%iron%' OR description ILIKE '%scrap%' THEN 'Metal'
+            WHEN description ILIKE '%paper%' OR description ILIKE '%cardboard%' THEN 'Paper'
+            WHEN description ILIKE '%glass%' THEN 'Glass'
+            ELSE NULL
+          END AS keyword
+        FROM reports
+        WHERE deleted_at IS NULL AND description IS NOT NULL AND description != ''
+      ) t
+      WHERE keyword IS NOT NULL
+      GROUP BY keyword
+      ORDER BY count DESC
+      LIMIT 10
     `),
     db.execute(sql`
       SELECT

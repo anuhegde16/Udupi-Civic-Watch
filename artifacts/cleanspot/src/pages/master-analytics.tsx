@@ -517,11 +517,9 @@ export default function MasterAnalytics() {
                 <div className="text-2xl font-black text-blue-700">{insights?.photoSubmissionRate ?? 0}%</div>
                 <div className="text-xs font-bold text-blue-600/80 mt-0.5">Photo Rate</div>
               </div>
-              <div className={`rounded-2xl p-3.5 text-center border ${(insights?.unassignedRate ?? 0) > 20 ? "bg-destructive/10 border-destructive/20" : "bg-muted/40 border-border/40"}`}>
-                <div className={`text-2xl font-black ${(insights?.unassignedRate ?? 0) > 20 ? "text-destructive" : "text-foreground"}`}>
-                  {insights?.unassignedRate ?? 0}%
-                </div>
-                <div className="text-xs font-bold text-muted-foreground mt-0.5">Unassigned</div>
+              <div className="bg-muted/40 rounded-2xl p-3.5 text-center border border-border/40">
+                <div className="text-2xl font-black text-foreground">{insights?.weekOverWeek.thisWeek ?? 0}</div>
+                <div className="text-xs font-bold text-muted-foreground mt-0.5">This Week</div>
               </div>
             </div>
 

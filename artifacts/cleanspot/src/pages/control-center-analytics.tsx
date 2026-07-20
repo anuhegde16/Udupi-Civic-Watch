@@ -29,6 +29,7 @@ import {
   Tag,
   Zap,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 
 type DayTrend = {
@@ -538,6 +539,7 @@ export default function ControlCenterAnalytics() {
           description: `Processed ${result.processed ?? 0} photo${(result.processed ?? 0) !== 1 ? "s" : ""}${(result.failed ?? 0) > 0 ? `, ${result.failed} failed` : ""}.`,
         });
         queryClient.invalidateQueries({ queryKey: ["district-analytics"] });
+        queryClient.invalidateQueries({ queryKey: ["admin-smart-insights"] });
       },
       onError: () => {
         toast({ title: "Backfill failed", description: "Could not run analysis. Please try again.", variant: "destructive" });
@@ -659,22 +661,32 @@ export default function ControlCenterAnalytics() {
             </h2>
             <p className="text-sm text-muted-foreground font-medium mt-0.5">AI analysis · last 90 days</p>
           </div>
-          {!isLoadingInsights && insights?.weekOverWeek && (
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-black border ${
-              insights.weekOverWeek.changePct === null
-                ? "bg-muted/60 text-muted-foreground border-border/40"
-                : insights.weekOverWeek.changePct > 0
-                  ? "bg-destructive/10 text-destructive border-destructive/20"
-                  : insights.weekOverWeek.changePct < 0
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    : "bg-muted/60 text-muted-foreground border-border/40"
-            }`}>
-              {insights.weekOverWeek.changePct === null ? "—" :
-                insights.weekOverWeek.changePct > 0 ? `↑ ${insights.weekOverWeek.changePct}% this week` :
-                insights.weekOverWeek.changePct < 0 ? `↓ ${Math.abs(insights.weekOverWeek.changePct)}% this week` :
-                "→ No change this week"}
-            </div>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isLoadingInsights && insights?.weekOverWeek && (
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-black border ${
+                insights.weekOverWeek.changePct === null
+                  ? "bg-muted/60 text-muted-foreground border-border/40"
+                  : insights.weekOverWeek.changePct > 0
+                    ? "bg-destructive/10 text-destructive border-destructive/20"
+                    : insights.weekOverWeek.changePct < 0
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-muted/60 text-muted-foreground border-border/40"
+              }`}>
+                {insights.weekOverWeek.changePct === null ? "—" :
+                  insights.weekOverWeek.changePct > 0 ? `↑ ${insights.weekOverWeek.changePct}% this week` :
+                  insights.weekOverWeek.changePct < 0 ? `↓ ${Math.abs(insights.weekOverWeek.changePct)}% this week` :
+                  "→ No change this week"}
+              </div>
+            )}
+            <button
+              onClick={() => queryClient.refetchQueries({ queryKey: ["admin-smart-insights"] })}
+              disabled={isLoadingInsights}
+              title="Refresh insights"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInsights ? "animate-spin" : ""}`} /> Refresh
+            </button>
+          </div>
         </div>
 
         {isLoadingInsights ? (
