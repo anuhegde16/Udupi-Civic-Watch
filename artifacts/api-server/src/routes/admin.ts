@@ -4,7 +4,7 @@ import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
 import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
-import { analyseWastePhoto } from "../lib/waste-analysis";
+import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
 import { generateInsightNarrative } from "../lib/smart-insights";
 import {
   sendAssignmentEmail,
@@ -581,7 +581,7 @@ router.post("/admin/backfill-photo-analysis", requireControlCenter, async (req, 
     await Promise.all(
       batch.map(async (row) => {
         try {
-          const result = await analyseWastePhoto(row.imageUrl!);
+          const result = await analyseWastePhoto(toPublicImageUrl(row.imageUrl!));
           if (!result) { failed++; return; }
           await db
             .update(reportsTable)

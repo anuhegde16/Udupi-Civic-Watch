@@ -14,7 +14,7 @@ import {
 import { requireAuth, getSessionUser } from "../lib/auth";
 import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
 import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
-import { analyseWastePhoto } from "../lib/waste-analysis";
+import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
 
 const router: IRouter = Router();
 
@@ -299,7 +299,7 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   // Fire-and-forget AI photo analysis — does not block the response
   if (resolvedImageUrl) {
-    analyseWastePhoto(resolvedImageUrl)
+    analyseWastePhoto(toPublicImageUrl(resolvedImageUrl))
       .then(async (result) => {
         if (!result) return;
         await db

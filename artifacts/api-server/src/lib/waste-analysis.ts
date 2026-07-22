@@ -21,6 +21,26 @@ Example: {"wasteTypes":["plastic bottles","food waste"],"brandNames":["Bisleri"]
 
 const TIMEOUT_MS = 15_000;
 
+/**
+ * Convert a potentially-relative image path to a fully-qualified public HTTPS URL
+ * so OpenAI's vision API can download it from the internet.
+ *
+ * In production REPLIT_DOMAINS is set (e.g. "myapp.replit.app").
+ * In development we fall back to the dev tunnel domain, then localhost via the proxy.
+ */
+export function toPublicImageUrl(imageUrl: string): string {
+  if (imageUrl.startsWith("https://") || imageUrl.startsWith("http://")) {
+    return imageUrl;
+  }
+  const domain =
+    process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim() ??
+    process.env["REPLIT_DEV_DOMAIN"];
+  if (domain) {
+    return `https://${domain}${imageUrl}`;
+  }
+  return `http://localhost:80${imageUrl}`;
+}
+
 export async function analyseWastePhoto(imageUrl: string): Promise<WasteAnalysisResult | null> {
   try {
     const controller = new AbortController();
