@@ -289,11 +289,13 @@ async function seedOfficerPanchayatNames() {
   try {
     const { db } = await import("@workspace/db");
     const { sql } = await import("drizzle-orm");
+    // Only backfill officers that have no panchayat set yet; never overwrite a
+    // valid panchayat assignment (e.g. Udupi officers seeded later).
     await db.execute(sql`
       UPDATE officers SET panchayat_name = 'Saligrama'
-      WHERE (panchayat_name IS NULL OR panchayat_name != 'Saligrama') AND deleted_at IS NULL
+      WHERE panchayat_name IS NULL AND deleted_at IS NULL
     `);
-    logger.info("Officer panchayat names normalised to Saligrama");
+    logger.info("Officer panchayat names backfilled (NULL → Saligrama)");
   } catch (err) {
     logger.warn({ err }, "Could not backfill officer panchayat names");
   }

@@ -184,7 +184,7 @@ router.post("/reports", async (req, res): Promise<void> => {
 
   // Geo-fence: reject if outside the defined service area
   if (!isWithinServiceArea(latitude, longitude)) {
-    res.status(422).json({ error: "Outside service area", message: "This location is outside the Saligrama service area. Reports can only be submitted within the designated zone." });
+    res.status(422).json({ error: "Outside service area", message: "This location is outside the designated service area. Reports can only be submitted within the Saligrama or Udupi service zones." });
     return;
   }
 

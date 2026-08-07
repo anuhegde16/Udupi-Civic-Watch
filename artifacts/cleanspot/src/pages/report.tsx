@@ -312,7 +312,7 @@ export default function Report() {
       return;
     }
     if (outsideFence && !testMode) {
-      toast({ title: "Outside service area", description: "Please move the pin inside the Saligrama service boundary.", variant: "destructive" });
+      toast({ title: "Outside service area", description: "Please move the pin inside a service boundary (Saligrama or Udupi).", variant: "destructive" });
       return;
     }
     setReporterEmail("");
@@ -599,7 +599,7 @@ export default function Report() {
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-bold text-red-700">Outside service area</p>
-                <p className="text-xs text-red-600 mt-0.5">This location is outside the Saligrama service boundary. Move the pin inside the highlighted zone to submit.</p>
+                <p className="text-xs text-red-600 mt-0.5">This location is outside the service boundary. Move the pin inside the Saligrama or Udupi zone to submit.</p>
               </div>
             </div>
           )}
@@ -611,7 +611,7 @@ export default function Report() {
               </div>
               <div className="flex flex-col">
                 <span className="text-xs font-mono font-bold text-foreground">{location.lat.toFixed(5)}, {location.lng.toFixed(5)}</span>
-                <span className="text-xs text-muted-foreground font-medium">Saligrama, Udupi District — GPS location</span>
+                <span className="text-xs text-muted-foreground font-medium">Udupi District — GPS location</span>
               </div>
               <Button type="button" variant="ghost" size="sm" onClick={getLocation} className="ml-auto h-8 text-primary hover:bg-primary/10 font-bold rounded-lg text-xs">
                 Refresh
