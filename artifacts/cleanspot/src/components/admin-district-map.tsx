@@ -31,6 +31,7 @@ const DISTRICT_BOUNDS: [[number, number], [number, number]] = [
 
 interface GeoFeatureMeta extends GeoZone {
   featureType: "district" | "ward";
+  panchayat?: string;
 }
 
 const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
@@ -44,6 +45,7 @@ const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
     return {
       name: (f.properties as any)?.name ?? "Zone",
       featureType: ((f.properties as any)?.type === "ward" ? "ward" : "district") as "district" | "ward",
+      panchayat: (f.properties as any)?.panchayat as string | undefined,
       bounds: [
         [Math.min(...lats), Math.min(...lons)],
         [Math.max(...lats), Math.max(...lons)],
@@ -247,13 +249,11 @@ export function AdminDistrictMap({
             zone.name === activeZone ||
             (assignedOfficer ? selectedOfficerId === assignedOfficer.id : false);
 
-          // Unassigned wards are still visible/interactive when a panchayat is active
-          // (we can't know their panchayat, so we show them all rather than hiding them)
+          // Use the ward's own panchayat from geofences.json — no need to guess
+          // from officer assignment any more.
           const isInActivePanchayat =
             !activePanchayat ||
-            (assignedOfficer
-              ? assignedOfficer.panchayatName === activePanchayat
-              : true);
+            zone.panchayat === activePanchayat;
 
           const poly = L.polygon(zone.latlngs, {
             color: isInActivePanchayat ? wardColor : "#d1d5db",
@@ -413,7 +413,9 @@ export function AdminDistrictMap({
   const chipInactive =
     "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground hover:bg-primary/5";
 
-  const visibleWards = allGeoFeatures.filter((zone) => zone.featureType === "ward");
+  const visibleWards = allGeoFeatures.filter(
+    (zone) => zone.featureType === "ward" && (!activePanchayat || zone.panchayat === activePanchayat)
+  );
 
   return (
     <div>
