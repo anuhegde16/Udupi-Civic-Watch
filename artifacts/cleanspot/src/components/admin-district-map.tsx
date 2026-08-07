@@ -57,6 +57,18 @@ const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
 
 const geoZones: GeoZone[] = allGeoFeatures;
 
+// Bounding box that fits ALL district polygons — used for the "All Panchayats" view.
+const allDistrictsBounds: [[number, number], [number, number]] = (() => {
+  const districts = allGeoFeatures.filter((f) => f.featureType === "district");
+  if (districts.length === 0) return DISTRICT_BOUNDS;
+  const allLats = districts.flatMap((d) => [d.bounds[0][0], d.bounds[1][0]]);
+  const allLngs = districts.flatMap((d) => [d.bounds[0][1], d.bounds[1][1]]);
+  return [
+    [Math.min(...allLats), Math.min(...allLngs)],
+    [Math.max(...allLats), Math.max(...allLngs)],
+  ];
+})();
+
 export type MapReport = {
   id: number;
   latitude: number;
@@ -116,19 +128,18 @@ export function AdminDistrictMap({
       await import("leaflet/dist/leaflet.css");
       if (cancelled || !containerRef.current) return;
 
-      const initialBounds: [[number, number], [number, number]] =
-        geoZones[0]?.bounds ?? [[13.46988, 74.6863], [13.52115, 74.73806]];
-
       const map = L.map(containerRef.current, {
         zoomControl: false,
       });
       mapRef.current = map;
 
-      map.fitBounds(initialBounds, { padding: [24, 24] });
+      // Start showing all service areas so users see that the app covers
+      // multiple municipalities from the very first render.
+      map.fitBounds(allDistrictsBounds, { padding: [24, 24] });
       setTimeout(() => map.invalidateSize(), 0);
       setTimeout(() => {
         map.invalidateSize();
-        map.fitBounds(initialBounds, { padding: [24, 24] });
+        map.fitBounds(allDistrictsBounds, { padding: [24, 24] });
       }, 300);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -154,24 +165,36 @@ export function AdminDistrictMap({
     setActiveZone(null);
   }, [activePanchayat]);
 
+  // Single camera effect — priority: ward > panchayat > all districts.
+  // Keeping this as one effect (rather than two) avoids races where both fire
+  // at the same tick and the second call overrides the first.
   useEffect(() => {
-    if (!mapRef.current) return;
+    if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
 
-    function focusGeoZone() {
-      if (activeZone === null) {
-        map.flyToBounds(DISTRICT_BOUNDS, { padding: [20, 20], duration: 0.7 });
-      } else {
+    const t = setTimeout(() => {
+      if (activeZone !== null) {
+        // A specific ward is selected — zoom to it
         const zone = geoZones.find((z) => z.name === activeZone);
         if (zone) {
           map.flyToBounds(zone.bounds, { padding: [32, 32], duration: 0.7 });
         }
+      } else if (activePanchayat !== null) {
+        // A panchayat is selected but no ward — zoom to that district
+        const districtZone = allGeoFeatures.find(
+          (z) => z.featureType === "district" && z.panchayat === activePanchayat
+        );
+        if (districtZone) {
+          map.flyToBounds(districtZone.bounds, { padding: [32, 32], duration: 0.7 });
+        }
+      } else {
+        // All Panchayats / no selection — show every service area
+        map.flyToBounds(allDistrictsBounds, { padding: [24, 24], duration: 0.7 });
       }
-    }
+    }, 60);
 
-    const t = setTimeout(focusGeoZone, 60);
     return () => clearTimeout(t);
-  }, [activeZone]);
+  }, [activeZone, activePanchayat, mapReady]);
 
   useEffect(() => {
     if (!mapRef.current) return;
