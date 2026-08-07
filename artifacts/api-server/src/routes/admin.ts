@@ -561,13 +561,13 @@ router.get("/admin/analytics", requireAdmin, async (req, res): Promise<void> => 
 // ── AI Photo Analysis Backfill (Control Center only) ─────────────────────────
 router.post("/admin/backfill-photo-analysis", requireControlCenter, async (req, res): Promise<void> => {
   const unanalysed = await db
-    .select({ id: reportsTable.id, imageUrl: reportsTable.imageUrl })
+    .select({ id: reportsTable.id, imageUrl: reportsTable.imageUrl, imageUrls: reportsTable.imageUrls })
     .from(reportsTable)
     .where(
       and(
         isNull(reportsTable.deletedAt),
         isNull(reportsTable.photoAiAnalysedAt),
-        sql`${reportsTable.imageUrl} IS NOT NULL`
+        sql`(${reportsTable.imageUrl} IS NOT NULL OR (image_urls IS NOT NULL AND jsonb_array_length(image_urls) > 0))`
       )
     )
     .orderBy(reportsTable.createdAt);
@@ -581,7 +581,10 @@ router.post("/admin/backfill-photo-analysis", requireControlCenter, async (req, 
     await Promise.all(
       batch.map(async (row) => {
         try {
-          const result = await analyseWastePhoto(toPublicImageUrl(row.imageUrl!));
+          // Prefer legacy single-URL field; fall back to first entry in the JSONB array
+          const rawUrl = row.imageUrl ?? row.imageUrls?.[0]?.url;
+          if (!rawUrl) { failed++; return; }
+          const result = await analyseWastePhoto(toPublicImageUrl(rawUrl));
           if (!result) { failed++; return; }
           await db
             .update(reportsTable)
