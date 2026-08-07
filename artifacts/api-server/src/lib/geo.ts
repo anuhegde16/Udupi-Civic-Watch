@@ -3,6 +3,20 @@ import type { Officer } from "@workspace/db";
 import { isNull } from "drizzle-orm";
 import geofencesData from "../data/geofences.json";
 
+// ── Internal: which panchayat does a lat/lng fall inside? ───────────────────
+// Uses district-level (non-ward) polygons so it matches the service-area gate.
+// Returns null when the point is outside all known municipalities.
+function detectPanchayat(lat: number, lng: number): string | null {
+  for (const feature of geofencesData.features) {
+    const props = feature.properties as { type?: string; panchayat?: string };
+    if (feature.geometry.type === "Polygon" && props.type !== "ward") {
+      const ring = feature.geometry.coordinates[0] as [number, number][];
+      if (pointInPolygon(lat, lng, ring)) return props.panchayat ?? null;
+    }
+  }
+  return null;
+}
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -81,7 +95,21 @@ export async function findOfficerForLocation(
   lat: number,
   lng: number
 ): Promise<Officer | null> {
-  const officers = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
+  // Determine which municipality this point belongs to so we never route a
+  // report across panchayat boundaries (e.g. Udupi report → Saligrama officer).
+  const panchayat = detectPanchayat(lat, lng);
+
+  const allOfficers = await db.select().from(officersTable).where(isNull(officersTable.deletedAt));
+
+  // Constrain the candidate pool to the matching panchayat.
+  // If panchayat is null (e.g. point is right on a boundary), keep all officers
+  // as a last resort so no report is ever stranded.
+  const officers = panchayat
+    ? allOfficers.filter((o) => o.panchayatName === panchayat)
+    : allOfficers;
+
+  // If no officers are configured for this panchayat yet, leave unassigned.
+  if (officers.length === 0) return null;
 
   // Build lookups: zone name → exterior ring, and zone name → type (ward | district)
   const zoneRings = new Map<string, [number, number][]>();
@@ -115,10 +143,9 @@ export async function findOfficerForLocation(
   if (wardOfficers.length > 0) return wardOfficers[0];
   if (districtOfficers.length > 0) return districtOfficers[0];
 
-  // Final fallback: no ward/district polygon matched this point. Rather than
-  // picking an arbitrary officer (previously `officers[0]` with no ORDER BY,
-  // i.e. undefined DB order), deterministically assign to the officer whose
-  // ward is geographically closest to the report's coordinates.
+  // Final fallback: no ward/district polygon matched this point exactly.
+  // Deterministically assign to the closest officer within the same panchayat
+  // to handle rare floating-point edge cases at shared ward borders.
   let closestOfficer: Officer | null = null;
   let closestDistanceKm = Infinity;
   for (const officer of officers) {
@@ -133,5 +160,5 @@ export async function findOfficerForLocation(
   }
   if (closestOfficer) return closestOfficer;
 
-  return officers.length > 0 ? officers[0] : null;
+  return officers[0] ?? null;
 }

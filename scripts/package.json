@@ -8,7 +8,8 @@
     "seed:officers": "tsx ./src/seed-real-officers.ts",
     "gen:pwa-icons": "tsx ./src/generate-pwa-icons.ts",
     "test:emails": "tsx ./src/test-emails.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "validate:geo": "tsx ./src/validate-geo-routing.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",
