@@ -660,6 +660,7 @@ export default function MasterDashboard() {
           reports={reportsData?.reports ?? []}
           highlightedWard={selectedWard}
           onReportClick={(r) => openReport(r)}
+          panchayatName={user?.panchayatName}
         />
       </div>
 

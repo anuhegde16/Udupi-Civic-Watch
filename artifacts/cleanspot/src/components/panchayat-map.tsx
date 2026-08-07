@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import geofencesData from "@/data/geofences.json";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -25,12 +25,14 @@ const FALLBACK_BOUNDS: [[number, number], [number, number]] = [
 
 type WardFeature = {
   name: string;
+  panchayat?: string;
   latlngs: [number, number][];
   bounds: [[number, number], [number, number]];
   centroid: [number, number];
 };
 
-const wardFeatures: WardFeature[] = geofencesData.features
+// All wards from all municipalities — filtered per-component by panchayatName prop
+const allWardFeatures: WardFeature[] = geofencesData.features
   .filter(
     (f) =>
       f.geometry.type === "Polygon" &&
@@ -42,6 +44,7 @@ const wardFeatures: WardFeature[] = geofencesData.features
     const lons = coords.map(([lon]) => lon);
     return {
       name: (f.properties as any)?.name ?? "Ward",
+      panchayat: (f.properties as any)?.panchayat as string | undefined,
       latlngs: coords.map(([lon, lat]) => [lat, lon] as [number, number]),
       bounds: [
         [Math.min(...lats), Math.min(...lons)],
@@ -54,14 +57,21 @@ const wardFeatures: WardFeature[] = geofencesData.features
     };
   });
 
-const districtFeature = (() => {
-  const f = geofencesData.features.find(
-    (f) => (f.properties as any)?.type === "district"
-  );
-  if (!f || f.geometry.type !== "Polygon") return null;
-  const coords = f.geometry.coordinates[0] as [number, number][];
-  return coords.map(([lon, lat]) => [lat, lon] as [number, number]);
-})();
+// All district outlines — selected per-component by panchayatName prop
+const allDistrictFeatures: { panchayat: string; latlngs: [number, number][] }[] =
+  geofencesData.features
+    .filter(
+      (f) =>
+        f.geometry.type === "Polygon" &&
+        (f.properties as any)?.type === "district"
+    )
+    .map((f) => {
+      const coords = f.geometry.coordinates[0] as [number, number][];
+      return {
+        panchayat: ((f.properties as any)?.panchayat as string) ?? "",
+        latlngs: coords.map(([lon, lat]) => [lat, lon] as [number, number]),
+      };
+    });
 
 export type PanchayatMapOfficer = {
   id: number;
@@ -89,13 +99,31 @@ interface PanchayatMapProps {
   reports: PanchayatMapReport[];
   highlightedWard?: string | null;
   onReportClick?: (report: PanchayatMapReport) => void;
+  /** When set, only wards and the district outline for this panchayat are drawn. */
+  panchayatName?: string | null;
 }
 
-export function PanchayatMap({ officers, reports, highlightedWard, onReportClick }: PanchayatMapProps) {
+export function PanchayatMap({ officers, reports, highlightedWard, onReportClick, panchayatName }: PanchayatMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const hasZoomedRef = useRef(false);
+
+  // Filter wards and district to the relevant municipality when panchayatName is set
+  const wardFeatures = useMemo(
+    () =>
+      panchayatName
+        ? allWardFeatures.filter((w) => w.panchayat === panchayatName)
+        : allWardFeatures,
+    [panchayatName]
+  );
+
+  const districtFeature = useMemo(() => {
+    const match = panchayatName
+      ? allDistrictFeatures.find((d) => d.panchayat === panchayatName)
+      : allDistrictFeatures[0];
+    return match?.latlngs ?? null;
+  }, [panchayatName]);
 
   // Init effect: create map + tiles only; all layer drawing is in the redraw effect
   useEffect(() => {
@@ -333,7 +361,7 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
       cancelled = true;
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [officers, reports, mapReady, highlightedWard, onReportClick]);
+  }, [officers, reports, mapReady, highlightedWard, onReportClick, wardFeatures, districtFeature]);
 
   return (
     <div
