@@ -3,6 +3,130 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
+
+// ── Commissioner Team View ─────────────────────────────────────────────────────
+type CommissionerHierarchy = {
+  environmentalEngineer: {
+    id: number; name: string; phone: string; hiCount: number;
+    healthInspectors: {
+      id: number; name: string; phone: string; supervisorCount: number;
+      reportedCount: number; cleaningCount: number; cleanedCount: number;
+      supervisors: {
+        id: number; name: string; phone: string; wardNames: string[];
+        reportedCount: number; totalCount: number;
+      }[];
+    }[];
+  } | null;
+};
+
+function CommissionerTeamView() {
+  const [expandedHi, setExpandedHi] = useState<number | null>(null);
+  const { data, isLoading, error } = useQuery<CommissionerHierarchy>({
+    queryKey: ["commissioner-hierarchy"],
+    queryFn: () => customFetch("/api/commissioner/hierarchy"),
+    staleTime: 60_000,
+  });
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mr-3" />
+      <span className="font-bold">Loading org tree…</span>
+    </div>
+  );
+  if (error || !data?.environmentalEngineer) return (
+    <div className="text-center py-12 text-muted-foreground font-medium">No hierarchy data available.</div>
+  );
+
+  const ee = data.environmentalEngineer;
+  const his = ee.healthInspectors ?? [];
+  const totals = {
+    reported: his.reduce((s, h) => s + h.reportedCount, 0),
+    cleaning: his.reduce((s, h) => s + h.cleaningCount, 0),
+    cleaned: his.reduce((s, h) => s + h.cleanedCount, 0),
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* EE card */}
+      <div className="bg-sky-50 border border-sky-200 rounded-3xl p-5">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center font-black text-lg shrink-0">
+            {ee.name.charAt(0)}
+          </div>
+          <div>
+            <p className="font-black text-sky-900">{ee.name}</p>
+            <p className="text-xs text-sky-600 font-bold">Environmental Engineer · {ee.hiCount} Health Inspector{ee.hiCount !== 1 ? "s" : ""}</p>
+          </div>
+          {ee.phone && <a href={`tel:${ee.phone}`} className="ml-auto text-sky-700 text-xs font-bold hover:underline">{ee.phone}</a>}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">{totals.reported} New</span>
+          <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">{totals.cleaning} In Progress</span>
+          <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">{totals.cleaned} Cleaned</span>
+        </div>
+      </div>
+
+      {/* HI cards */}
+      <div className="space-y-3">
+        <h3 className="text-base font-black text-foreground flex items-center gap-2">
+          <Users className="w-4 h-4 text-indigo-500" /> Health Inspectors
+        </h3>
+        {his.length === 0 && <p className="text-sm text-muted-foreground">No health inspectors found.</p>}
+        {his.map((hi) => (
+          <div key={hi.id} className="bg-card border border-border/50 rounded-2xl overflow-hidden">
+            <button
+              type="button"
+              className="w-full text-left p-4 hover:bg-muted/30 transition-colors"
+              onClick={() => setExpandedHi(expandedHi === hi.id ? null : hi.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-black text-sm text-foreground">{hi.name}</span>
+                    {hi.phone && <a href={`tel:${hi.phone}`} onClick={(e) => e.stopPropagation()} className="text-primary text-xs font-bold hover:underline">{hi.phone}</a>}
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">{hi.supervisorCount} supervisor{hi.supervisorCount !== 1 ? "s" : ""}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">{hi.reportedCount} New</span>
+                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">{hi.cleaningCount} In Progress</span>
+                    <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full border border-primary/20">{hi.cleanedCount} Cleaned</span>
+                  </div>
+                </div>
+                <span className="text-muted-foreground mt-1 text-lg">{expandedHi === hi.id ? "↑" : "↓"}</span>
+              </div>
+            </button>
+            {expandedHi === hi.id && (
+              <div className="border-t border-border/50 bg-muted/20 p-3 space-y-2">
+                {hi.supervisors.length === 0 && <p className="text-sm text-muted-foreground px-2">No supervisors assigned.</p>}
+                {hi.supervisors.map((sv) => {
+                  const wards: string[] = Array.isArray(sv.wardNames) ? sv.wardNames : [];
+                  return (
+                    <div key={sv.id} className="bg-card border border-border/40 rounded-xl p-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-sm text-foreground">{sv.name}</span>
+                        {sv.phone && <a href={`tel:${sv.phone}`} className="text-primary text-xs font-bold hover:underline">{sv.phone}</a>}
+                      </div>
+                      {wards.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {wards.map((w) => <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{w}</span>)}
+                        </div>
+                      )}
+                      <div className="flex gap-2 flex-wrap">
+                        <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">{sv.reportedCount} New</span>
+                        <span className="text-muted-foreground text-xs font-bold px-2 py-0.5 bg-muted rounded-full">{sv.totalCount} Total</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch, useCreateOfficer, useUpdateOfficer, useUpdateReport } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -185,6 +309,7 @@ export default function MasterDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"dashboard" | "team">("dashboard");
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
   const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -403,9 +528,38 @@ export default function MasterDashboard() {
   const completionRate =
     (stats?.total ?? 0) > 0 ? Math.round(((stats?.cleaned ?? 0) / stats!.total) * 100) : 0;
 
+  const isCommissioner = user?.role === "commissioner";
+
   return (
     <div className="pb-12 animate-in fade-in duration-500 space-y-6">
       <NotificationCTABanner variant="officer" />
+
+      {/* Commissioner: tab switcher */}
+      {isCommissioner && (
+        <div className="flex gap-2 bg-muted/50 p-1.5 rounded-2xl border border-border/50">
+          <button
+            type="button"
+            onClick={() => setActiveTab("dashboard")}
+            className={`flex-1 py-2 px-4 rounded-xl text-sm font-bold transition-all ${activeTab === "dashboard" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("team")}
+            className={`flex-1 py-2 px-4 rounded-xl text-sm font-bold transition-all ${activeTab === "team" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Team Hierarchy
+          </button>
+        </div>
+      )}
+
+      {/* Commissioner Team tab */}
+      {isCommissioner && activeTab === "team" && <CommissionerTeamView />}
+
+      {/* Main dashboard (hidden when Team tab is active for commissioner) */}
+      {(!isCommissioner || activeTab === "dashboard") && <>
+
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/5 rounded-bl-[100px] pointer-events-none" />
@@ -1298,6 +1452,8 @@ export default function MasterDashboard() {
           </div>
         </SheetContent>
       </Sheet>
+
+      </> /* end main dashboard fragment */}
     </div>
   );
 }

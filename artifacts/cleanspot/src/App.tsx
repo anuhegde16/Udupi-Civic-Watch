@@ -21,7 +21,10 @@ import MasterReports from "@/pages/master-reports";
 import MasterAnalytics from "@/pages/master-analytics";
 import ControlCenterAnalytics from "@/pages/control-center-analytics";
 import NotificationsPage from "@/pages/notifications";
-import HierarchyPlaceholder from "@/pages/hierarchy-placeholder";
+import SupervisorDashboard from "@/pages/supervisor-dashboard";
+import HealthInspectorDashboard from "@/pages/health-inspector-dashboard";
+import EnvEngineerDashboard from "@/pages/env-engineer-dashboard";
+import CommunityMobiliserDashboard from "@/pages/community-mobiliser-dashboard";
 import ChangePassword from "@/pages/change-password";
 import Activate from "@/pages/activate";
 
@@ -69,25 +72,25 @@ function Router() {
           </AuthGuard>
         </Route>
 
-        {/* Udupi hierarchy role dashboards — full UI delivered by task #265 */}
+        {/* Udupi hierarchy role dashboards */}
         <Route path="/supervisor/dashboard">
           <AuthGuard roles={["supervisor"]}>
-            <HierarchyPlaceholder />
+            <SupervisorDashboard />
           </AuthGuard>
         </Route>
         <Route path="/health-inspector/dashboard">
           <AuthGuard roles={["health_inspector"]}>
-            <HierarchyPlaceholder />
+            <HealthInspectorDashboard />
           </AuthGuard>
         </Route>
         <Route path="/env-engineer/dashboard">
           <AuthGuard roles={["environmental_engineer"]}>
-            <HierarchyPlaceholder />
+            <EnvEngineerDashboard />
           </AuthGuard>
         </Route>
         <Route path="/community-mobiliser/dashboard">
           <AuthGuard roles={["community_mobiliser"]}>
-            <HierarchyPlaceholder />
+            <CommunityMobiliserDashboard />
           </AuthGuard>
         </Route>
 
