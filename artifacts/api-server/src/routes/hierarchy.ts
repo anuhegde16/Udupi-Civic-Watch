@@ -481,7 +481,8 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
              COUNT(DISTINCT sv.id)::int AS "supervisorCount",
              COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
              COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount"
+             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
+             COUNT(DISTINCT r.id)::int AS "totalCount"
       FROM health_inspectors hi
       LEFT JOIN supervisors sv ON sv.health_inspector_id = hi.id
       LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
@@ -498,7 +499,8 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
           SELECT sv.id, sv.name, sv.phone, sv.ward_names AS "wardNames",
                  COUNT(r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
                  COUNT(r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-                 COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount"
+                 COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
+                 COUNT(r.id)::int AS "totalCount"
           FROM supervisors sv
           LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
           LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
@@ -514,6 +516,168 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
     res.json({ healthInspectors });
   } catch (err) {
     logger.error({ err }, "Error fetching EE full hierarchy");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/env-engineer/health-inspector/:id/credentials ──────────────────
+// EE can update name, phone, or password for a health inspector under them.
+router.patch("/env-engineer/health-inspector/:id/credentials", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const hiId = parseInt(rawId, 10);
+  if (isNaN(hiId)) { res.status(400).json({ error: "Invalid health inspector ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    // Verify HI belongs to this EE
+    const hiCheck = await db.execute(sql`
+      SELECT id, name, phone FROM health_inspectors
+      WHERE id = ${hiId} AND environmental_engineer_id = ${Number(user.officerId)}
+      LIMIT 1
+    `);
+    if (!hiCheck.rows.length) {
+      res.status(403).json({ error: "Health inspector not under your team" });
+      return;
+    }
+    const existing = hiCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+    const oldEmail = `${existing.phone}@phone.local`;
+
+    // Pre-flight uniqueness check for phone change
+    if (newPhone !== existing.phone) {
+      const conflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (phone = ${existing.phone} OR email = ${oldEmail})
+        LIMIT 1
+      `);
+      if (conflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    const newHash = (password as string)?.trim()
+      ? await hashPassword((password as string).trim())
+      : null;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE health_inspectors SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${hiId}
+      `);
+
+      // Identify the users row by its immutable officer_id link, not by mutable phone/email.
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(hiId)} AND role = 'health_inspector'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(hiId)} AND role = 'health_inspector'
+            RETURNING id
+          `);
+
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for HI ${hiId}, got ${userUpdate.rows.length}`);
+      }
+    });
+
+    res.json({ id: hiId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating health inspector credentials");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/env-engineer/supervisor/:id/credentials ────────────────────────
+// EE can update name, phone, or password for a supervisor whose HI is under them.
+router.patch("/env-engineer/supervisor/:id/credentials", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const svId = parseInt(rawId, 10);
+  if (isNaN(svId)) { res.status(400).json({ error: "Invalid supervisor ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    // Verify supervisor → HI → EE chain
+    const svCheck = await db.execute(sql`
+      SELECT sv.id, sv.name, sv.phone FROM supervisors sv
+      JOIN health_inspectors hi ON hi.id = sv.health_inspector_id
+      WHERE sv.id = ${svId} AND hi.environmental_engineer_id = ${Number(user.officerId)}
+      LIMIT 1
+    `);
+    if (!svCheck.rows.length) {
+      res.status(403).json({ error: "Supervisor not under your team" });
+      return;
+    }
+    const existing = svCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+    const oldEmail = `${existing.phone}@phone.local`;
+
+    if (newPhone !== existing.phone) {
+      const conflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (phone = ${existing.phone} OR email = ${oldEmail})
+        LIMIT 1
+      `);
+      if (conflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    const newHash = (password as string)?.trim()
+      ? await hashPassword((password as string).trim())
+      : null;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE supervisors SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${svId}
+      `);
+
+      // Identify the users row by its immutable officer_id link, not by mutable phone/email.
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `);
+
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for supervisor ${svId}, got ${userUpdate.rows.length}`);
+      }
+    });
+
+    res.json({ id: svId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating supervisor credentials via EE");
     res.status(500).json({ error: "Internal server error" });
   }
 });

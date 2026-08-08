@@ -1,9 +1,20 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   Users,
@@ -12,7 +23,11 @@ import {
   AlertCircle,
   CheckCircle2,
   Wrench,
+  Pencil,
+  TrendingUp,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Supervisor = {
   id: number;
@@ -22,6 +37,7 @@ type Supervisor = {
   reportedCount: number;
   cleaningCount: number;
   cleanedCount: number;
+  totalCount: number;
 };
 
 type HealthInspector = {
@@ -32,12 +48,15 @@ type HealthInspector = {
   reportedCount: number;
   cleaningCount: number;
   cleanedCount: number;
+  totalCount: number;
   supervisors: Supervisor[];
 };
 
 type EeHierarchy = {
   healthInspectors: HealthInspector[];
 };
+
+// ─── Data hooks ───────────────────────────────────────────────────────────────
 
 function useHierarchy() {
   return useQuery<EeHierarchy>({
@@ -57,8 +76,123 @@ function useProfile() {
   });
 }
 
+// ─── Edit credentials modal ───────────────────────────────────────────────────
+
+type EditTarget = { id: number; name: string; phone: string; kind: "hi" | "supervisor" };
+
+function EditCredentialsModal({
+  target,
+  onClose,
+}: {
+  target: EditTarget;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [name, setName] = useState(target.name);
+  const [phone, setPhone] = useState(target.phone);
+  const [password, setPassword] = useState("");
+
+  const endpoint =
+    target.kind === "hi"
+      ? `/api/env-engineer/health-inspector/${target.id}/credentials`
+      : `/api/env-engineer/supervisor/${target.id}/credentials`;
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      customFetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim() || undefined,
+          phone: phone.trim() || undefined,
+          password: password.trim() || undefined,
+        }),
+      }),
+    onSuccess: () => {
+      toast({ title: "Credentials updated" });
+      qc.invalidateQueries({ queryKey: ["ee-hierarchy"] });
+      onClose();
+    },
+    onError: (err: any) => {
+      const msg = err?.message ?? "Failed to update credentials";
+      toast({ title: "Update failed", description: msg, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Edit credentials</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-name">Name</Label>
+            <Input
+              id="ec-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Full name"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-phone">Phone</Label>
+            <Input
+              id="ec-phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="10-digit mobile number"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ec-password">New password <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input
+              id="ec-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Leave blank to keep current password"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || (!name.trim() && !phone.trim() && !password.trim())}
+          >
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Resolution rate pill ─────────────────────────────────────────────────────
+
+function ResolutionPill({ cleaned, total }: { cleaned: number; total: number }) {
+  const rate = total > 0 ? Math.round((cleaned / total) * 100) : 0;
+  return (
+    <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+      <TrendingUp className="w-3 h-3" />
+      {rate}%
+    </span>
+  );
+}
+
+// ─── HI card ─────────────────────────────────────────────────────────────────
+
 function HiCard({ hi }: { hi: HealthInspector }) {
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
+
   const wardSet = useMemo(() => {
     const seen = new Set<string>();
     for (const sv of hi.supervisors) {
@@ -69,85 +203,135 @@ function HiCard({ hi }: { hi: HealthInspector }) {
   }, [hi.supervisors]);
 
   return (
-    <Card className="rounded-3xl border-border/50 overflow-hidden">
-      <button
-        type="button"
-        className="w-full text-left p-5 hover:bg-muted/30 transition-colors"
-        onClick={() => setExpanded((e) => !e)}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-black text-foreground text-base truncate">{hi.name}</span>
-              {hi.phone && (
-                <a href={`tel:${hi.phone}`} onClick={(e) => e.stopPropagation()} className="text-primary text-xs font-bold hover:underline shrink-0">
-                  {hi.phone}
-                </a>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground font-medium mb-3">
-              {hi.supervisorCount} supervisor{hi.supervisorCount !== 1 ? "s" : ""} · {wardSet.length} ward{wardSet.length !== 1 ? "s" : ""}
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
-                {hi.reportedCount} New
-              </span>
-              <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
-                {hi.cleaningCount} In Progress
-              </span>
-              <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
-                {hi.cleanedCount} Cleaned
-              </span>
-            </div>
-          </div>
-          <div className="shrink-0 text-muted-foreground mt-1">
-            {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-          </div>
-        </div>
-      </button>
+    <>
+      {editing && <EditCredentialsModal target={editing} onClose={() => setEditing(null)} />}
 
-      {/* Expanded: supervisor sub-cards */}
-      {expanded && hi.supervisors.length > 0 && (
-        <div className="border-t border-border/50 bg-muted/20 p-4 space-y-3">
-          {hi.supervisors.map((sv) => {
-            const svWards: string[] = Array.isArray(sv.wardNames) ? sv.wardNames : [];
-            return (
-              <div key={sv.id} className="bg-card border border-border/50 rounded-2xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-foreground text-sm">{sv.name}</span>
-                  {sv.phone && (
-                    <a href={`tel:${sv.phone}`} className="text-primary text-xs font-bold hover:underline">
-                      {sv.phone}
-                    </a>
-                  )}
-                </div>
-                {svWards.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {svWards.map((w) => (
-                      <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                        {w}
-                      </span>
-                    ))}
-                  </div>
+      <Card className="rounded-3xl border-border/50 overflow-hidden">
+        <button
+          type="button"
+          className="w-full text-left p-5 hover:bg-muted/30 transition-colors"
+          onClick={() => setExpanded((e) => !e)}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Name + phone + edit */}
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <span className="font-black text-foreground text-base truncate">{hi.name}</span>
+                {hi.phone && (
+                  <a
+                    href={`tel:${hi.phone}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-primary text-xs font-bold hover:underline shrink-0"
+                  >
+                    {hi.phone}
+                  </a>
                 )}
-                <div className="flex gap-2 flex-wrap">
-                  <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">{sv.reportedCount} New</span>
-                  <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">{sv.cleaningCount} In Progress</span>
-                  <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full border border-primary/20">{sv.cleanedCount} Cleaned</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditing({ id: hi.id, name: hi.name, phone: hi.phone, kind: "hi" });
+                  }}
+                  className="ml-auto shrink-0 p-1 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Edit health inspector credentials"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
               </div>
-            );
-          })}
-        </div>
-      )}
-      {expanded && hi.supervisors.length === 0 && (
-        <div className="border-t border-border/50 bg-muted/20 p-4 text-center text-sm text-muted-foreground">
-          No supervisors assigned yet.
-        </div>
-      )}
-    </Card>
+
+              <p className="text-xs text-muted-foreground font-medium mb-3">
+                {hi.supervisorCount} field officer{hi.supervisorCount !== 1 ? "s" : ""} · {wardSet.length} ward{wardSet.length !== 1 ? "s" : ""}
+              </p>
+
+              <div className="flex gap-2 flex-wrap">
+                <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
+                  {hi.reportedCount} New
+                </span>
+                <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
+                  {hi.cleaningCount} In Progress
+                </span>
+                <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
+                  {hi.cleanedCount} Cleaned
+                </span>
+                <ResolutionPill cleaned={hi.cleanedCount} total={hi.totalCount} />
+              </div>
+            </div>
+
+            <div className="shrink-0 text-muted-foreground mt-1">
+              {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+            </div>
+          </div>
+        </button>
+
+        {/* Expanded: supervisor sub-cards */}
+        {expanded && hi.supervisors.length > 0 && (
+          <div className="border-t border-border/50 bg-muted/20 p-4 space-y-3">
+            {hi.supervisors.map((sv) => {
+              const svWards: string[] = Array.isArray(sv.wardNames) ? sv.wardNames : [];
+              return (
+                <div key={sv.id} className="bg-card border border-border/50 rounded-2xl p-4">
+                  {/* Name + phone + edit */}
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="font-bold text-foreground text-sm">{sv.name}</span>
+                    {sv.phone && (
+                      <a href={`tel:${sv.phone}`} className="text-primary text-xs font-bold hover:underline">
+                        {sv.phone}
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing({ id: sv.id, name: sv.name, phone: sv.phone, kind: "supervisor" })
+                      }
+                      className="ml-auto p-1 rounded-full hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      aria-label="Edit field officer credentials"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {svWards.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {svWards.map((w) => (
+                        <span
+                          key={w}
+                          className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full"
+                        >
+                          {w}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 flex-wrap">
+                    <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">
+                      {sv.reportedCount} New
+                    </span>
+                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                      {sv.cleaningCount} In Progress
+                    </span>
+                    <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full border border-primary/20">
+                      {sv.cleanedCount} Cleaned
+                    </span>
+                    <ResolutionPill cleaned={sv.cleanedCount} total={sv.totalCount} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {expanded && hi.supervisors.length === 0 && (
+          <div className="border-t border-border/50 bg-muted/20 p-4 text-center text-sm text-muted-foreground">
+            No field officers assigned yet.
+          </div>
+        )}
+      </Card>
+    </>
   );
 }
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function EnvEngineerDashboard() {
   const { user } = useAuth();
@@ -155,12 +339,16 @@ export default function EnvEngineerDashboard() {
   const { data: hierarchy, isLoading: hierarchyLoading } = useHierarchy();
 
   const his = hierarchy?.healthInspectors ?? [];
-  const totals = useMemo(() => ({
-    reported: his.reduce((s, h) => s + h.reportedCount, 0),
-    cleaning: his.reduce((s, h) => s + h.cleaningCount, 0),
-    cleaned: his.reduce((s, h) => s + h.cleanedCount, 0),
-    supervisors: his.reduce((s, h) => s + h.supervisorCount, 0),
-  }), [his]);
+
+  const totals = useMemo(() => {
+    const reported = his.reduce((s, h) => s + h.reportedCount, 0);
+    const cleaning = his.reduce((s, h) => s + h.cleaningCount, 0);
+    const cleaned = his.reduce((s, h) => s + h.cleanedCount, 0);
+    const total = his.reduce((s, h) => s + h.totalCount, 0);
+    const supervisors = his.reduce((s, h) => s + h.supervisorCount, 0);
+    const resolutionRate = total > 0 ? Math.round((cleaned / total) * 100) : 0;
+    return { reported, cleaning, cleaned, total, supervisors, resolutionRate };
+  }, [his]);
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
@@ -175,14 +363,15 @@ export default function EnvEngineerDashboard() {
           {profileLoading ? "Loading…" : (profile?.name ?? user?.name)}
         </h1>
         <p className="text-sm text-muted-foreground font-medium">
-          {profile?.panchayat_name ?? "Udupi"} · {his.length} Health Inspector{his.length !== 1 ? "s" : ""} · {totals.supervisors} Supervisors
+          {profile?.panchayat_name ?? "Udupi"} · {his.length} Health Inspector{his.length !== 1 ? "s" : ""} · {totals.supervisors} Field Officers
         </p>
 
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: "New Reports", value: totals.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
             { label: "In Progress", value: totals.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50" },
             { label: "Cleaned", value: totals.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
+            { label: "Resolution Rate", value: `${totals.resolutionRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "text-emerald-600", bg: "bg-emerald-50" },
           ].map((s) => (
             <div key={s.label} className={`${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
               <div className={s.color}>{s.icon}</div>
