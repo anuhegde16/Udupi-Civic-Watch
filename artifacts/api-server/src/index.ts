@@ -457,6 +457,10 @@ async function seedUdupiHierarchy() {
       { name: "Mr. Sachin",           phone: "7676880597", hi: "9535052544", wards: [[22,"76 Badagubettu"],[31,"Bailoor"],[23,"Chitpady"]] },
       { name: "Mr. Shreekanth",       phone: "9880605830", hi: "9845905977", wards: [[30,"Olakadu"],[29,"Tenkapete"],[34,"Shiribeedu"]] },
       { name: "Mr. Prashanth",        phone: "9901995778", hi: "9845905977", wards: [[33,"Ajjarakadu"],[32,"Kinnimulky"]] },
+      // East Division (Manipal Division) — under HI Prakash Prabhu
+      { name: "Mr. Suresh Shetty",    phone: "8861038802", hi: "9964213243", wards: [[11,"Kakkunje"],[12,"Karamballi"],[13,"Moodu Perampalli"],[19,"Moodu Sagri"]] },
+      { name: "Mr. Ravi",             phone: "9035088749", hi: "9964213243", wards: [[20,"Indrali"],[18,"Manipal"],[21,"Indira Nagar"],[24,"Kasthurba Nagar"]] },
+      { name: "Mr. Boja Naik",        phone: "9880625188", hi: "9964213243", wards: [[16,"Parkala"],[15,"Shettibettu"],[14,"Saralabettu"],[17,"Eshwar Nagar"]] },
     ] as const;
 
     for (const sv of supervisorList) {
