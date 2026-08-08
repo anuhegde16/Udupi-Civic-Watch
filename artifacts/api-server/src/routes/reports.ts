@@ -401,18 +401,31 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   if (user.role === "panchayat_admin" || user.role === "commissioner") {
-    if (!user.panchayatName || !row.report.assignedOfficerId) {
+    if (!user.panchayatName) {
       res.status(403).json({ error: "Access denied" });
       return;
     }
-    const [assignedOfficer] = await db
-      .select({ panchayatName: officersTable.panchayatName })
-      .from(officersTable)
-      .where(eq(officersTable.id, row.report.assignedOfficerId))
-      .limit(1);
-    if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
-      res.status(403).json({ error: "Access denied: report is not in your panchayat" });
-      return;
+    // Udupi: reports are not officer-assigned — authorize by geographic containment
+    if (user.panchayatName === "Udupi") {
+      const { inUdupi: isInUdupi } = await import("../lib/geo");
+      if (!isInUdupi(row.report.latitude, row.report.longitude)) {
+        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+        return;
+      }
+    } else {
+      if (!row.report.assignedOfficerId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const [assignedOfficer] = await db
+        .select({ panchayatName: officersTable.panchayatName })
+        .from(officersTable)
+        .where(eq(officersTable.id, row.report.assignedOfficerId))
+        .limit(1);
+      if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
+        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+        return;
+      }
     }
   }
 
@@ -457,18 +470,31 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
       return;
     }
   } else if (user.role === "panchayat_admin" || user.role === "commissioner") {
-    if (!user.panchayatName || !existing.assignedOfficerId) {
+    if (!user.panchayatName) {
       res.status(403).json({ error: "Access denied" });
       return;
     }
-    const [assignedOfficer] = await db
-      .select({ panchayatName: officersTable.panchayatName })
-      .from(officersTable)
-      .where(eq(officersTable.id, existing.assignedOfficerId))
-      .limit(1);
-    if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
-      res.status(403).json({ error: "Access denied: report is not in your panchayat" });
-      return;
+    // Udupi: reports are not officer-assigned — authorize by geographic containment
+    if (user.panchayatName === "Udupi") {
+      const { inUdupi: isInUdupi } = await import("../lib/geo");
+      if (!isInUdupi(existing.latitude, existing.longitude)) {
+        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+        return;
+      }
+    } else {
+      if (!existing.assignedOfficerId) {
+        res.status(403).json({ error: "Access denied" });
+        return;
+      }
+      const [assignedOfficer] = await db
+        .select({ panchayatName: officersTable.panchayatName })
+        .from(officersTable)
+        .where(eq(officersTable.id, existing.assignedOfficerId))
+        .limit(1);
+      if (!assignedOfficer || assignedOfficer.panchayatName !== user.panchayatName) {
+        res.status(403).json({ error: "Access denied: report is not in your panchayat" });
+        return;
+      }
     }
   }
 

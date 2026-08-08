@@ -92,6 +92,8 @@ export type PanchayatMapReport = {
   cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
   reporterEmail?: string | null;
   createdAt?: string | null;
+  /** Set for Udupi reports — the geofence ward name the report falls inside, e.g. "Udupi Ward 11". */
+  geographicWardName?: string | null;
 };
 
 interface PanchayatMapProps {

@@ -203,7 +203,7 @@ import {
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
 
-const wardNames: string[] = geofencesData.features
+const allWardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
   .map((f) => (f.properties as any)?.name ?? "");
 
@@ -310,6 +310,16 @@ function useDeleteOfficer() {
 export default function MasterDashboard() {
   const { user } = useAuth();
   const isCommissioner = user?.role === "commissioner";
+  const isUdupi = user?.panchayatName === "Udupi";
+  // Show only the wards that belong to the logged-in admin's panchayat.
+  // Udupi ward geofence names are prefixed "Udupi Ward N"; Saligrama ones are plain "Ward N".
+  const wardNames = useMemo(
+    () =>
+      isUdupi
+        ? allWardNames.filter((n) => n.startsWith("Udupi Ward"))
+        : allWardNames.filter((n) => !n.startsWith("Udupi Ward")),
+    [isUdupi],
+  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"dashboard" | "team">("dashboard");
@@ -529,7 +539,9 @@ export default function MasterDashboard() {
 
   // Wards that have at least one report matching the active status filter
   const allReports = reportsData?.reports ?? [];
-  const filteredWardNames = statusFilter === "all"
+  // For Udupi, reports are not assigned to officer IDs (supervisors), so skip the
+  // officer-based status filter — all wards are always visible in the coverage grid.
+  const filteredWardNames = statusFilter === "all" || isUdupi
     ? wardNames
     : wardNames.filter((ward) => {
         const officer = officers.find((o) => o.areaName === ward);
@@ -903,21 +915,18 @@ export default function MasterDashboard() {
       {/* Ward officer slide-out sheet */}
       {(() => {
         const wardOfficer = selectedWard ? officers.find((o) => o.areaName === selectedWard) : null;
-        const wardReports = wardOfficer
-          ? (reportsData?.reports ?? []).filter(
-              (r) => r.assignedOfficerId === wardOfficer.id && r.status !== "cleaned"
+        // For Udupi: reports carry a geographicWardName instead of assignedOfficerId, so we match by ward name.
+        // For Saligrama: use the classic assignedOfficerId match.
+        const allReportsForWard = wardOfficer
+          ? (reportsData?.reports ?? []).filter((r) =>
+              isUdupi
+                ? r.geographicWardName === selectedWard
+                : r.assignedOfficerId === wardOfficer.id
             )
           : [];
-        const pendingCount = wardOfficer
-          ? (reportsData?.reports ?? []).filter(
-              (r) => r.assignedOfficerId === wardOfficer.id && r.status === "reported"
-            ).length
-          : 0;
-        const cleaningCount = wardOfficer
-          ? (reportsData?.reports ?? []).filter(
-              (r) => r.assignedOfficerId === wardOfficer.id && r.status === "cleaning"
-            ).length
-          : 0;
+        const wardReports    = allReportsForWard.filter((r) => r.status !== "cleaned");
+        const pendingCount   = allReportsForWard.filter((r) => r.status === "reported").length;
+        const cleaningCount  = allReportsForWard.filter((r) => r.status === "cleaning").length;
 
         return (
           <Sheet open={!!selectedWard} onOpenChange={(open) => { if (!open) setSelectedWard(null); }}>
@@ -934,16 +943,18 @@ export default function MasterDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-black text-base leading-tight truncate">{wardOfficer.name}</p>
-                      <p className="text-indigo-200 text-xs font-medium mt-0.5">Field Officer</p>
+                      <p className="text-indigo-200 text-xs font-medium mt-0.5">{isUdupi ? "Supervisor" : "Field Officer"}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(wardOfficer)}
-                      className="w-8 h-8 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors shrink-0"
-                      title="Edit officer"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    {!isUdupi && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(wardOfficer)}
+                        className="w-8 h-8 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition-colors shrink-0"
+                        title="Edit officer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-3 mt-4">
@@ -1040,40 +1051,42 @@ export default function MasterDashboard() {
                     )}
                   </div>
 
-                  {/* Officer actions footer */}
-                  <div className="px-6 pb-6 pt-2 border-t border-border/50 flex gap-2 shrink-0">
-                    <Button
-                      variant="outline"
-                      className="flex-1 rounded-xl h-10 font-bold text-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                      onClick={() => openEdit(wardOfficer)}
-                    >
-                      <Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="rounded-xl h-10 font-bold text-sm border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 px-3">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="rounded-[2rem] p-8">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
-                          <AlertDialogDescription className="text-base text-muted-foreground mt-3">
-                            This will permanently delete <strong>{wardOfficer.name}</strong>. Assigned reports will become unassigned.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter className="mt-6 gap-2">
-                          <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive rounded-xl font-black h-11"
-                            onClick={() => handleDelete(wardOfficer.id)}
-                          >
-                            Yes, remove
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  {/* Officer actions footer — hidden for Udupi supervisors (read-only) */}
+                  {!isUdupi && (
+                    <div className="px-6 pb-6 pt-2 border-t border-border/50 flex gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-xl h-10 font-bold text-sm border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                        onClick={() => openEdit(wardOfficer)}
+                      >
+                        <Pencil className="w-3.5 h-3.5 mr-2" /> Edit Details
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" className="rounded-xl h-10 font-bold text-sm border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 px-3">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-[2rem] p-8">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                              This will permanently delete <strong>{wardOfficer.name}</strong>. Assigned reports will become unassigned.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter className="mt-6 gap-2">
+                            <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive rounded-xl font-black h-11"
+                              onClick={() => handleDelete(wardOfficer.id)}
+                            >
+                              Yes, remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
                 </>
               )}
             </SheetContent>

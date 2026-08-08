@@ -32,7 +32,7 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 }
 
 // Ray-casting point-in-polygon. Ring coords are GeoJSON [lon, lat] pairs.
-function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
+export function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boolean {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const xi = ring[i][0], yi = ring[i][1]; // lon, lat
@@ -161,4 +161,45 @@ export async function findOfficerForLocation(
   if (closestOfficer) return closestOfficer;
 
   return officers[0] ?? null;
+}
+
+// ── Udupi geographic helpers (shared across routes) ──────────────────────────
+
+export const udupiWardRings: { name: string; ring: [number, number][] }[] = (
+  geofencesData.features as any[]
+)
+  .filter(
+    (f) =>
+      f.geometry.type === "Polygon" &&
+      (f.properties as any)?.type === "ward" &&
+      ((f.properties as any)?.name as string)?.startsWith("Udupi Ward"),
+  )
+  .map((f) => ({
+    name: (f.properties as any).name as string,
+    ring: f.geometry.coordinates[0] as [number, number][],
+  }));
+
+export const udupiBox = udupiWardRings.reduce(
+  (b, { ring }) => {
+    for (const [lng, lat] of ring) {
+      if (lat < b.minLat) b.minLat = lat;
+      if (lat > b.maxLat) b.maxLat = lat;
+      if (lng < b.minLng) b.minLng = lng;
+      if (lng > b.maxLng) b.maxLng = lng;
+    }
+    return b;
+  },
+  { minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 },
+);
+
+/** Returns true when lat/lng falls inside any Udupi ward polygon. */
+export function inUdupi(lat: number, lng: number): boolean {
+  if (
+    lat < udupiBox.minLat ||
+    lat > udupiBox.maxLat ||
+    lng < udupiBox.minLng ||
+    lng > udupiBox.maxLng
+  )
+    return false;
+  return udupiWardRings.some(({ ring }) => pointInPolygon(lat, lng, ring));
 }

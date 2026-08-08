@@ -5,6 +5,7 @@ import { requirePanchayatAdmin } from "../lib/auth";
 import geofencesData from "../data/geofences.json";
 import { logger } from "../lib/logger";
 import { generateInsightNarrative } from "../lib/smart-insights";
+import { inUdupi, udupiWardRings, udupiBox, pointInPolygon as pip } from "../lib/geo";
 
 const router: IRouter = Router();
 
@@ -13,13 +14,72 @@ const wardNames: string[] = geofencesData.features
   .map((f) => (f.properties as any)?.name ?? "");
 
 router.get("/panchayat/wards", requirePanchayatAdmin, async (req, res): Promise<void> => {
-  res.json({ wards: wardNames });
+  const user = (req as any).user;
+  const panchayatWards =
+    user?.panchayatName === "Udupi"
+      ? wardNames.filter((n) => n.startsWith("Udupi Ward"))
+      : wardNames.filter((n) => !n.startsWith("Udupi Ward"));
+  res.json({ wards: panchayatWards });
 });
 
 router.get("/panchayat/officers", requirePanchayatAdmin, async (req, res): Promise<void> => {
   const user = (req as any).user;
   if (!user.panchayatName) {
     res.json({ officers: [], total: 0 });
+    return;
+  }
+
+  // Udupi uses the supervisors table (multi-ward per supervisor, no officers rows).
+  // Compute per-ward report counts via geographic PiP against active reports.
+  if (user.panchayatName === "Udupi") {
+    const { minLat, maxLat, minLng, maxLng } = udupiBox;
+    const [svRows, rawReports] = await Promise.all([
+      db.execute(sql`
+        SELECT id, name, phone, panchayat_name, ward_names, created_at
+        FROM supervisors
+        WHERE panchayat_name = 'Udupi'
+        ORDER BY id
+      `),
+      db
+        .select({ id: reportsTable.id, latitude: reportsTable.latitude, longitude: reportsTable.longitude, status: reportsTable.status })
+        .from(reportsTable)
+        .where(
+          and(
+            sql`${reportsTable.latitude}  BETWEEN ${minLat} AND ${maxLat}`,
+            sql`${reportsTable.longitude} BETWEEN ${minLng} AND ${maxLng}`,
+            isNull(reportsTable.deletedAt),
+          ),
+        ),
+    ]);
+    const activeReports = rawReports.filter((r) => inUdupi(r.latitude, r.longitude));
+
+    const expanded: any[] = [];
+    for (const sv of svRows.rows as any[]) {
+      const wards: string[] = Array.isArray(sv.ward_names)
+        ? sv.ward_names
+        : (JSON.parse(sv.ward_names ?? "[]") as string[]);
+      for (const wn of wards) {
+        const m = (wn as string).match(/^Ward (\d+)\//);
+        if (!m) continue;
+        const areaName = `Udupi Ward ${m[1]}`;
+        const wardRing = udupiWardRings.find((w) => w.name === areaName)?.ring;
+        const wardReports = wardRing
+          ? activeReports.filter((r) => pip(r.latitude, r.longitude, wardRing))
+          : [];
+        expanded.push({
+          id: sv.id,
+          name: sv.name,
+          email: `${sv.phone}@phone.local`,
+          phone: sv.phone,
+          areaName,
+          panchayatName: "Udupi",
+          reportCount: wardReports.length,
+          pendingCount: wardReports.filter((r) => r.status !== "cleaned").length,
+          createdAt: sv.created_at,
+        });
+      }
+    }
+    res.json({ officers: expanded, total: expanded.length });
     return;
   }
 
@@ -59,6 +119,38 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
 
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const archived = req.query.archived === "true";
+
+  // Udupi: reports aren't assigned to officers — use geographic bounding-box + PiP filter
+  if (user.panchayatName === "Udupi") {
+    const { minLat, maxLat, minLng, maxLng } = udupiBox;
+    const boxConds: any[] = [
+      sql`${reportsTable.latitude}  BETWEEN ${minLat} AND ${maxLat}`,
+      sql`${reportsTable.longitude} BETWEEN ${minLng} AND ${maxLng}`,
+    ];
+    if (archived) {
+      boxConds.push(isNotNull(reportsTable.deletedAt));
+    } else {
+      boxConds.push(isNull(reportsTable.deletedAt));
+      if (status) boxConds.push(eq(reportsTable.status, status));
+    }
+    const rawRows = await db
+      .select({ report: reportsTable })
+      .from(reportsTable)
+      .where(and(...boxConds))
+      .orderBy(sql`${reportsTable.createdAt} DESC`)
+      .limit(500);
+
+    const inArea = rawRows.filter(({ report }) => inUdupi(report.latitude, report.longitude));
+    const formatted = inArea.slice(0, 200).map(({ report }) => {
+      const { reporterIp: _ri, ...safeReport } = report;
+      // Annotate each report with the ward it falls inside so the frontend can
+      // filter ward-level slide-out reports without knowing officer IDs.
+      const wardMatch = udupiWardRings.find(({ ring }) => pip(report.latitude, report.longitude, ring));
+      return { ...safeReport, assignedOfficer: null, geographicWardName: wardMatch?.name ?? null };
+    });
+    res.json({ reports: formatted, total: inArea.length });
+    return;
+  }
 
   const officerRows = await db
     .select({ id: officersTable.id })
@@ -122,6 +214,35 @@ router.delete("/panchayat/reports/:id", requirePanchayatAdmin, async (req, res):
     return;
   }
 
+  // Udupi: authorize by geographic containment (no officers rows to check against)
+  if (user.panchayatName === "Udupi") {
+    const [report] = await db
+      .select({ id: reportsTable.id, latitude: reportsTable.latitude, longitude: reportsTable.longitude, deletedAt: reportsTable.deletedAt })
+      .from(reportsTable)
+      .where(eq(reportsTable.id, id))
+      .limit(1);
+
+    if (!report || !inUdupi(report.latitude, report.longitude)) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const [archived] = await db
+      .update(reportsTable)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(reportsTable.id, id), isNull(reportsTable.deletedAt)))
+      .returning();
+
+    if (!archived) {
+      res.status(404).json({ error: "Report not found or already archived" });
+      return;
+    }
+
+    logger.info({ reportId: id, panchayatName: "Udupi" }, "Report archived (soft-deleted) by Udupi panchayat admin");
+    res.json({ success: true, id });
+    return;
+  }
+
   const officerRows = await db
     .select({ id: officersTable.id })
     .from(officersTable)
@@ -163,6 +284,55 @@ router.get("/panchayat/stats", requirePanchayatAdmin, async (req, res): Promise<
   const user = (req as any).user;
   if (!user.panchayatName) {
     res.json({ total: 0, reported: 0, cleaning: 0, cleaned: 0, wardStats: [] });
+    return;
+  }
+
+  // Udupi: geographic filtering — supervisors, not officers
+  if (user.panchayatName === "Udupi") {
+    const { minLat, maxLat, minLng, maxLng } = udupiBox;
+    const rawAll = await db
+      .select()
+      .from(reportsTable)
+      .where(
+        and(
+          sql`${reportsTable.latitude}  BETWEEN ${minLat} AND ${maxLat}`,
+          sql`${reportsTable.longitude} BETWEEN ${minLng} AND ${maxLng}`,
+          isNull(reportsTable.deletedAt),
+        ),
+      );
+    const activeReports = rawAll.filter((r) => inUdupi(r.latitude, r.longitude));
+
+    const total    = activeReports.length;
+    const reported = activeReports.filter((r) => r.status === "reported").length;
+    const cleaning = activeReports.filter((r) => r.status === "cleaning").length;
+    const cleaned  = activeReports.filter((r) => r.status === "cleaned").length;
+
+    const svRows = await db.execute(sql`
+      SELECT id, name, phone, ward_names FROM supervisors WHERE panchayat_name = 'Udupi' ORDER BY id
+    `);
+    const wardStats: any[] = [];
+    for (const sv of svRows.rows as any[]) {
+      const wards: string[] = Array.isArray(sv.ward_names)
+        ? sv.ward_names
+        : (JSON.parse(sv.ward_names ?? "[]") as string[]);
+      for (const wn of wards) {
+        const m = (wn as string).match(/^Ward (\d+)\//);
+        if (!m) continue;
+        const wardName = `Udupi Ward ${m[1]}`;
+        const wardRing = udupiWardRings.find((w) => w.name === wardName)?.ring;
+        const wardReports = wardRing
+          ? activeReports.filter((r) => pip(r.latitude, r.longitude, wardRing))
+          : [];
+        wardStats.push({
+          wardName,
+          officerName: sv.name,
+          officerId: sv.id,
+          reportCount: wardReports.length,
+          pendingCount: wardReports.filter((r) => r.status !== "cleaned").length,
+        });
+      }
+    }
+    res.json({ total, reported, cleaning, cleaned, wardStats });
     return;
   }
 
