@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { RoleMap, type RoleMapReport, type WardGroup } from "@/components/role-map";
 import {
   Loader2,
   Users,
@@ -173,6 +174,22 @@ function EditCredentialsModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function useMapReports() {
+  return useQuery<{ reports: RoleMapReport[] }>({
+    queryKey: ["ee-map-reports"],
+    queryFn: () => customFetch("/api/env-engineer/map-reports"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** "Ward N/TownName" → "Udupi Ward N" */
+function svWardToGeoName(wn: string): string {
+  const m = wn.match(/^Ward (\d+)/);
+  return m ? `Udupi Ward ${m[1]}` : wn;
 }
 
 // ─── Resolution rate pill ─────────────────────────────────────────────────────
@@ -350,6 +367,22 @@ export default function EnvEngineerDashboard() {
     return { reported, cleaning, cleaned, total, supervisors, resolutionRate };
   }, [his]);
 
+  const { data: mapData } = useMapReports();
+  const mapReports = mapData?.reports ?? [];
+  const wardGroups = useMemo((): WardGroup[] =>
+    his.map(hi => ({
+      id: hi.id,
+      name: hi.name,
+      wardGeoNames: hi.supervisors.flatMap(sv =>
+        (Array.isArray(sv.wardNames) ? sv.wardNames : []).map(svWardToGeoName)
+      ),
+      openCount: hi.reportedCount,
+      cleaningCount: hi.cleaningCount,
+      cleanedCount: hi.cleanedCount,
+      totalCount: hi.totalCount,
+    })), [his]);
+  const wardGeoNames = useMemo(() => wardGroups.flatMap(g => g.wardGeoNames), [wardGroups]);
+
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {/* Header */}
@@ -383,6 +416,18 @@ export default function EnvEngineerDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Coverage map — coloured by health inspector zone */}
+      {wardGeoNames.length > 0 && (
+        <RoleMap
+          reports={mapReports}
+          wardGeoNames={wardGeoNames}
+          wardGroups={wardGroups}
+          title="Zone Coverage Map"
+          subtitle="Wards coloured by health inspector zone · orange outline = <50% resolved"
+          height="340px"
+        />
+      )}
 
       {/* HI cards */}
       {hierarchyLoading ? (

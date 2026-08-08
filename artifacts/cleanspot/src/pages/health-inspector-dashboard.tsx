@@ -17,6 +17,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { RoleMap, type RoleMapReport, type WardGroup } from "@/components/role-map";
 import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
@@ -104,6 +105,22 @@ function useSupervisorReports(supervisorId: number | null) {
     enabled: supervisorId !== null,
     staleTime: 60_000,
   });
+}
+
+function useMapReports() {
+  return useQuery<{ reports: RoleMapReport[] }>({
+    queryKey: ["hi-map-reports"],
+    queryFn: () => customFetch("/api/health-inspector/map-reports"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** "Ward N/TownName" → "Udupi Ward N" */
+function svWardToGeoName(wn: string): string {
+  const m = wn.match(/^Ward (\d+)/);
+  return m ? `Udupi Ward ${m[1]}` : wn;
 }
 
 // ── Edit Credentials Modal ────────────────────────────────────────────────────
@@ -476,6 +493,20 @@ export default function HealthInspectorDashboard() {
 
   const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
+  const { data: mapData } = useMapReports();
+  const mapReports = mapData?.reports ?? [];
+  const wardGroups = useMemo((): WardGroup[] =>
+    supervisors.map(sv => ({
+      id: sv.id,
+      name: sv.name,
+      wardGeoNames: (Array.isArray(sv.wardNames) ? sv.wardNames : []).map(svWardToGeoName),
+      openCount: sv.reportedCount,
+      cleaningCount: sv.cleaningCount,
+      cleanedCount: sv.cleanedCount,
+      totalCount: sv.totalCount,
+    })), [supervisors]);
+  const wardGeoNames = useMemo(() => wardGroups.flatMap(g => g.wardGeoNames), [wardGroups]);
+
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {/* Header */}
@@ -510,6 +541,18 @@ export default function HealthInspectorDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Coverage map — coloured by field officer */}
+      {wardGeoNames.length > 0 && (
+        <RoleMap
+          reports={mapReports}
+          wardGeoNames={wardGeoNames}
+          wardGroups={wardGroups}
+          title="Coverage Overview"
+          subtitle="Wards coloured by field officer · tap a pin for details"
+          height="340px"
+        />
+      )}
 
       {/* Field Officer cards */}
       {statsLoading ? (

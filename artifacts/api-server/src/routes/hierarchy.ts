@@ -17,6 +17,7 @@ import {
   type SessionUser,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { udupiWardRings, udupiBox, pointInPolygon as pip } from "../lib/geo";
 
 const router: IRouter = Router();
 
@@ -1030,6 +1031,287 @@ router.patch("/commissioner/supervisor/:id/credentials", requireCommissioner, as
     res.json({ id: svId, name: newName, phone: newPhone });
   } catch (err) {
     logger.error({ err }, "Error updating supervisor credentials via commissioner");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAP-REPORT ENDPOINTS
+// Return lat/lng + role-contextual fields for the dashboard maps.
+// All use geographic PiP filtering (Udupi reports are not officer-assigned).
+// Ward name format returned: "Udupi Ward N" to match geofences.json polygons.
+//
+// Correctness invariants:
+//  1. Bounding-box WHERE clause is derived from the role's specific ward ring set,
+//     NOT the full udupiBox — this avoids the over-broad LIMIT cutoff bug where
+//     a global "LIMIT 500" could exclude in-scope reports that sit past the cutoff.
+//  2. No row-level LIMIT is applied. PiP is the authoritative scope filter; the
+//     tight bbox means only geometrically adjacent reports reach the app layer.
+//  3. Commissioner endpoint uses only the rings assigned to the commissioner's
+//     panchayat — it never falls back to all udupiWardRings — preventing
+//     cross-panchayat report-location disclosure.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Compute a tight bounding box from a set of ward rings. */
+function ringsBbox(rings: { ring: [number, number][] }[]): {
+  minLat: number; maxLat: number; minLng: number; maxLng: number;
+} {
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const { ring } of rings) {
+    for (const [lng, lat] of ring) {  // GeoJSON order: [longitude, latitude]
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+  }
+  return { minLat, maxLat, minLng, maxLng };
+}
+
+// ── GET /api/community-mobiliser/map-reports ──────────────────────────────────
+router.get("/community-mobiliser/map-reports", requireCommunityMobiliser, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  try {
+    const profRow = await db.execute(sql`
+      SELECT ward_number FROM community_mobilisers WHERE id = ${Number(user.officerId)} LIMIT 1
+    `);
+    if (!profRow.rows.length) { res.status(404).json({ error: "Profile not found" }); return; }
+    const wardNumber = (profRow.rows[0] as any).ward_number as number;
+    const geoWardName = `Udupi Ward ${wardNumber}`;
+    const wardEntry = udupiWardRings.find(w => w.name === geoWardName);
+    if (!wardEntry) { res.json({ reports: [], geoWardName }); return; }
+
+    // Tight bbox scoped to this mobiliser's single ward — no global cutoff
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox([wardEntry]);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude, status,
+             image_url AS "imageUrl", image_urls AS "imageUrls",
+             waste_types AS "wasteTypes", waste_severity AS "wasteSeverity",
+             created_at AS "createdAt"
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+      ORDER BY created_at DESC
+    `);
+    const reports = (rawRows.rows as any[])
+      .filter(r => pip(Number(r.latitude), Number(r.longitude), wardEntry.ring))
+      .map(r => ({ ...r, wardName: geoWardName }));
+    res.json({ reports, geoWardName });
+  } catch (err) {
+    logger.error({ err }, "Error fetching community mobiliser map reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/supervisor/map-reports ───────────────────────────────────────────
+router.get("/supervisor/map-reports", requireSupervisor, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  try {
+    const profRow = await db.execute(sql`
+      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
+    `);
+    if (!profRow.rows.length) { res.status(404).json({ error: "Profile not found" }); return; }
+    const wardNames: string[] = (profRow.rows[0] as any).ward_names as string[];
+
+    // Convert "Ward N/Town" → "Udupi Ward N", gather rings
+    const rings: { name: string; ring: [number, number][] }[] = [];
+    for (const wn of wardNames) {
+      const m = wn.match(/^Ward (\d+)/);
+      if (!m) continue;
+      const geoName = `Udupi Ward ${m[1]}`;
+      const entry = udupiWardRings.find(w => w.name === geoName);
+      if (entry) rings.push(entry);
+    }
+    if (!rings.length) { res.json({ reports: [] }); return; }
+
+    // Tight bbox scoped to supervisor's own wards — no global cutoff
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude, status,
+             image_url AS "imageUrl", image_urls AS "imageUrls",
+             waste_types AS "wasteTypes", created_at AS "createdAt"
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+      ORDER BY created_at DESC
+    `);
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = rings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.name }];
+    });
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "Error fetching supervisor map reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/health-inspector/map-reports ─────────────────────────────────────
+router.get("/health-inspector/map-reports", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  try {
+    const svRows = await db.execute(sql`
+      SELECT id, name, ward_names FROM supervisors
+      WHERE health_inspector_id = ${Number(user.officerId)}
+    `);
+
+    const wardToSv = new Map<string, { id: number; name: string }>();
+    for (const sv of svRows.rows as any[]) {
+      for (const wn of (sv.ward_names as string[] ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        wardToSv.set(`Udupi Ward ${m[1]}`, { id: sv.id as number, name: sv.name as string });
+      }
+    }
+    if (!wardToSv.size) { res.json({ reports: [] }); return; }
+
+    // Tight bbox scoped to this HI's wards only — no global cutoff
+    const relevantRings = udupiWardRings.filter(w => wardToSv.has(w.name));
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude, status,
+             image_url AS "imageUrl", image_urls AS "imageUrls",
+             waste_types AS "wasteTypes", created_at AS "createdAt"
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+      ORDER BY created_at DESC
+    `);
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = relevantRings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      const sv = wardToSv.get(match.name)!;
+      return [{ ...r, wardName: match.name, supervisorId: sv.id, supervisorName: sv.name }];
+    });
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "Error fetching health inspector map reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/env-engineer/map-reports ─────────────────────────────────────────
+router.get("/env-engineer/map-reports", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  try {
+    const svRows = await db.execute(sql`
+      SELECT sv.id AS sv_id, sv.name AS sv_name, sv.ward_names,
+             hi.id AS hi_id, hi.name AS hi_name
+      FROM supervisors sv
+      JOIN health_inspectors hi ON hi.id = sv.health_inspector_id
+      WHERE hi.environmental_engineer_id = ${Number(user.officerId)}
+    `);
+
+    const wardToCtx = new Map<string, { svId: number; svName: string; hiId: number; hiName: string }>();
+    for (const row of svRows.rows as any[]) {
+      for (const wn of (row.ward_names as string[] ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        wardToCtx.set(`Udupi Ward ${m[1]}`, {
+          svId: row.sv_id as number, svName: row.sv_name as string,
+          hiId: row.hi_id as number, hiName: row.hi_name as string,
+        });
+      }
+    }
+    if (!wardToCtx.size) { res.json({ reports: [] }); return; }
+
+    // Tight bbox scoped to this EE's wards only — no global cutoff
+    const relevantRings = udupiWardRings.filter(w => wardToCtx.has(w.name));
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude, status,
+             image_url AS "imageUrl", image_urls AS "imageUrls",
+             waste_types AS "wasteTypes", created_at AS "createdAt"
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+      ORDER BY created_at DESC
+    `);
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = relevantRings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      const ctx = wardToCtx.get(match.name)!;
+      return [{
+        ...r, wardName: match.name,
+        supervisorId: ctx.svId, supervisorName: ctx.svName,
+        healthInspectorId: ctx.hiId, healthInspectorName: ctx.hiName,
+      }];
+    });
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "Error fetching env engineer map reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/commissioner/map-reports ─────────────────────────────────────────
+router.get("/commissioner/map-reports", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+  try {
+    const svRows = await db.execute(sql`
+      SELECT sv.id AS sv_id, sv.name AS sv_name, sv.ward_names,
+             hi.id AS hi_id, hi.name AS hi_name
+      FROM supervisors sv
+      JOIN health_inspectors hi ON hi.id = sv.health_inspector_id
+      JOIN environmental_engineers ee ON ee.id = hi.environmental_engineer_id
+      WHERE ee.panchayat_name = ${panchayat}
+    `);
+
+    const wardToCtx = new Map<string, { svId: number; svName: string; hiId: number; hiName: string }>();
+    for (const row of svRows.rows as any[]) {
+      for (const wn of (row.ward_names as string[] ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        wardToCtx.set(`Udupi Ward ${m[1]}`, {
+          svId: row.sv_id as number, svName: row.sv_name as string,
+          hiId: row.hi_id as number, hiName: row.hi_name as string,
+        });
+      }
+    }
+
+    // Scope rings strictly to wards assigned to THIS commissioner's panchayat.
+    // Never fall back to all udupiWardRings — that would expose other panchayats.
+    const relevantRings = udupiWardRings.filter(w => wardToCtx.has(w.name));
+    if (!relevantRings.length) { res.json({ reports: [] }); return; }
+
+    // Tight bbox derived from the panchayat's own ward set — no global cutoff
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude, status,
+             image_url AS "imageUrl", image_urls AS "imageUrls",
+             waste_types AS "wasteTypes", created_at AS "createdAt"
+      FROM reports
+      WHERE deleted_at IS NULL
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+      ORDER BY created_at DESC
+    `);
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      // PiP against only the assigned rings — never leaks other-panchayat coordinates
+      const match = relevantRings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      const ctx = wardToCtx.get(match.name);
+      return [{
+        ...r, wardName: match.name,
+        supervisorId:        ctx?.svId   ?? null,
+        supervisorName:      ctx?.svName ?? null,
+        healthInspectorId:   ctx?.hiId   ?? null,
+        healthInspectorName: ctx?.hiName ?? null,
+      }];
+    });
+    res.json({ reports });
+  } catch (err) {
+    logger.error({ err }, "Error fetching commissioner map reports");
     res.status(500).json({ error: "Internal server error" });
   }
 });

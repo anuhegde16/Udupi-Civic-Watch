@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { RoleMap, type RoleMapReport, type WardGroup } from "@/components/role-map";
 import {
   Loader2,
   Users,
@@ -91,6 +92,22 @@ function useHierarchy() {
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
   });
+}
+
+function useMapReports() {
+  return useQuery<{ reports: RoleMapReport[] }>({
+    queryKey: ["commissioner-map-reports"],
+    queryFn: () => customFetch("/api/commissioner/map-reports"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** "Ward N/TownName" → "Udupi Ward N" */
+function svWardToGeoName(wn: string): string {
+  const m = wn.match(/^Ward (\d+)/);
+  return m ? `Udupi Ward ${m[1]}` : wn;
 }
 
 // ── Edit credentials modal ────────────────────────────────────────────────────
@@ -487,6 +504,22 @@ export default function CommissionerDashboard() {
 
   const resolutionRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
+  const { data: mapData } = useMapReports();
+  const mapReports = mapData?.reports ?? [];
+  const wardGroups = useMemo((): WardGroup[] =>
+    (ee?.healthInspectors ?? []).map(hi => ({
+      id: hi.id,
+      name: hi.name,
+      wardGeoNames: hi.supervisors.flatMap(sv =>
+        (Array.isArray(sv.wardNames) ? sv.wardNames : []).map(svWardToGeoName)
+      ),
+      openCount: hi.reportedCount,
+      cleaningCount: hi.cleaningCount,
+      cleanedCount: hi.cleanedCount,
+      totalCount: hi.totalCount,
+    })), [ee]);
+  const wardGeoNames = useMemo(() => wardGroups.flatMap(g => g.wardGeoNames), [wardGroups]);
+
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {/* Header */}
@@ -545,6 +578,19 @@ export default function CommissionerDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Panchayat coverage map */}
+      {wardGeoNames.length > 0 && (
+        <RoleMap
+          reports={mapReports}
+          wardGeoNames={wardGeoNames}
+          wardGroups={wardGroups}
+          showLayerToggle
+          title="Panchayat Coverage"
+          subtitle="Wards coloured by health inspector · use tabs to filter by status"
+          height="380px"
+        />
+      )}
 
       {/* Hierarchy tree */}
       {hierarchyLoading ? (

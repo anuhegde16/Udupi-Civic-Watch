@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { RoleMap, type RoleMapReport } from "@/components/role-map";
 import {
   Loader2,
   Search,
@@ -74,6 +75,16 @@ function useReports(ward?: string, status?: string, wasteType?: string) {
   });
 }
 
+function useMapReports() {
+  return useQuery<{ reports: RoleMapReport[]; geoWardName: string }>({
+    queryKey: ["cm-map-reports"],
+    queryFn: () => customFetch("/api/community-mobiliser/map-reports"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
 export default function CommunityMobiliserDashboard() {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
@@ -81,6 +92,7 @@ export default function CommunityMobiliserDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [wasteTypeFilter, setWasteTypeFilter] = useState("all");
   const { lightbox, open: openLightbox } = useImageLightbox();
+  const { data: mapData } = useMapReports();
 
   const { data: reportsData, isLoading } = useReports(wardFilter, statusFilter, wasteTypeFilter);
   const allReports = reportsData?.reports ?? [];
@@ -137,6 +149,15 @@ export default function CommunityMobiliserDashboard() {
           </div>
         )}
       </div>
+
+      {/* Ward map */}
+      <RoleMap
+        reports={mapData?.reports ?? []}
+        wardGeoNames={mapData?.geoWardName ? [mapData.geoWardName] : []}
+        title={mapData?.geoWardName ? `Your Ward — ${mapData.geoWardName}` : "Your Ward"}
+        subtitle="All waste reports in your coverage area"
+        height="300px"
+      />
 
       {/* Filters */}
       <div className="bg-card rounded-3xl border border-border/50 p-4 space-y-3 shadow-sm">

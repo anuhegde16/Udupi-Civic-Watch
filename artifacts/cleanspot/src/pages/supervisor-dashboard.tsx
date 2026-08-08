@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { RoleMap, type RoleMapReport } from "@/components/role-map";
 import {
   MapPin,
   Clock,
@@ -77,6 +78,22 @@ function useReports() {
   });
 }
 
+function useMapReports() {
+  return useQuery<{ reports: RoleMapReport[] }>({
+    queryKey: ["sv-map-reports"],
+    queryFn: () => customFetch("/api/supervisor/map-reports"),
+    staleTime: 60_000,
+    refetchInterval: 180_000,
+    refetchIntervalInBackground: false,
+  });
+}
+
+/** "Ward N/TownName" → "Udupi Ward N" to match geofences polygon names */
+function svWardToGeoName(wn: string): string {
+  const m = wn.match(/^Ward (\d+)/);
+  return m ? `Udupi Ward ${m[1]}` : wn;
+}
+
 const STATUS_COLOR: Record<string, string> = {
   reported: "bg-destructive/10 text-destructive border-destructive/20",
   cleaning: "bg-blue-50 text-blue-700 border-blue-200",
@@ -136,6 +153,10 @@ export default function SupervisorDashboard() {
 
   const wardNames: string[] = profile?.ward_names ?? [];
   const isLoading = profileLoading || reportsLoading;
+
+  const { data: mapData } = useMapReports();
+  const mapReports = mapData?.reports ?? [];
+  const wardGeoNames = useMemo(() => wardNames.map(svWardToGeoName), [wardNames]);
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
@@ -199,6 +220,18 @@ export default function SupervisorDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Ward coverage map */}
+      {wardGeoNames.length > 0 && (
+        <RoleMap
+          reports={mapReports}
+          wardGeoNames={wardGeoNames}
+          title="Your Ward Coverage"
+          subtitle={`${wardNames.length} ward${wardNames.length !== 1 ? "s" : ""} — tap any pin to see details`}
+          height="320px"
+          highlightBacklogWards
+        />
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
