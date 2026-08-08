@@ -573,6 +573,31 @@ export default function MasterDashboard() {
     }));
   }, [officers, udupiSupervisors]);
 
+  // For Udupi panchayat admin: collapse the one-entry-per-ward officers array into
+  // unique supervisors, each carrying all their ward names and summed counts.
+  const udupiGroupedOfficers = useMemo(() => {
+    if (!isUdupi) return [];
+    const map = new Map<number, { id: number; name: string; phone: string; areaNames: string[]; reportCount: number; pendingCount: number }>();
+    for (const o of officers) {
+      if (!map.has(o.id)) {
+        map.set(o.id, { id: o.id, name: o.name, phone: o.phone ?? "", areaNames: [], reportCount: 0, pendingCount: 0 });
+      }
+      const entry = map.get(o.id)!;
+      if (o.areaName) entry.areaNames.push(o.areaName);
+      entry.reportCount += o.reportCount ?? 0;
+      entry.pendingCount += o.pendingCount ?? 0;
+    }
+    // Sort wards by numeric ward number for readability
+    for (const entry of map.values()) {
+      entry.areaNames.sort((a, b) => {
+        const na = parseInt(a.match(/\d+/)?.[0] ?? "0", 10);
+        const nb = parseInt(b.match(/\d+/)?.[0] ?? "0", 10);
+        return na - nb;
+      });
+    }
+    return Array.from(map.values());
+  }, [isUdupi, officers]);
+
   return (
     <div className="pb-12 animate-in fade-in duration-500 space-y-6">
       <NotificationCTABanner variant="officer" />
@@ -1208,7 +1233,7 @@ export default function MasterDashboard() {
           <h2 className="text-xl font-black text-foreground flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-500" /> Officer Zones
             <span className="text-sm font-bold text-muted-foreground ml-1">
-              ({officers.length + (isCommissioner ? udupiSupervisors.length : 0)})
+              ({isUdupi ? udupiGroupedOfficers.length : officers.length + (isCommissioner ? udupiSupervisors.length : 0)})
             </span>
           </h2>
         </div>
@@ -1387,8 +1412,86 @@ export default function MasterDashboard() {
                 </div>
               ))}
           </div>
+        ) : isUdupi ? (
+          /* ── Grouped supervisor cards for Udupi panchayat admin ─────────────── */
+          <>
+            {/* Mobile: compact list — one row per supervisor */}
+            <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
+              {udupiGroupedOfficers.map((sv, i) => {
+                const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                return (
+                  <div key={sv.id} className="flex items-center gap-3 p-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                      {sv.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-black text-foreground text-sm leading-tight truncate">{sv.name}</h3>
+                      <p className="text-[11px] text-muted-foreground font-bold truncate">
+                        {sv.areaNames.length > 0 ? sv.areaNames.map((n) => n.replace("Udupi ", "")).join(", ") : "No wards assigned"}
+                      </p>
+                    </div>
+                    {sv.pendingCount > 0 && (
+                      <Badge className="bg-destructive/10 text-destructive border-destructive/20 shrink-0 text-[10px] font-black">
+                        {sv.pendingCount} pending
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop/tablet: grouped supervisor cards with tappable ward chips */}
+            <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {udupiGroupedOfficers.map((sv, i) => {
+                const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                const resolvedCount = sv.reportCount - sv.pendingCount;
+                return (
+                  <Card key={sv.id} className="rounded-xl border-border/50 p-3 relative overflow-hidden hover:shadow-md transition-all">
+                    {/* Supervisor name row */}
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                        {sv.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-black text-foreground text-sm leading-tight truncate">{sv.name}</h3>
+                        <p className="text-[10px] text-muted-foreground font-bold">{sv.areaNames.length} ward{sv.areaNames.length !== 1 ? "s" : ""}</p>
+                      </div>
+                    </div>
+
+                    {/* Ward chips — each opens the ward slide-out */}
+                    {sv.areaNames.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-2.5">
+                        {sv.areaNames.map((ward) => (
+                          <button
+                            key={ward}
+                            type="button"
+                            onClick={() => setSelectedWard(ward)}
+                            className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition-colors hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 bg-muted/50 border-border/50 text-muted-foreground"
+                          >
+                            {ward.replace("Udupi ", "")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Pending / Resolved stats */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
+                        <div className="text-sm font-black text-foreground leading-none mb-0.5">{sv.pendingCount}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
+                      </div>
+                      <div className="rounded-lg py-1.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
+                        <div className="text-sm font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
+                        <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
         ) : (
-          /* ── Flat list for panchayat admins (unchanged) ─────────────────────── */
+          /* ── Flat list for Saligrama panchayat admins (unchanged) ───────────── */
           <>
             {/* Mobile: compact tappable list (name + ward only) */}
             <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
