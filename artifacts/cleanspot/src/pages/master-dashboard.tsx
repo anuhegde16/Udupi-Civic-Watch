@@ -153,6 +153,7 @@ import {
   KeyRound,
   RefreshCw,
   Archive,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -251,10 +252,10 @@ const editOfficerSchema = z.object({
 );
 type EditOfficerValues = z.infer<typeof editOfficerSchema>;
 
-function usePanchayatOfficers() {
+function usePanchayatOfficers(isCommissioner: boolean) {
   return useQuery<{ officers: PanchayatOfficer[]; total: number }>({
-    queryKey: ["panchayat-officers"],
-    queryFn: () => customFetch("/api/panchayat/officers"),
+    queryKey: isCommissioner ? ["all-officers"] : ["panchayat-officers"],
+    queryFn: () => customFetch(isCommissioner ? "/api/commissioner/all-officers" : "/api/panchayat/officers"),
     retry: false,
     staleTime: 5 * 60_000,
     refetchInterval: 120_000,
@@ -300,6 +301,7 @@ function useDeleteOfficer() {
       customFetch(`/api/officers/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+      queryClient.invalidateQueries({ queryKey: ["all-officers"] });
       queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
     },
   });
@@ -307,6 +309,7 @@ function useDeleteOfficer() {
 
 export default function MasterDashboard() {
   const { user } = useAuth();
+  const isCommissioner = user?.role === "commissioner";
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"dashboard" | "team">("dashboard");
@@ -327,8 +330,14 @@ export default function MasterDashboard() {
       setIsRefreshing(false);
     }
   }
-  const { data: officersData, isLoading: isLoadingOfficers, dataUpdatedAt: officersUpdatedAt } = usePanchayatOfficers();
+  const { data: officersData, isLoading: isLoadingOfficers, dataUpdatedAt: officersUpdatedAt } = usePanchayatOfficers(isCommissioner);
   const { data: stats, isLoading: isLoadingStats, dataUpdatedAt: statsUpdatedAt } = usePanchayatStats();
+  const { data: hierarchyData } = useQuery<CommissionerHierarchy>({
+    queryKey: ["commissioner-hierarchy"],
+    queryFn: () => customFetch("/api/commissioner/hierarchy"),
+    staleTime: 60_000,
+    enabled: isCommissioner,
+  });
   const { data: reportsData, dataUpdatedAt: reportsUpdatedAt } = usePanchayatReports();
 
   useEffect(() => {
@@ -455,6 +464,7 @@ export default function MasterDashboard() {
           setCreateOpen(false);
           form.reset();
           queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+          queryClient.invalidateQueries({ queryKey: ["all-officers"] });
           queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
         },
         onError: (err) => {
@@ -472,6 +482,7 @@ export default function MasterDashboard() {
           toast({ title: "Officer removed" });
           setSelectedWard(null);
           queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+          queryClient.invalidateQueries({ queryKey: ["all-officers"] });
           queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
         },
         onError: (err) => toast({ title: "Failed to remove officer", description: err.message, variant: "destructive" }),
@@ -499,6 +510,7 @@ export default function MasterDashboard() {
           setEditOpen(false);
           setEditingOfficer(null);
           queryClient.invalidateQueries({ queryKey: ["panchayat-officers"] });
+          queryClient.invalidateQueries({ queryKey: ["all-officers"] });
         },
         onError: (err) => toast({ title: "Failed to update officer", description: err.message, variant: "destructive" }),
       }
@@ -528,7 +540,26 @@ export default function MasterDashboard() {
   const completionRate =
     (stats?.total ?? 0) > 0 ? Math.round(((stats?.cleaned ?? 0) / stats!.total) * 100) : 0;
 
-  const isCommissioner = user?.role === "commissioner";
+  // Flat list of Udupi supervisors extracted from the commissioner hierarchy (empty for panchayat admins)
+  const udupiSupervisors = useMemo(() => {
+    if (!isCommissioner || !hierarchyData?.environmentalEngineer) return [] as NonNullable<CommissionerHierarchy["environmentalEngineer"]>["healthInspectors"][number]["supervisors"];
+    return hierarchyData.environmentalEngineer.healthInspectors.flatMap((hi) => hi.supervisors);
+  }, [isCommissioner, hierarchyData]);
+
+  // Officers grouped by panchayatName; Udupi group also carries supervisors
+  const panchayatGroups = useMemo(() => {
+    const map = new Map<string, PanchayatOfficer[]>();
+    for (const o of officers) {
+      const key = o.panchayatName ?? "Other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(o);
+    }
+    return Array.from(map.entries()).map(([panchayat, groupOfficers]) => ({
+      panchayat,
+      officers: groupOfficers,
+      supervisors: panchayat === "Udupi" ? udupiSupervisors : ([] as typeof udupiSupervisors),
+    }));
+  }, [officers, udupiSupervisors]);
 
   return (
     <div className="pb-12 animate-in fade-in duration-500 space-y-6">
@@ -1158,12 +1189,14 @@ export default function MasterDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Officers list */}
+      {/* Officer Zones — grouped by panchayat for commissioner, flat list for panchayat admin */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-black text-foreground flex items-center gap-2">
-            <Users className="w-5 h-5 text-indigo-500" /> Field Officers
-            <span className="text-sm font-bold text-muted-foreground ml-1">({officers.length})</span>
+            <Users className="w-5 h-5 text-indigo-500" /> Officer Zones
+            <span className="text-sm font-bold text-muted-foreground ml-1">
+              ({officers.length + (isCommissioner ? udupiSupervisors.length : 0)})
+            </span>
           </h2>
         </div>
 
@@ -1172,7 +1205,7 @@ export default function MasterDashboard() {
             <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
             <p className="font-bold">Loading officers…</p>
           </div>
-        ) : officers.length === 0 ? (
+        ) : officers.length === 0 && udupiSupervisors.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-3xl flex flex-col items-center py-20 text-center">
             <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
               <Users className="w-8 h-8 text-muted-foreground" />
@@ -1186,7 +1219,163 @@ export default function MasterDashboard() {
               <Plus className="w-4 h-4 mr-2" /> Add Field Officer
             </Button>
           </div>
+        ) : isCommissioner ? (
+          /* ── Grouped view for commissioner ─────────────────────────────────── */
+          <div className="space-y-8">
+            {panchayatGroups
+              .filter((g) => g.officers.length > 0 || g.supervisors.length > 0)
+              .map(({ panchayat, officers: groupOfficers, supervisors: groupSupervisors }) => (
+                <div key={panchayat}>
+                  {/* Panchayat section header */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="text-base font-black text-foreground">{panchayat} Panchayat</h3>
+                    <Badge variant="secondary" className="text-xs font-bold rounded-full px-2">
+                      {groupOfficers.length + groupSupervisors.length}
+                    </Badge>
+                  </div>
+
+                  {/* Mobile: compact list */}
+                  <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50 mb-3">
+                    {groupOfficers.map((officer, i) => {
+                      const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                      return (
+                        <button
+                          key={officer.id}
+                          type="button"
+                          onClick={() => setMobileOfficerDetail(officer)}
+                          className="w-full flex items-center gap-3 p-3 text-left active:bg-muted/50 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                            {officer.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
+                            <p className="text-[11px] text-muted-foreground font-bold truncate">{officer.areaName || "No ward assigned"}</p>
+                          </div>
+                          {officer.pendingCount > 0 && (
+                            <Badge className="bg-destructive/10 text-destructive border-destructive/20 shrink-0 text-[10px] font-black">{officer.pendingCount} pending</Badge>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {groupSupervisors.map((sv) => (
+                      <div key={`sv-${sv.id}`} className="flex items-center gap-3 p-3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0 bg-violet-500">
+                          {sv.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="font-black text-foreground text-sm leading-tight truncate">{sv.name}</span>
+                            <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[9px] font-black px-1.5 py-0 h-4 shrink-0">Supervisor</Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground font-bold truncate">
+                            {sv.wardNames?.join(", ") || "No wards assigned"}
+                          </p>
+                        </div>
+                        {sv.reportedCount > 0 && (
+                          <Badge className="bg-destructive/10 text-destructive border-destructive/20 shrink-0 text-[10px] font-black">{sv.reportedCount} open</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: cards grid */}
+                  <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groupOfficers.map((officer, i) => {
+                      const color = ZONE_COLORS[i % ZONE_COLORS.length];
+                      const resolvedCount = officer.reportCount - officer.pendingCount;
+                      return (
+                        <Card key={officer.id} className="rounded-xl border-border/50 p-3 relative overflow-hidden group hover:shadow-md transition-all">
+                          <div className="flex items-center justify-between gap-2 mb-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0" style={{ background: color }}>
+                                {officer.name.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
+                                <p className="text-[10px] text-muted-foreground font-bold truncate">{officer.areaName || "No ward assigned"}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-6 w-6 rounded-full" onClick={() => openEdit(officer)} title="Edit officer">
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 h-6 w-6 rounded-full">
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="rounded-[2rem] p-8">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle className="font-black text-2xl">Remove Officer?</AlertDialogTitle>
+                                    <AlertDialogDescription className="text-base text-muted-foreground mt-3">
+                                      This will permanently delete <strong>{officer.name}</strong>. Assigned reports will become unassigned.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter className="mt-6 gap-2">
+                                    <AlertDialogCancel className="rounded-xl font-bold h-11">Cancel</AlertDialogCancel>
+                                    <AlertDialogAction className="bg-destructive rounded-xl font-black h-11" onClick={() => handleDelete(officer.id)}>Yes, remove</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
+                              <div className="text-sm font-black text-foreground leading-none mb-0.5">{officer.pendingCount}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Pending</div>
+                            </div>
+                            <div className="rounded-lg py-1.5 text-center border" style={{ background: `${color}10`, borderColor: `${color}30` }}>
+                              <div className="text-sm font-black leading-none mb-0.5" style={{ color }}>{resolvedCount}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider" style={{ color }}>Resolved</div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                    {/* Supervisor cards — read-only, violet accent */}
+                    {groupSupervisors.map((sv) => {
+                      const wardList = sv.wardNames ?? [];
+                      const cleaned = sv.totalCount - sv.reportedCount;
+                      return (
+                        <Card key={`sv-${sv.id}`} className="rounded-xl border-violet-200 p-3 relative overflow-hidden bg-violet-50/30 hover:shadow-md transition-all">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-xs shrink-0 bg-violet-500">
+                              {sv.name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-black text-foreground text-sm leading-tight truncate">{sv.name}</h3>
+                              <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[9px] font-black px-1.5 py-0 h-4">Supervisor</Badge>
+                            </div>
+                          </div>
+                          {wardList.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {wardList.map((w) => (
+                                <span key={w} className="text-[9px] font-bold bg-muted/60 border border-border/50 px-1.5 py-0.5 rounded-md text-muted-foreground">{w}</span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <div className="bg-muted/50 rounded-lg py-1.5 text-center border border-border/50">
+                              <div className="text-sm font-black text-foreground leading-none mb-0.5">{sv.reportedCount}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Open</div>
+                            </div>
+                            <div className="rounded-lg py-1.5 text-center border bg-violet-50 border-violet-200">
+                              <div className="text-sm font-black leading-none mb-0.5 text-violet-700">{cleaned}</div>
+                              <div className="text-[9px] font-bold uppercase tracking-wider text-violet-600">Cleaned</div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+          </div>
         ) : (
+          /* ── Flat list for panchayat admins (unchanged) ─────────────────────── */
           <>
             {/* Mobile: compact tappable list (name + ward only) */}
             <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50">

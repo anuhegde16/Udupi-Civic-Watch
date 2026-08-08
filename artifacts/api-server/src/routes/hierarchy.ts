@@ -402,6 +402,33 @@ router.get("/community-mobiliser/reports", requireCommunityMobiliser, async (req
   }
 });
 
+// ── GET /api/commissioner/all-officers ────────────────────────────────────────
+// Returns all non-deleted officers across every panchayat with report counts.
+// Used by the control-center Officer Zones view to show grouped sections.
+router.get("/commissioner/all-officers", requireCommissioner, async (req, res): Promise<void> => {
+  try {
+    const rows = await db.execute(sql`
+      SELECT
+        o.id, o.name, o.email, o.phone,
+        o.area_name  AS "areaName",
+        o.panchayat_name AS "panchayatName",
+        o.created_at AS "createdAt",
+        COUNT(r.id)::int AS "reportCount",
+        COUNT(r.id) FILTER (WHERE r.status != 'cleaned')::int AS "pendingCount"
+      FROM officers o
+      LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
+      WHERE o.deleted_at IS NULL
+      GROUP BY o.id, o.name, o.email, o.phone, o.area_name, o.panchayat_name, o.created_at
+      ORDER BY o.panchayat_name, o.created_at
+    `);
+    const officers = rows.rows as any[];
+    res.json({ officers, total: officers.length });
+  } catch (err) {
+    logger.error({ err }, "Error fetching all officers for commissioner");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── GET /api/commissioner/hierarchy ───────────────────────────────────────────
 // Full org tree for the commissioner's Team tab: EE → HIs → Supervisors with counts.
 router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Promise<void> => {
