@@ -777,7 +777,8 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
              COUNT(DISTINCT sv.id)::int AS "supervisorCount",
              COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
              COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount"
+             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
+             COUNT(DISTINCT r.id)::int AS "totalCount"
       FROM health_inspectors hi
       LEFT JOIN supervisors sv ON sv.health_inspector_id = hi.id
       LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
@@ -793,6 +794,8 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
         const svRows = await db.execute(sql`
           SELECT sv.id, sv.name, sv.phone, sv.ward_names AS "wardNames",
                  COUNT(r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
+                 COUNT(r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
+                 COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
                  COUNT(r.id)::int AS "totalCount"
           FROM supervisors sv
           LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
@@ -809,6 +812,224 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
     res.json({ environmentalEngineer: { ...ee, healthInspectors } });
   } catch (err) {
     logger.error({ err }, "Error fetching commissioner hierarchy");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/commissioner/env-engineer/:id/credentials ─────────────────────
+// Commissioner can update name/phone/password for the EE in their panchayat.
+router.patch("/commissioner/env-engineer/:id/credentials", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const eeId = parseInt(rawId, 10);
+  if (isNaN(eeId)) { res.status(400).json({ error: "Invalid EE ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    const eeCheck = await db.execute(sql`
+      SELECT id, name, phone FROM environmental_engineers
+      WHERE id = ${eeId} AND panchayat_name = ${panchayat}
+      LIMIT 1
+    `);
+    if (!eeCheck.rows.length) {
+      res.status(403).json({ error: "Environmental engineer not in your panchayat" });
+      return;
+    }
+    const existing = eeCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+
+    if (newPhone !== existing.phone) {
+      const conflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (officer_id = ${String(eeId)} AND role = 'environmental_engineer')
+        LIMIT 1
+      `);
+      if (conflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    const newHash = (password as string)?.trim() ? await hashPassword((password as string).trim()) : null;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE environmental_engineers SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${eeId}
+      `);
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(eeId)} AND role = 'environmental_engineer'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(eeId)} AND role = 'environmental_engineer'
+            RETURNING id
+          `);
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for EE ${eeId}, got ${userUpdate.rows.length}`);
+      }
+    });
+
+    res.json({ id: eeId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating EE credentials via commissioner");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/commissioner/health-inspector/:id/credentials ──────────────────
+// Commissioner can update credentials for any HI under their panchayat's EE.
+router.patch("/commissioner/health-inspector/:id/credentials", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const hiId = parseInt(rawId, 10);
+  if (isNaN(hiId)) { res.status(400).json({ error: "Invalid HI ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    // Verify HI → EE → panchayat chain
+    const hiCheck = await db.execute(sql`
+      SELECT hi.id, hi.name, hi.phone FROM health_inspectors hi
+      JOIN environmental_engineers ee ON ee.id = hi.environmental_engineer_id
+      WHERE hi.id = ${hiId} AND ee.panchayat_name = ${panchayat}
+      LIMIT 1
+    `);
+    if (!hiCheck.rows.length) {
+      res.status(403).json({ error: "Health inspector not in your panchayat" });
+      return;
+    }
+    const existing = hiCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+
+    if (newPhone !== existing.phone) {
+      const conflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (officer_id = ${String(hiId)} AND role = 'health_inspector')
+        LIMIT 1
+      `);
+      if (conflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    const newHash = (password as string)?.trim() ? await hashPassword((password as string).trim()) : null;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE health_inspectors SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${hiId}
+      `);
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(hiId)} AND role = 'health_inspector'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(hiId)} AND role = 'health_inspector'
+            RETURNING id
+          `);
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for HI ${hiId}, got ${userUpdate.rows.length}`);
+      }
+    });
+
+    res.json({ id: hiId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating HI credentials via commissioner");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/commissioner/supervisor/:id/credentials ────────────────────────
+// Commissioner can update credentials for any supervisor under their panchayat's EE.
+router.patch("/commissioner/supervisor/:id/credentials", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const svId = parseInt(rawId, 10);
+  if (isNaN(svId)) { res.status(400).json({ error: "Invalid supervisor ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    // Verify supervisor → HI → EE → panchayat chain
+    const svCheck = await db.execute(sql`
+      SELECT sv.id, sv.name, sv.phone FROM supervisors sv
+      JOIN health_inspectors hi ON hi.id = sv.health_inspector_id
+      JOIN environmental_engineers ee ON ee.id = hi.environmental_engineer_id
+      WHERE sv.id = ${svId} AND ee.panchayat_name = ${panchayat}
+      LIMIT 1
+    `);
+    if (!svCheck.rows.length) {
+      res.status(403).json({ error: "Supervisor not in your panchayat" });
+      return;
+    }
+    const existing = svCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+
+    if (newPhone !== existing.phone) {
+      const conflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (officer_id = ${String(svId)} AND role = 'supervisor')
+        LIMIT 1
+      `);
+      if (conflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    const newHash = (password as string)?.trim() ? await hashPassword((password as string).trim()) : null;
+
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE supervisors SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${svId}
+      `);
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `);
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for supervisor ${svId}, got ${userUpdate.rows.length}`);
+      }
+    });
+
+    res.json({ id: svId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating supervisor credentials via commissioner");
     res.status(500).json({ error: "Internal server error" });
   }
 });
