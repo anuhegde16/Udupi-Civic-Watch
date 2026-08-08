@@ -13,6 +13,7 @@ import {
   requireEnvEngineer,
   requireCommissioner,
   requireCommunityMobiliser,
+  hashPassword,
   type SessionUser,
 } from "../lib/auth";
 import { logger } from "../lib/logger";
@@ -305,6 +306,166 @@ router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthIn
     res.json({ reports: rows.rows });
   } catch (err) {
     logger.error({ err }, "Error fetching supervisor reports for HI");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── POST /api/health-inspector/reports/:reportId/reassign ──────────────────────
+// Reassigns a "New" (reported) report to a different field officer (supervisor's ward).
+// Both the current and target supervisor must be under the calling HI.
+router.post("/health-inspector/reports/:reportId/reassign", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
+
+  const rawId = Array.isArray(req.params.reportId) ? req.params.reportId[0] : req.params.reportId;
+  const reportId = parseInt(rawId, 10);
+  if (isNaN(reportId)) { res.status(400).json({ error: "Invalid reportId" }); return; }
+
+  const { targetSupervisorId } = req.body ?? {};
+  const targetSvId = parseInt(String(targetSupervisorId), 10);
+  if (isNaN(targetSvId)) { res.status(400).json({ error: "targetSupervisorId required" }); return; }
+
+  try {
+    // Verify the report is in one of this HI's supervisor wards
+    const reportCheck = await db.execute(sql`
+      SELECT r.id, r.status
+      FROM supervisors sv
+      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
+      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
+      JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
+      WHERE sv.health_inspector_id = ${Number(user.officerId)} AND r.id = ${reportId}
+      LIMIT 1
+    `);
+    if (!reportCheck.rows.length) {
+      res.status(403).json({ error: "Report not in your wards" });
+      return;
+    }
+
+    // Verify target supervisor is under this HI
+    const targetSvCheck = await db.execute(sql`
+      SELECT id FROM supervisors
+      WHERE id = ${targetSvId} AND health_inspector_id = ${Number(user.officerId)}
+      LIMIT 1
+    `);
+    if (!targetSvCheck.rows.length) {
+      res.status(403).json({ error: "Target supervisor is not under your team" });
+      return;
+    }
+
+    // Find the first active officer in the target supervisor's wards
+    const officerCheck = await db.execute(sql`
+      SELECT o.id AS officer_id
+      FROM supervisors sv
+      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
+      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
+      WHERE sv.id = ${targetSvId}
+      LIMIT 1
+    `);
+    if (!officerCheck.rows.length) {
+      res.status(400).json({ error: "No active field officer found in target supervisor's wards" });
+      return;
+    }
+    const targetOfficerId = (officerCheck.rows[0] as any).officer_id;
+
+    // Atomically update the report only if it is still in "reported" status.
+    // This prevents a race where a concurrent status change (e.g. officer starts cleaning)
+    // happens between the ownership check above and this write.
+    const updated = await db.execute(sql`
+      UPDATE reports
+      SET assigned_officer_id = ${targetOfficerId}, updated_at = NOW()
+      WHERE id = ${reportId} AND status = 'reported' AND deleted_at IS NULL
+      RETURNING id, status, assigned_officer_id, updated_at
+    `);
+
+    if (!updated.rows.length) {
+      res.status(409).json({ error: "Report is no longer in New status and cannot be reassigned" });
+      return;
+    }
+
+    res.json(updated.rows[0]);
+  } catch (err) {
+    logger.error({ err }, "Error reassigning report");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── PATCH /api/health-inspector/supervisor/:id/credentials ─────────────────────
+// Health Inspector can update name, phone, or password for a supervisor under them.
+router.patch("/health-inspector/supervisor/:id/credentials", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const svId = parseInt(rawId, 10);
+  if (isNaN(svId)) { res.status(400).json({ error: "Invalid supervisor ID" }); return; }
+
+  const { name, phone, password } = req.body ?? {};
+
+  try {
+    // Verify supervisor belongs to this HI
+    const svCheck = await db.execute(sql`
+      SELECT id, name, phone FROM supervisors
+      WHERE id = ${svId} AND health_inspector_id = ${Number(user.officerId)}
+      LIMIT 1
+    `);
+    if (!svCheck.rows.length) {
+      res.status(403).json({ error: "Supervisor not under your team" });
+      return;
+    }
+    const existing = svCheck.rows[0] as any;
+
+    const newName = (name as string)?.trim() || existing.name;
+    const newPhone = (phone as string)?.trim() || existing.phone;
+    const newEmail = `${newPhone}@phone.local`;
+    const oldEmail = `${existing.phone}@phone.local`;
+
+    // Pre-flight: reject if the new phone is already taken by a different account.
+    // Check both the supervisors table and the users table to catch any alias.
+    if (newPhone !== existing.phone) {
+      const phoneConflict = await db.execute(sql`
+        SELECT id FROM users
+        WHERE (phone = ${newPhone} OR email = ${newEmail})
+          AND NOT (phone = ${existing.phone} OR email = ${oldEmail})
+        LIMIT 1
+      `);
+      if (phoneConflict.rows.length) {
+        res.status(409).json({ error: "Phone number is already in use by another account" });
+        return;
+      }
+    }
+
+    // Hash password outside the transaction (CPU-bound; avoids holding a connection slot).
+    const newHash = (password as string)?.trim()
+      ? await hashPassword((password as string).trim())
+      : null;
+
+    // Transactional update: supervisors row + users row together.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
+        UPDATE supervisors SET name = ${newName}, phone = ${newPhone}
+        WHERE id = ${svId}
+      `);
+
+      if (newHash) {
+        await tx.execute(sql`
+          UPDATE users
+          SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+          WHERE (email = ${oldEmail} OR phone = ${existing.phone})
+            AND role IN ('supervisor', 'field_officer', 'officer')
+        `);
+      } else {
+        await tx.execute(sql`
+          UPDATE users
+          SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+          WHERE (email = ${oldEmail} OR phone = ${existing.phone})
+            AND role IN ('supervisor', 'field_officer', 'officer')
+        `);
+      }
+    });
+
+    res.json({ id: svId, name: newName, phone: newPhone });
+  } catch (err) {
+    logger.error({ err }, "Error updating supervisor credentials");
     res.status(500).json({ error: "Internal server error" });
   }
 });

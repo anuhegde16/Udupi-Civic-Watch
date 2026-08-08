@@ -1,12 +1,23 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   Users,
@@ -18,6 +29,9 @@ import {
   AlertCircle,
   Wrench,
   CheckCircle2,
+  Pencil,
+  ArrowRightLeft,
+  TrendingUp,
 } from "lucide-react";
 
 type HiProfile = {
@@ -92,132 +106,361 @@ function useSupervisorReports(supervisorId: number | null) {
   });
 }
 
-function SupervisorCard({ sv }: { sv: SupervisorStat }) {
+// ── Edit Credentials Modal ────────────────────────────────────────────────────
+function EditCredentialsModal({
+  sv,
+  open,
+  onOpenChange,
+}: {
+  sv: SupervisorStat;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [name, setName] = useState(sv.name);
+  const [phone, setPhone] = useState(sv.phone);
+  const [password, setPassword] = useState("");
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (data: { name?: string; phone?: string; password?: string }) =>
+      customFetch(`/api/health-inspector/supervisor/${sv.id}/credentials`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      toast({ title: "Field officer updated" });
+      queryClient.invalidateQueries({ queryKey: ["hi-supervisor-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["hi-me"] });
+      setPassword("");
+      onOpenChange(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to update", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleSave = () => {
+    const data: Record<string, string> = {};
+    if (name.trim() && name.trim() !== sv.name) data.name = name.trim();
+    if (phone.trim() && phone.trim() !== sv.phone) data.phone = phone.trim();
+    if (password.trim()) data.password = password.trim();
+    if (Object.keys(data).length === 0) { onOpenChange(false); return; }
+    mutation.mutate(data);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle className="text-xl font-black">Edit Field Officer</DialogTitle>
+        </DialogHeader>
+        <div className="p-6 space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-sm font-bold">Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Officer name"
+              className="rounded-xl"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-bold">Phone (login)</Label>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="10-digit phone"
+              className="rounded-xl"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-sm font-bold">New Password <span className="text-muted-foreground font-normal">(leave blank to keep current)</span></Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min 8 characters"
+              className="rounded-xl"
+            />
+          </div>
+        </div>
+        <DialogFooter className="p-6 pt-0 flex gap-2">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 rounded-xl"
+            onClick={handleSave}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Reassign Modal ────────────────────────────────────────────────────────────
+function ReassignModal({
+  report,
+  currentSvId,
+  allSupervisors,
+  open,
+  onOpenChange,
+}: {
+  report: SupervisorReport;
+  currentSvId: number;
+  allSupervisors: SupervisorStat[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  const [selectedSvId, setSelectedSvId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const otherSupervisors = allSupervisors.filter((s) => s.id !== currentSvId);
+
+  const mutation = useMutation({
+    mutationFn: (targetSupervisorId: number) =>
+      customFetch(`/api/health-inspector/reports/${report.id}/reassign`, {
+        method: "POST",
+        body: JSON.stringify({ targetSupervisorId }),
+      }),
+    onSuccess: () => {
+      toast({ title: "Report reassigned successfully" });
+      queryClient.invalidateQueries({ queryKey: ["hi-sv-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["hi-supervisor-stats"] });
+      setSelectedSvId(null);
+      onOpenChange(false);
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to reassign", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
+        <DialogHeader className="p-6 pb-2">
+          <DialogTitle className="text-xl font-black">Reassign Report #{report.id}</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {report.address || `${report.latitude?.toFixed(4)}, ${report.longitude?.toFixed(4)}`}
+          </p>
+        </DialogHeader>
+        <div className="px-6 pb-2 space-y-2 max-h-64 overflow-y-auto">
+          {otherSupervisors.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No other field officers available.</p>
+          ) : (
+            otherSupervisors.map((sv) => (
+              <button
+                key={sv.id}
+                type="button"
+                onClick={() => setSelectedSvId(sv.id)}
+                className={`w-full text-left p-3 rounded-xl border transition-colors ${
+                  selectedSvId === sv.id
+                    ? "border-violet-400 bg-violet-50"
+                    : "border-border/50 hover:bg-muted/40"
+                }`}
+              >
+                <div className="font-bold text-sm text-foreground">{sv.name}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {Array.isArray(sv.wardNames) ? sv.wardNames.join(", ") : "—"}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+        <DialogFooter className="p-6 pt-3 flex gap-2">
+          <Button variant="outline" className="flex-1 rounded-xl" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="flex-1 rounded-xl"
+            onClick={() => selectedSvId && mutation.mutate(selectedSvId)}
+            disabled={!selectedSvId || mutation.isPending}
+          >
+            {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Reassign
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Supervisor Card ───────────────────────────────────────────────────────────
+function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervisors: SupervisorStat[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [reassignReport, setReassignReport] = useState<SupervisorReport | null>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
   const { data: reportsData, isLoading } = useSupervisorReports(expanded ? sv.id : null);
 
   const wardNames: string[] = Array.isArray(sv.wardNames) ? sv.wardNames : [];
+  const resolutionRate = sv.totalCount > 0 ? Math.round((sv.cleanedCount / sv.totalCount) * 100) : 0;
 
   return (
-    <Card className="rounded-3xl border-border/50 overflow-hidden">
-      {lightbox}
-      <button
-        type="button"
-        className="w-full text-left p-5 hover:bg-muted/30 transition-colors"
-        onClick={() => setExpanded((e) => !e)}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="font-black text-foreground text-base truncate">{sv.name}</span>
-              {sv.phone && (
-                <a
-                  href={`tel:${sv.phone}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-primary text-xs font-bold hover:underline shrink-0"
-                >
-                  {sv.phone}
-                </a>
-              )}
-            </div>
-            {wardNames.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {wardNames.map((w) => (
-                  <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                    {w}
+    <>
+      <EditCredentialsModal sv={sv} open={editOpen} onOpenChange={setEditOpen} />
+      {reassignReport && (
+        <ReassignModal
+          report={reassignReport}
+          currentSvId={sv.id}
+          allSupervisors={allSupervisors}
+          open={!!reassignReport}
+          onOpenChange={(v) => { if (!v) setReassignReport(null); }}
+        />
+      )}
+      <Card className="rounded-3xl border-border/50 overflow-hidden">
+        {lightbox}
+        {/* Header row: expand button + edit action */}
+        <div className="flex items-stretch">
+          <button
+            type="button"
+            className="flex-1 text-left p-5 hover:bg-muted/30 transition-colors"
+            onClick={() => setExpanded((e) => !e)}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-black text-foreground text-base truncate">{sv.name}</span>
+                  {sv.phone && (
+                    <a
+                      href={`tel:${sv.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-primary text-xs font-bold hover:underline shrink-0"
+                    >
+                      {sv.phone}
+                    </a>
+                  )}
+                </div>
+                {wardNames.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {wardNames.map((w) => (
+                      <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Status pills + resolution rate */}
+                <div className="flex gap-2 flex-wrap items-center">
+                  <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
+                    {sv.reportedCount} New
                   </span>
-                ))}
+                  <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
+                    {sv.cleaningCount} In Progress
+                  </span>
+                  <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
+                    {sv.cleanedCount} Cleaned
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    <TrendingUp className="w-3 h-3" /> {resolutionRate}%
+                  </span>
+                </div>
               </div>
-            )}
-            {/* Count pills */}
-            <div className="flex gap-2 flex-wrap">
-              <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
-                {sv.reportedCount} New
-              </span>
-              <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
-                {sv.cleaningCount} In Progress
-              </span>
-              <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
-                {sv.cleanedCount} Cleaned
-              </span>
+              <div className="shrink-0 text-muted-foreground mt-1">
+                {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+              </div>
             </div>
-          </div>
-          <div className="shrink-0 text-muted-foreground mt-1">
-            {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-          </div>
+          </button>
+          {/* Edit button */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}
+            className="px-4 flex items-center justify-center border-l border-border/40 hover:bg-violet-50 transition-colors text-muted-foreground hover:text-violet-600"
+            title="Edit field officer"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
         </div>
-      </button>
 
-      {/* Expanded reports */}
-      {expanded && (
-        <div className="border-t border-border/50 bg-muted/20 p-4">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              <span className="text-sm font-medium">Loading reports…</span>
-            </div>
-          ) : !reportsData?.reports.length ? (
-            <p className="text-center text-sm text-muted-foreground py-6 font-medium">No active reports in these wards.</p>
-          ) : (
-            <div className="space-y-3">
-              {reportsData.reports.map((r) => {
-                const thumb = r.imageUrls?.[0]?.url ?? r.imageUrl;
-                return (
-                  <div key={r.id} className="bg-card border border-border/50 rounded-2xl p-4 flex gap-3">
-                    {thumb ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const urls = r.imageUrls?.length ? r.imageUrls.map((p) => p.url) : [thumb!];
-                          openLightbox(urls, 0);
-                        }}
-                        className="w-20 h-20 shrink-0 rounded-xl overflow-hidden cursor-zoom-in"
-                      >
-                        <img src={thumb} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    ) : (
-                      <div className="w-20 h-20 shrink-0 rounded-xl bg-muted flex items-center justify-center">
-                        <FileWarning className="w-8 h-8 text-muted-foreground opacity-50" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge className={`${STATUS_COLOR[r.status] ?? ""} border text-xs font-black uppercase tracking-wider`}>
-                          {STATUS_LABEL[r.status] ?? r.status}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground font-mono">#{r.id}</span>
-                        {r.wardName && (
-                          <span className="text-xs text-muted-foreground font-bold">{r.wardName}</span>
-                        )}
-                      </div>
-                      <p className="text-sm font-medium text-foreground flex items-start gap-1.5 line-clamp-1">
-                        <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                        {r.address || `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}`}
-                      </p>
-                      {r.wasteTypes && r.wasteTypes.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {r.wasteTypes.slice(0, 3).map((wt) => (
-                            <span key={wt} className="bg-amber-50 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-200">{wt}</span>
-                          ))}
+        {/* Expanded reports */}
+        {expanded && (
+          <div className="border-t border-border/50 bg-muted/20 p-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm font-medium">Loading reports…</span>
+              </div>
+            ) : !reportsData?.reports.length ? (
+              <p className="text-center text-sm text-muted-foreground py-6 font-medium">No active reports in these wards.</p>
+            ) : (
+              <div className="space-y-3">
+                {reportsData.reports.map((r) => {
+                  const thumb = r.imageUrls?.[0]?.url ?? r.imageUrl;
+                  return (
+                    <div key={r.id} className="bg-card border border-border/50 rounded-2xl p-4 flex gap-3">
+                      {thumb ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const urls = r.imageUrls?.length ? r.imageUrls.map((p) => p.url) : [thumb!];
+                            openLightbox(urls, 0);
+                          }}
+                          className="w-20 h-20 shrink-0 rounded-xl overflow-hidden cursor-zoom-in"
+                        >
+                          <img src={thumb} alt="" className="w-full h-full object-cover" />
+                        </button>
+                      ) : (
+                        <div className="w-20 h-20 shrink-0 rounded-xl bg-muted flex items-center justify-center">
+                          <FileWarning className="w-8 h-8 text-muted-foreground opacity-50" />
                         </div>
                       )}
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Clock className="w-3 h-3" />
-                        {format(new Date(r.createdAt), "MMM d, h:mm a")}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge className={`${STATUS_COLOR[r.status] ?? ""} border text-xs font-black uppercase tracking-wider`}>
+                            {STATUS_LABEL[r.status] ?? r.status}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground font-mono">#{r.id}</span>
+                          {r.wardName && (
+                            <span className="text-xs text-muted-foreground font-bold">{r.wardName}</span>
+                          )}
+                        </div>
+                        <p className="text-sm font-medium text-foreground flex items-start gap-1.5 line-clamp-1">
+                          <MapPin className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                          {r.address || `${r.latitude?.toFixed(4)}, ${r.longitude?.toFixed(4)}`}
+                        </p>
+                        {r.wasteTypes && r.wasteTypes.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {r.wasteTypes.slice(0, 3).map((wt) => (
+                              <span key={wt} className="bg-amber-50 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-200">{wt}</span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {format(new Date(r.createdAt), "MMM d, h:mm a")}
+                          </div>
+                          {/* Reassign button — only for New reports */}
+                          {r.status === "reported" && (
+                            <button
+                              type="button"
+                              onClick={() => setReassignReport(r)}
+                              className="flex items-center gap-1 text-xs font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2.5 py-1 rounded-full hover:bg-violet-100 transition-colors"
+                            >
+                              <ArrowRightLeft className="w-3 h-3" /> Reassign
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </>
   );
 }
 
+// ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function HealthInspectorDashboard() {
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -228,7 +471,10 @@ export default function HealthInspectorDashboard() {
     reported: supervisors.reduce((s, sv) => s + sv.reportedCount, 0),
     cleaning: supervisors.reduce((s, sv) => s + sv.cleaningCount, 0),
     cleaned: supervisors.reduce((s, sv) => s + sv.cleanedCount, 0),
+    total: supervisors.reduce((s, sv) => s + sv.totalCount, 0),
   }), [supervisors]);
+
+  const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
@@ -242,14 +488,17 @@ export default function HealthInspectorDashboard() {
         <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
           {profileLoading ? "Loading…" : (profile?.name ?? user?.name)}
         </h1>
-        <p className="text-sm text-muted-foreground font-medium">{profile?.panchayat_name ?? "Udupi"} · {supervisors.length} Supervisor{supervisors.length !== 1 ? "s" : ""}</p>
+        <p className="text-sm text-muted-foreground font-medium">
+          {profile?.panchayat_name ?? "Udupi"} · {supervisors.length} Field Officer{supervisors.length !== 1 ? "s" : ""}
+        </p>
 
         {/* Summary stats */}
-        <div className="mt-5 grid grid-cols-3 gap-3">
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: "New Reports", value: totals.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
             { label: "In Progress", value: totals.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50" },
             { label: "Cleaned", value: totals.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
+            { label: "Resolution Rate", value: `${overallRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "text-emerald-600", bg: "bg-emerald-50" },
           ].map((s) => (
             <div key={s.label} className={`${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
               <div className={s.color}>{s.icon}</div>
@@ -262,22 +511,22 @@ export default function HealthInspectorDashboard() {
         </div>
       </div>
 
-      {/* Supervisor cards */}
+      {/* Field Officer cards */}
       {statsLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-          <p className="font-bold text-lg">Loading supervisors…</p>
+          <p className="font-bold text-lg">Loading field officers…</p>
         </div>
       ) : supervisors.length === 0 ? (
         <div className="bg-card border border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center py-20 px-4 text-center">
           <Users className="w-12 h-12 text-muted-foreground opacity-50 mb-4" />
-          <h3 className="text-xl font-black text-foreground mb-1">No supervisors assigned</h3>
+          <h3 className="text-xl font-black text-foreground mb-1">No field officers assigned</h3>
         </div>
       ) : (
         <div className="space-y-4">
-          <h2 className="text-lg font-black text-foreground">Your Supervisors</h2>
+          <h2 className="text-lg font-black text-foreground">Your Field Officers</h2>
           {supervisors.map((sv) => (
-            <SupervisorCard key={sv.id} sv={sv} />
+            <SupervisorCard key={sv.id} sv={sv} allSupervisors={supervisors} />
           ))}
         </div>
       )}
