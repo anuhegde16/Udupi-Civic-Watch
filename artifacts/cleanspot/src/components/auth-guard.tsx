@@ -8,7 +8,9 @@ const ROLE_ALIASES: Record<string, string[]> = {
   control_center: ["admin", "control_center"],
   officer: ["officer", "field_officer"],
   field_officer: ["officer", "field_officer"],
-  panchayat_admin: ["panchayat_admin"],
+  // commissioner inherits panchayat_admin permissions
+  panchayat_admin: ["panchayat_admin", "commissioner"],
+  commissioner: ["panchayat_admin", "commissioner"],
 };
 
 function expandRoles(roles: string[]): string[] {
@@ -21,7 +23,11 @@ function expandRoles(roles: string[]): string[] {
 
 function dashboardFor(role: string): string {
   if (role === "admin" || role === "control_center") return "/admin/dashboard";
-  if (role === "panchayat_admin") return "/master/dashboard";
+  if (role === "panchayat_admin" || role === "commissioner") return "/master/dashboard";
+  if (role === "supervisor") return "/supervisor/dashboard";
+  if (role === "health_inspector") return "/health-inspector/dashboard";
+  if (role === "environmental_engineer") return "/env-engineer/dashboard";
+  if (role === "community_mobiliser") return "/community-mobiliser/dashboard";
   return "/officer/dashboard";
 }
 

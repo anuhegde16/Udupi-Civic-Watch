@@ -23,6 +23,7 @@ import type {
   BulkArchiveBody,
   BulkArchivePreviewResponse,
   BulkArchiveResponse,
+  ChangePasswordBody,
   CreateOfficerBody,
   CreateReportBody,
   DeletePushSubscriptionBody,
@@ -291,6 +292,92 @@ export function useGetMe<
 }
 
 /**
+ * @summary Change the logged-in user's password (required after first login for seeded accounts)
+ */
+export const getChangePasswordUrl = () => {
+  return `/api/auth/change-password`;
+};
+
+export const changePassword = async (
+  changePasswordBody: ChangePasswordBody,
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getChangePasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(changePasswordBody),
+  });
+};
+
+export const getChangePasswordMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changePassword>>,
+    TError,
+    { data: BodyType<ChangePasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changePassword>>,
+  TError,
+  { data: BodyType<ChangePasswordBody> },
+  TContext
+> => {
+  const mutationKey = ["changePassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changePassword>>,
+    { data: BodyType<ChangePasswordBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return changePassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChangePasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof changePassword>>
+>;
+export type ChangePasswordMutationBody = BodyType<ChangePasswordBody>;
+export type ChangePasswordMutationError = ErrorType<void>;
+
+/**
+ * @summary Change the logged-in user's password (required after first login for seeded accounts)
+ */
+export const useChangePassword = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changePassword>>,
+    TError,
+    { data: BodyType<ChangePasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof changePassword>>,
+  TError,
+  { data: BodyType<ChangePasswordBody> },
+  TContext
+> => {
+  return useMutation(getChangePasswordMutationOptions(options));
+};
+
+/**
  * @summary Logout
  */
 export const getLogoutUrl = () => {
@@ -370,6 +457,382 @@ export const useLogout = <
 > => {
   return useMutation(getLogoutMutationOptions(options));
 };
+
+/**
+ * @summary Profile for the logged-in supervisor
+ */
+export const getGetSupervisorMeUrl = () => {
+  return `/api/supervisor/me`;
+};
+
+export const getSupervisorMe = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getGetSupervisorMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSupervisorMeQueryKey = () => {
+  return [`/api/supervisor/me`] as const;
+};
+
+export const getGetSupervisorMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSupervisorMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupervisorMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSupervisorMeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupervisorMe>>> = ({
+    signal,
+  }) => getSupervisorMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSupervisorMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSupervisorMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSupervisorMe>>
+>;
+export type GetSupervisorMeQueryError = ErrorType<void>;
+
+/**
+ * @summary Profile for the logged-in supervisor
+ */
+
+export function useGetSupervisorMe<
+  TData = Awaited<ReturnType<typeof getSupervisorMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSupervisorMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSupervisorMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Profile for the logged-in health inspector
+ */
+export const getGetHealthInspectorMeUrl = () => {
+  return `/api/health-inspector/me`;
+};
+
+export const getHealthInspectorMe = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getGetHealthInspectorMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHealthInspectorMeQueryKey = () => {
+  return [`/api/health-inspector/me`] as const;
+};
+
+export const getGetHealthInspectorMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHealthInspectorMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHealthInspectorMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHealthInspectorMeQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getHealthInspectorMe>>
+  > = ({ signal }) => getHealthInspectorMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHealthInspectorMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHealthInspectorMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHealthInspectorMe>>
+>;
+export type GetHealthInspectorMeQueryError = ErrorType<void>;
+
+/**
+ * @summary Profile for the logged-in health inspector
+ */
+
+export function useGetHealthInspectorMe<
+  TData = Awaited<ReturnType<typeof getHealthInspectorMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHealthInspectorMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHealthInspectorMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Profile for the logged-in environmental engineer
+ */
+export const getGetEnvEngineerMeUrl = () => {
+  return `/api/env-engineer/me`;
+};
+
+export const getEnvEngineerMe = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getGetEnvEngineerMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEnvEngineerMeQueryKey = () => {
+  return [`/api/env-engineer/me`] as const;
+};
+
+export const getGetEnvEngineerMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEnvEngineerMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEnvEngineerMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEnvEngineerMeQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEnvEngineerMe>>
+  > = ({ signal }) => getEnvEngineerMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEnvEngineerMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEnvEngineerMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEnvEngineerMe>>
+>;
+export type GetEnvEngineerMeQueryError = ErrorType<void>;
+
+/**
+ * @summary Profile for the logged-in environmental engineer
+ */
+
+export function useGetEnvEngineerMe<
+  TData = Awaited<ReturnType<typeof getEnvEngineerMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEnvEngineerMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEnvEngineerMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Profile for the logged-in commissioner
+ */
+export const getGetCommissionerMeUrl = () => {
+  return `/api/commissioner/me`;
+};
+
+export const getCommissionerMe = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getGetCommissionerMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCommissionerMeQueryKey = () => {
+  return [`/api/commissioner/me`] as const;
+};
+
+export const getGetCommissionerMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCommissionerMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCommissionerMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCommissionerMeQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCommissionerMe>>
+  > = ({ signal }) => getCommissionerMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCommissionerMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCommissionerMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCommissionerMe>>
+>;
+export type GetCommissionerMeQueryError = ErrorType<void>;
+
+/**
+ * @summary Profile for the logged-in commissioner
+ */
+
+export function useGetCommissionerMe<
+  TData = Awaited<ReturnType<typeof getCommissionerMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCommissionerMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCommissionerMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Profile for the logged-in community mobiliser
+ */
+export const getGetCommunityMobiliserMeUrl = () => {
+  return `/api/community-mobiliser/me`;
+};
+
+export const getCommunityMobiliserMe = async (
+  options?: RequestInit,
+): Promise<SuccessResponse> => {
+  return customFetch<SuccessResponse>(getGetCommunityMobiliserMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCommunityMobiliserMeQueryKey = () => {
+  return [`/api/community-mobiliser/me`] as const;
+};
+
+export const getGetCommunityMobiliserMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCommunityMobiliserMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCommunityMobiliserMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCommunityMobiliserMeQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCommunityMobiliserMe>>
+  > = ({ signal }) => getCommunityMobiliserMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCommunityMobiliserMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCommunityMobiliserMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCommunityMobiliserMe>>
+>;
+export type GetCommunityMobiliserMeQueryError = ErrorType<void>;
+
+/**
+ * @summary Profile for the logged-in community mobiliser
+ */
+
+export function useGetCommunityMobiliserMe<
+  TData = Awaited<ReturnType<typeof getCommunityMobiliserMe>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCommunityMobiliserMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCommunityMobiliserMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all reports (admin) or assigned reports (officer)

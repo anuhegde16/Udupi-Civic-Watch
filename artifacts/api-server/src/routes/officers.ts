@@ -27,7 +27,7 @@ const router: IRouter = Router();
 
 router.get("/officers", requirePanchayatOrControlCenter, async (req, res): Promise<void> => {
   const user = (req as any).user;
-  const isPanchayatAdmin = user.role === "panchayat_admin";
+  const isPanchayatAdmin = user.role === "panchayat_admin" || user.role === "commissioner";
 
   let query = db
     .select()
@@ -74,7 +74,7 @@ router.post("/officers", requirePanchayatOrControlCenter, async (req, res): Prom
   }
 
   const user = (req as any).user;
-  const isPanchayatAdmin = user.role === "panchayat_admin";
+  const isPanchayatAdmin = user.role === "panchayat_admin" || user.role === "commissioner";
 
   let { name, email, password, phone, areaName, centerLat, centerLng, panchayatName } = parsed.data as any;
 
@@ -187,8 +187,8 @@ router.patch("/officers/:id", requirePanchayatOrControlCenter, async (req, res):
     return;
   }
 
-  // Panchayat admin can only edit officers in their own panchayat
-  if (user.role === "panchayat_admin" && user.panchayatName) {
+  // Panchayat admin / commissioner can only edit officers in their own panchayat
+  if ((user.role === "panchayat_admin" || user.role === "commissioner") && user.panchayatName) {
     if (existing.panchayatName !== user.panchayatName) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -269,8 +269,8 @@ router.delete("/officers/:id", requirePanchayatOrControlCenter, async (req, res)
     return;
   }
 
-  // Panchayat admin can only delete officers in their own panchayat
-  if (user.role === "panchayat_admin" && user.panchayatName) {
+  // Panchayat admin / commissioner can only delete officers in their own panchayat
+  if ((user.role === "panchayat_admin" || user.role === "commissioner") && user.panchayatName) {
     if (existing.panchayatName !== user.panchayatName) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -310,7 +310,7 @@ router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void>
       res.status(403).json({ error: "Access denied: you can only view your own reports" });
       return;
     }
-  } else if (user.role === "panchayat_admin") {
+  } else if (user.role === "panchayat_admin" || user.role === "commissioner") {
     const [officer] = await db.select().from(officersTable).where(eq(officersTable.id, id)).limit(1);
     if (!officer || officer.panchayatName !== user.panchayatName) {
       res.status(403).json({ error: "Access denied: officer is not in your panchayat" });

@@ -7,6 +7,7 @@ import adminRouter from "./admin";
 import uploadsRouter from "./uploads";
 import panchayatRouter from "./panchayat";
 import notificationsRouter from "./notifications";
+import hierarchyRouter from "./hierarchy";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(adminRouter);
 router.use(panchayatRouter);
 router.use(uploadsRouter);
 router.use(notificationsRouter);
+router.use(hierarchyRouter);
 
 export default router;

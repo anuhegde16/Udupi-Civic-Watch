@@ -79,8 +79,15 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
   const limit = query.success ? (query.data.limit ?? 50) : 50;
   const offset = query.success ? (query.data.offset ?? 0) : 0;
 
+  // New hierarchy roles have dedicated APIs (task #265); deny generic access
+  const HIERARCHY_ONLY_ROLES = ["supervisor", "health_inspector", "environmental_engineer", "community_mobiliser"];
+  if (HIERARCHY_ONLY_ROLES.includes(user.role)) {
+    res.status(403).json({ error: "Use the role-specific API for report access" });
+    return;
+  }
+
   const isFieldOfficer = user.role === "officer" || user.role === "field_officer";
-  const isPanchayatAdmin = user.role === "panchayat_admin";
+  const isPanchayatAdmin = user.role === "panchayat_admin" || user.role === "commissioner";
 
   let conditions: any[] = [isNull(reportsTable.deletedAt)];
 
@@ -368,6 +375,13 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  // New hierarchy roles have dedicated APIs (task #265); deny before any DB work
+  const HIERARCHY_ONLY_ROLES = ["supervisor", "health_inspector", "environmental_engineer", "community_mobiliser"];
+  if (HIERARCHY_ONLY_ROLES.includes(user.role)) {
+    res.status(403).json({ error: "Use the role-specific API for report access" });
+    return;
+  }
+
   const [row] = await db
     .select({ report: reportsTable, officer: officersTable })
     .from(reportsTable)
@@ -386,7 +400,7 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  if (user.role === "panchayat_admin") {
+  if (user.role === "panchayat_admin" || user.role === "commissioner") {
     if (!user.panchayatName || !row.report.assignedOfficerId) {
       res.status(403).json({ error: "Access denied" });
       return;
@@ -403,7 +417,7 @@ router.get("/reports/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const { report, officer } = row;
-  const isAdminOrPanchayat = user.role === "admin" || user.role === "control_center" || user.role === "panchayat_admin";
+  const isAdminOrPanchayat = user.role === "admin" || user.role === "control_center" || user.role === "panchayat_admin" || user.role === "commissioner";
   const safeReport = sanitizeReport(report);
   res.json({
     ...safeReport,
@@ -421,7 +435,14 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Always fetch existing — needed for auth checks AND to capture old status for email deduplication
+  // New hierarchy roles have dedicated APIs (task #265); deny before any DB work
+  const HIERARCHY_ONLY_ROLES = ["supervisor", "health_inspector", "environmental_engineer", "community_mobiliser"];
+  if (HIERARCHY_ONLY_ROLES.includes(user.role)) {
+    res.status(403).json({ error: "Use the role-specific API for report access" });
+    return;
+  }
+
+  // Fetch existing — needed for auth checks AND to capture old status for email deduplication
   const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id)).limit(1);
   if (!existing) {
     res.status(404).json({ error: "Report not found" });
@@ -435,7 +456,7 @@ router.patch("/reports/:id", requireAuth, async (req, res): Promise<void> => {
       res.status(403).json({ error: "Access denied: report is not assigned to you" });
       return;
     }
-  } else if (user.role === "panchayat_admin") {
+  } else if (user.role === "panchayat_admin" || user.role === "commissioner") {
     if (!user.panchayatName || !existing.assignedOfficerId) {
       res.status(403).json({ error: "Access denied" });
       return;

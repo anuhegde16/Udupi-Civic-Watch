@@ -21,6 +21,9 @@ import MasterReports from "@/pages/master-reports";
 import MasterAnalytics from "@/pages/master-analytics";
 import ControlCenterAnalytics from "@/pages/control-center-analytics";
 import NotificationsPage from "@/pages/notifications";
+import HierarchyPlaceholder from "@/pages/hierarchy-placeholder";
+import ChangePassword from "@/pages/change-password";
+import Activate from "@/pages/activate";
 
 const queryClient = new QueryClient();
 
@@ -49,20 +52,42 @@ function Router() {
           </AuthGuard>
         </Route>
 
-        {/* Protected Panchayat Admin Routes */}
+        {/* Protected Panchayat Admin Routes — commissioner also permitted */}
         <Route path="/master/dashboard">
-          <AuthGuard roles={["panchayat_admin"]}>
+          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
             <MasterDashboard />
           </AuthGuard>
         </Route>
         <Route path="/master/reports">
-          <AuthGuard roles={["panchayat_admin"]}>
+          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
             <MasterReports />
           </AuthGuard>
         </Route>
         <Route path="/master/analytics">
-          <AuthGuard roles={["panchayat_admin"]}>
+          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
             <MasterAnalytics />
+          </AuthGuard>
+        </Route>
+
+        {/* Udupi hierarchy role dashboards — full UI delivered by task #265 */}
+        <Route path="/supervisor/dashboard">
+          <AuthGuard roles={["supervisor"]}>
+            <HierarchyPlaceholder />
+          </AuthGuard>
+        </Route>
+        <Route path="/health-inspector/dashboard">
+          <AuthGuard roles={["health_inspector"]}>
+            <HierarchyPlaceholder />
+          </AuthGuard>
+        </Route>
+        <Route path="/env-engineer/dashboard">
+          <AuthGuard roles={["environmental_engineer"]}>
+            <HierarchyPlaceholder />
+          </AuthGuard>
+        </Route>
+        <Route path="/community-mobiliser/dashboard">
+          <AuthGuard roles={["community_mobiliser"]}>
+            <HierarchyPlaceholder />
           </AuthGuard>
         </Route>
 
@@ -92,6 +117,18 @@ function Router() {
           <AuthGuard roles={["officer", "field_officer", "admin", "control_center", "panchayat_admin"]}>
             <NotificationsPage />
           </AuthGuard>
+        </Route>
+
+        {/* Forced password-change for seeded hierarchy accounts */}
+        <Route path="/change-password">
+          <AuthGuard roles={["supervisor", "health_inspector", "environmental_engineer", "commissioner", "community_mobiliser", "panchayat_admin", "officer", "field_officer", "admin", "control_center"]}>
+            <ChangePassword />
+          </AuthGuard>
+        </Route>
+
+        {/* One-time account activation for new hierarchy staff (no auth required) */}
+        <Route path="/activate">
+          <Activate />
         </Route>
 
         <Route component={NotFound} />

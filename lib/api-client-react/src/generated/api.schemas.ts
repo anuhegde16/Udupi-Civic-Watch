@@ -169,6 +169,10 @@ export interface DistrictAnalyticsResponse {
 }
 
 export interface LoginBody {
+  /**
+   * Email address OR phone number (phone numbers are accepted for Udupi hierarchy staff)
+   * @minLength 1
+   */
   email: string;
   password: string;
 }
@@ -181,6 +185,11 @@ export const UserInfoRole = {
   field_officer: "field_officer",
   control_center: "control_center",
   panchayat_admin: "panchayat_admin",
+  supervisor: "supervisor",
+  health_inspector: "health_inspector",
+  environmental_engineer: "environmental_engineer",
+  commissioner: "commissioner",
+  community_mobiliser: "community_mobiliser",
 } as const;
 
 export interface UserInfo {
@@ -195,6 +204,14 @@ export interface UserInfo {
 export interface LoginResponse {
   user: UserInfo;
   token?: string;
+  /** When true, the user must change their password before proceeding */
+  passwordResetRequired?: boolean;
+}
+
+export interface ChangePasswordBody {
+  currentPassword: string;
+  /** @minLength 8 */
+  newPassword: string;
 }
 
 export type ReportStatusProperty =

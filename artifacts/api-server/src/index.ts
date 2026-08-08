@@ -235,6 +235,296 @@ async function relocateDemoReportsToSaligrama() {
   }
 }
 
+// ── Udupi hierarchy tables + accounts ─────────────────────────────────────────
+
+/**
+ * MUST run before any Drizzle ORM query so the `phone` column exists in the
+ * DB to match the schema. Uses a raw pg pool query (not Drizzle) to avoid
+ * the chicken-and-egg problem where Drizzle tries to SELECT the column before
+ * we've added it.
+ */
+async function bootstrapPhoneColumn() {
+  try {
+    const { pool } = await import("@workspace/db");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone text");
+    await pool.query(
+      "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_required boolean NOT NULL DEFAULT false",
+    );
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS activation_token text");
+  } catch (err) {
+    // Non-fatal — column may already exist on a subsequent restart
+  }
+}
+
+async function ensureUdupiHierarchyTables() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+
+    // phone column is added by bootstrapPhoneColumn() at the very start;
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS environmental_engineers (
+        id            serial PRIMARY KEY,
+        name          text        NOT NULL,
+        phone         text        NOT NULL,
+        panchayat_name text       NOT NULL,
+        created_at    timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS health_inspectors (
+        id                       serial PRIMARY KEY,
+        name                     text        NOT NULL,
+        phone                    text        NOT NULL,
+        panchayat_name           text        NOT NULL,
+        environmental_engineer_id integer,
+        created_at               timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS supervisors (
+        id                  serial PRIMARY KEY,
+        name                text        NOT NULL,
+        phone               text        NOT NULL,
+        panchayat_name      text        NOT NULL,
+        health_inspector_id integer,
+        ward_names          jsonb       NOT NULL DEFAULT '[]',
+        created_at          timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS community_mobilisers (
+        id             serial PRIMARY KEY,
+        name           text        NOT NULL,
+        phone          text        NOT NULL,
+        panchayat_name text        NOT NULL,
+        ward_name      text        NOT NULL,
+        ward_number    integer     NOT NULL,
+        created_at     timestamptz NOT NULL DEFAULT now()
+      )
+    `);
+
+    logger.info("Udupi hierarchy tables ready");
+  } catch (err) {
+    logger.warn({ err }, "Could not ensure Udupi hierarchy tables");
+  }
+}
+
+async function seedUdupiHierarchy() {
+  try {
+    const { db, usersTable } = await import("@workspace/db");
+    const { sql, eq } = await import("drizzle-orm");
+    const { hashPassword } = await import("./lib/auth");
+
+    const PANCHAYAT = "Udupi";
+
+    // ── Initial password provisioning ────────────────────────────────────────
+    // Plaintext passwords are NEVER logged. Instead, each account is given a
+    // one-time ACTIVATION TOKEN. The admin retrieves pending tokens via:
+    //   GET /api/admin/hierarchy-accounts  (requires admin/control_center role)
+    // Staff visit /activate?token=<token> to set their own password.
+    //
+    // Additionally, any existing accounts whose password_hash still matches the
+    // previously-exposed "Udupi@1234" credential are locked (hash reset to an
+    // unguessable bcrypt string) so that credential no longer works.
+    const { randomBytes } = await import("crypto");
+
+    // Invalidate ALL accounts (regardless of password_reset_required flag) that
+    // still carry the known-bad exposed "Udupi@1234" credential.
+    // For each affected account we ALSO provision a fresh activation_token and
+    // set password_reset_required=true so the owner has a supported path to
+    // regain access via /activate?token=<token>.
+    const { comparePassword: cmp } = await import("./lib/auth");
+    const KNOWN_BAD_PASSWORD = "Udupi@1234";
+    const lockedHash = await hashPassword(randomBytes(32).toString("hex")); // unguessable
+    const staleAccounts = await db.execute(sql`
+      SELECT id, password_hash FROM users
+      WHERE panchayat_name = ${PANCHAYAT} AND phone IS NOT NULL
+    `);
+    let rotated = 0;
+    for (const row of staleAccounts.rows as any[]) {
+      const isExposed = await cmp(KNOWN_BAD_PASSWORD, row.password_hash);
+      if (isExposed) {
+        const activationToken = randomBytes(20).toString("hex");
+        await db.execute(sql`
+          UPDATE users
+          SET password_hash = ${lockedHash},
+              password_reset_required = true,
+              activation_token = ${activationToken}
+          WHERE id = ${row.id}
+        `);
+        rotated++;
+      }
+    }
+    if (rotated > 0) {
+      logger.info({ rotated }, "Udupi hierarchy: invalidated exposed Udupi@1234 hashes and provisioned activation tokens — retrieve via GET /api/admin/hierarchy-accounts");
+    }
+
+    // New accounts use a random locked hash; staff activate via token
+    const passwordHash = lockedHash;
+
+    // Helper: insert a users row for a phone-identified person (idempotent).
+    // Accounts are created with password_reset_required=true so every user
+    // must set their own password on first login.
+    async function ensureUser(
+      phone: string,
+      name: string,
+      role: string,
+      profileId: number | null,
+    ) {
+      const existing = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.phone, phone))
+        .limit(1);
+      if (existing.length > 0) return;
+
+      // One-time activation token: admin retrieves it via
+      // GET /api/admin/hierarchy-accounts to distribute to the staff member,
+      // who then goes to /activate?token=<token> to set their initial password.
+      const activationToken = randomBytes(20).toString("hex"); // 40 hex chars
+
+      await db.execute(sql`
+        INSERT INTO users (email, password_hash, name, role, officer_id, panchayat_name, phone, password_reset_required, activation_token)
+        VALUES (
+          ${phone + "@phone.local"},
+          ${passwordHash},
+          ${name},
+          ${role},
+          ${profileId !== null ? String(profileId) : null},
+          ${PANCHAYAT},
+          ${phone},
+          true,
+          ${activationToken}
+        )
+        ON CONFLICT DO NOTHING
+      `);
+    }
+
+    // ── Environmental Engineer ─────────────────────────────────────────────
+    const eePhone = "7624851225";
+    const eeName  = "Mr. Ravi Prakash";
+    let eeId: number;
+    {
+      const r = await db.execute(sql`SELECT id FROM environmental_engineers WHERE phone = ${eePhone} LIMIT 1`);
+      if (r.rows.length > 0) {
+        eeId = r.rows[0].id as number;
+      } else {
+        const ins = await db.execute(sql`
+          INSERT INTO environmental_engineers (name, phone, panchayat_name)
+          VALUES (${eeName}, ${eePhone}, ${PANCHAYAT}) RETURNING id
+        `);
+        eeId = ins.rows[0].id as number;
+      }
+    }
+    await ensureUser(eePhone, eeName, "environmental_engineer", eeId);
+
+    // ── Commissioner (users table only — no separate profile table) ────────
+    await ensureUser("8277293917", "Mr. Mahantesh Hangaragi", "commissioner", null);
+
+    // ── Health Inspectors ──────────────────────────────────────────────────
+    const hiList = [
+      { name: "Mr. Surendra Hobalidara", phone: "9739296004" },
+      { name: "Mr. Harish Billava",      phone: "9535052544" },
+      { name: "Mr. Satheesh",            phone: "9845905977" },
+      { name: "Mr. Prakash Prabhu",      phone: "9964213243" },
+    ];
+    const hiIds: Record<string, number> = {};
+    for (const hi of hiList) {
+      let hiId: number;
+      const r = await db.execute(sql`SELECT id FROM health_inspectors WHERE phone = ${hi.phone} LIMIT 1`);
+      if (r.rows.length > 0) {
+        hiId = r.rows[0].id as number;
+      } else {
+        const ins = await db.execute(sql`
+          INSERT INTO health_inspectors (name, phone, panchayat_name, environmental_engineer_id)
+          VALUES (${hi.name}, ${hi.phone}, ${PANCHAYAT}, ${eeId}) RETURNING id
+        `);
+        hiId = ins.rows[0].id as number;
+      }
+      hiIds[hi.phone] = hiId;
+      await ensureUser(hi.phone, hi.name, "health_inspector", hiId);
+    }
+
+    // ── Supervisors ────────────────────────────────────────────────────────
+    const supervisorList = [
+      { name: "Mr. Nagarjun D Amin",  phone: "8431564819", hi: "9739296004", wards: [[1,"Kola"],[2,"Vadabhandeshwara"],[3,"Malpe Central"]] },
+      { name: "Mr. Suresh Kelkar",    phone: "9844963244", hi: "9739296004", wards: [[5,"Kalmady"],[10,"Gopalapura"],[4,"Kodavoor"]] },
+      { name: "Mr. Yogeesh",          phone: "9743600255", hi: "9739296004", wards: [[6,"Moodubettu"],[9,"Subhrahmanya Nagar"],[7,"Kodankuru"]] },
+      { name: "Mrs. Anitha",          phone: "9743883501", hi: "9739296004", wards: [[8,"Nittur"],[28,"Bannanje"],[35,"Ambalapady"]] },
+      { name: "Mr. Manohar Karkada",  phone: "8105136113", hi: "9535052544", wards: [[25,"Kunjibettu"],[26,"Kadiyali"],[27,"Gundibailu"]] },
+      { name: "Mr. Sachin",           phone: "7676880597", hi: "9535052544", wards: [[22,"76 Badagubettu"],[31,"Bailoor"],[23,"Chitpady"]] },
+      { name: "Mr. Shreekanth",       phone: "9880605830", hi: "9845905977", wards: [[30,"Olakadu"],[29,"Tenkapete"],[34,"Shiribeedu"]] },
+      { name: "Mr. Prashanth",        phone: "9901995778", hi: "9845905977", wards: [[33,"Ajjarakadu"],[32,"Kinnimulky"]] },
+    ] as const;
+
+    for (const sv of supervisorList) {
+      const hiId = hiIds[sv.hi];
+      const wardNames = JSON.stringify(sv.wards.map(([n, w]) => `Ward ${n}/${w}`));
+      let svId: number;
+      const r = await db.execute(sql`SELECT id FROM supervisors WHERE phone = ${sv.phone} LIMIT 1`);
+      if (r.rows.length > 0) {
+        svId = r.rows[0].id as number;
+      } else {
+        const ins = await db.execute(sql`
+          INSERT INTO supervisors (name, phone, panchayat_name, health_inspector_id, ward_names)
+          VALUES (${sv.name}, ${sv.phone}, ${PANCHAYAT}, ${hiId}, ${wardNames}::jsonb) RETURNING id
+        `);
+        svId = ins.rows[0].id as number;
+      }
+      await ensureUser(sv.phone, sv.name, "supervisor", svId);
+    }
+
+    // ── Community Mobilisers ───────────────────────────────────────────────
+    const mobiliserList = [
+      { name: "Smt. Anasooya",       phone: "9480113566", wardNum: 1,  wardName: "Kola" },
+      { name: "Smt. Roopa Sandesh",  phone: "8073001725", wardNum: 3,  wardName: "Malpe Central" },
+      { name: "Smt. Vishala",        phone: "8660649340", wardNum: 10, wardName: "Gopalapura" },
+      { name: "Mrs. Usha",           phone: "9964786320", wardNum: 4,  wardName: "Kodavoor" },
+      { name: "Smt. Usha K",         phone: "9742028159", wardNum: 9,  wardName: "Subhrahmanya Nagar" },
+      { name: "Smt. Amrutha Rao",    phone: "9380752725", wardNum: 7,  wardName: "Kodankuru" },
+      { name: "Smt. Rashmi",         phone: "9632268961", wardNum: 8,  wardName: "Nittur" },
+      { name: "Smt. Vanishree",      phone: "7019922564", wardNum: 28, wardName: "Bannanje" },
+      { name: "Smt. Namratha",       phone: "9538608770", wardNum: 25, wardName: "Kunjibettu" },
+      { name: "Smt. Sapthami",       phone: "9353499589", wardNum: 26, wardName: "Kadiyali" },
+      { name: "Smt. Chandrika",      phone: "9743662050", wardNum: 27, wardName: "Gundibailu" },
+      { name: "Smt. Reshma",         phone: "8746819027", wardNum: 22, wardName: "76 Badagubettu" },
+      { name: "Smt. Thulasini",      phone: "8748967646", wardNum: 31, wardName: "Bailoor" },
+      { name: "Smt. Nalini Prabhu",  phone: "6361668572", wardNum: 23, wardName: "Chitpady" },
+      { name: "Mrs. Deepika",        phone: "8296368243", wardNum: 29, wardName: "Tenkapete" },
+      { name: "Smt. Nirmitha",       phone: "9743579735", wardNum: 33, wardName: "Ajjarakadu" },
+      { name: "Smt. Chaithra",       phone: "9481213815", wardNum: 11, wardName: "Kakkunje" },
+      { name: "Smt. Akshaya C",      phone: "7899101290", wardNum: 13, wardName: "Moodu Perampalli" },
+      { name: "Smt. Deepa",          phone: "8618325567", wardNum: 19, wardName: "Moodu Sagri" },
+      { name: "Smt. Pruthvi",        phone: "9880715984", wardNum: 20, wardName: "Indrali" },
+      { name: "Smt. Akshaya",        phone: "8971681037", wardNum: 21, wardName: "Indira Nagar" },
+      { name: "Smt. Sangeetha",      phone: "9964586450", wardNum: 16, wardName: "Parkala" },
+      { name: "Smt. Ramya",          phone: "9741874680", wardNum: 15, wardName: "Shettibettu" },
+      { name: "Smt. Abhirami",       phone: "8147125096", wardNum: 14, wardName: "Saralabettu" },
+    ];
+
+    for (const cm of mobiliserList) {
+      let cmId: number;
+      const r = await db.execute(sql`SELECT id FROM community_mobilisers WHERE phone = ${cm.phone} LIMIT 1`);
+      if (r.rows.length > 0) {
+        cmId = r.rows[0].id as number;
+      } else {
+        const ins = await db.execute(sql`
+          INSERT INTO community_mobilisers (name, phone, panchayat_name, ward_name, ward_number)
+          VALUES (${cm.name}, ${cm.phone}, ${PANCHAYAT}, ${cm.wardName}, ${cm.wardNum}) RETURNING id
+        `);
+        cmId = ins.rows[0].id as number;
+      }
+      await ensureUser(cm.phone, cm.name, "community_mobiliser", cmId);
+    }
+
+    logger.info("Udupi hierarchy accounts seeded");
+  } catch (err) {
+    logger.warn({ err }, "Could not seed Udupi hierarchy");
+  }
+}
+
 async function migrateRoles() {
   try {
     const { db } = await import("@workspace/db");
@@ -346,6 +636,8 @@ async function ensurePushSubscriptionsColumns() {
 }
 
 async function start() {
+  // Must run before any Drizzle query — adds phone column if missing
+  await bootstrapPhoneColumn();
   await ensureAdminExists();
   await ensureReportsColumns();
   await ensurePushSubscriptionsColumns();
@@ -354,6 +646,10 @@ async function start() {
   await seedOfficerPanchayatNames();
   await clearBrokenDiskImageRefs();
   await relocateDemoReportsToSaligrama();
+  // Udupi hierarchy — must run after clearBrokenDiskImageRefs so the
+  // system_migrations table already exists
+  await ensureUdupiHierarchyTables();
+  await seedUdupiHierarchy();
 
   startScheduler();
 

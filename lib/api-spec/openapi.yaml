@@ -76,6 +76,29 @@ paths:
         "401":
           description: Not authenticated
 
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change the logged-in user's password (required after first login for seeded accounts)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordBody"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Validation error or weak password
+        "401":
+          description: Not authenticated or current password incorrect
+
   /auth/logout:
     post:
       operationId: logout
@@ -88,6 +111,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+
+  /supervisor/me:
+    get:
+      operationId: getSupervisorMe
+      tags: [auth]
+      summary: Profile for the logged-in supervisor
+      responses:
+        "200":
+          description: Supervisor profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not a supervisor
+
+  /health-inspector/me:
+    get:
+      operationId: getHealthInspectorMe
+      tags: [auth]
+      summary: Profile for the logged-in health inspector
+      responses:
+        "200":
+          description: Health inspector profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not a health inspector
+
+  /env-engineer/me:
+    get:
+      operationId: getEnvEngineerMe
+      tags: [auth]
+      summary: Profile for the logged-in environmental engineer
+      responses:
+        "200":
+          description: Environmental engineer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not an environmental engineer
+
+  /commissioner/me:
+    get:
+      operationId: getCommissionerMe
+      tags: [auth]
+      summary: Profile for the logged-in commissioner
+      responses:
+        "200":
+          description: Commissioner profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not a commissioner
+
+  /community-mobiliser/me:
+    get:
+      operationId: getCommunityMobiliserMe
+      tags: [auth]
+      summary: Profile for the logged-in community mobiliser
+      responses:
+        "200":
+          description: Community mobiliser profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+        "403":
+          description: Not a community mobiliser
 
   /reports:
     get:
@@ -918,7 +1026,8 @@ components:
       properties:
         email:
           type: string
-          format: email
+          minLength: 1
+          description: "Email address OR phone number (phone numbers are accepted for Udupi hierarchy staff)"
         password:
           type: string
       required: [email, password]
@@ -930,6 +1039,9 @@ components:
           $ref: "#/components/schemas/UserInfo"
         token:
           type: string
+        passwordResetRequired:
+          type: boolean
+          description: "When true, the user must change their password before proceeding"
       required: [user]
 
     UserInfo:
@@ -943,7 +1055,17 @@ components:
           type: string
         role:
           type: string
-          enum: [officer, admin, field_officer, control_center, panchayat_admin]
+          enum:
+            - officer
+            - admin
+            - field_officer
+            - control_center
+            - panchayat_admin
+            - supervisor
+            - health_inspector
+            - environmental_engineer
+            - commissioner
+            - community_mobiliser
         officerId:
           type: integer
           nullable: true
@@ -951,6 +1073,16 @@ components:
           type: string
           nullable: true
       required: [id, email, name, role]
+
+    ChangePasswordBody:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
+      required: [currentPassword, newPassword]
 
     Report:
       type: object

@@ -18,8 +18,14 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Login for officer or admin
  */
+
 export const LoginBody = zod.object({
-  email: zod.string().email(),
+  email: zod
+    .string()
+    .min(1)
+    .describe(
+      "Email address OR phone number (phone numbers are accepted for Udupi hierarchy staff)",
+    ),
   password: zod.string(),
 });
 
@@ -34,11 +40,22 @@ export const LoginResponse = zod.object({
       "field_officer",
       "control_center",
       "panchayat_admin",
+      "supervisor",
+      "health_inspector",
+      "environmental_engineer",
+      "commissioner",
+      "community_mobiliser",
     ]),
     officerId: zod.number().nullish(),
     panchayatName: zod.string().nullish(),
   }),
   token: zod.string().optional(),
+  passwordResetRequired: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, the user must change their password before proceeding",
+    ),
 });
 
 /**
@@ -54,15 +71,75 @@ export const GetMeResponse = zod.object({
     "field_officer",
     "control_center",
     "panchayat_admin",
+    "supervisor",
+    "health_inspector",
+    "environmental_engineer",
+    "commissioner",
+    "community_mobiliser",
   ]),
   officerId: zod.number().nullish(),
   panchayatName: zod.string().nullish(),
 });
 
 /**
+ * @summary Change the logged-in user's password (required after first login for seeded accounts)
+ */
+export const changePasswordBodyNewPasswordMin = 8;
+
+export const ChangePasswordBody = zod.object({
+  currentPassword: zod.string(),
+  newPassword: zod.string().min(changePasswordBodyNewPasswordMin),
+});
+
+export const ChangePasswordResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary Logout
  */
 export const LogoutResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Profile for the logged-in supervisor
+ */
+export const GetSupervisorMeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Profile for the logged-in health inspector
+ */
+export const GetHealthInspectorMeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Profile for the logged-in environmental engineer
+ */
+export const GetEnvEngineerMeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Profile for the logged-in commissioner
+ */
+export const GetCommissionerMeResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Profile for the logged-in community mobiliser
+ */
+export const GetCommunityMobiliserMeResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
 });

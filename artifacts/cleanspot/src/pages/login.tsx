@@ -15,11 +15,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useLogin } from "@workspace/api-client-react";
-import { Shield, UserCog, Lock, Mail } from "lucide-react";
+import { Shield, UserCog, Lock, Phone } from "lucide-react";
 import { ForgotPassword } from "./forgot-password";
 
 const schema = z.object({
-  email: z.string().email("Enter a valid email"),
+  // Accepts an email address or a phone number (for Udupi hierarchy accounts)
+  email: z.string().min(1, "Enter your email or phone number"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -40,7 +41,7 @@ export default function LoginPage({ portalType }: LoginProps) {
     ? "admin@udupicivicwatch.com"
     : isMaster
     ? "saligrama@udupicivicspot.com"
-    : "saligrama@udupicivicspot.com";
+    : "";
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
@@ -52,13 +53,44 @@ export default function LoginPage({ portalType }: LoginProps) {
       { data: values },
       {
         onSuccess: (data) => {
-          const role = data?.user?.role;
+          const body = data as any;
+
+          // Token-provisioned accounts (new hierarchy staff) cannot use the
+          // login → change-password path because they have no known current
+          // password. The server returns requiresActivation: true without
+          // issuing a session cookie.
+          if (body?.requiresActivation) {
+            toast({
+              title: "Account not yet activated",
+              description:
+                "Please use the activation link sent by your administrator. Contact them if you don't have it.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          // Admin-forced reset (user knows current password): redirect to the
+          // change-password page so they can set a new one.
+          if (body?.passwordResetRequired) {
+            setLocation("/change-password", { replace: true });
+            return;
+          }
+
+          const role = body?.user?.role;
           if (role === "admin" || role === "control_center") {
             setLocation("/admin/dashboard", { replace: true });
-          } else if (role === "panchayat_admin") {
+          } else if (role === "panchayat_admin" || role === "commissioner") {
             setLocation("/master/dashboard", { replace: true });
           } else if (role === "officer" || role === "field_officer") {
             setLocation("/officer/dashboard", { replace: true });
+          } else if (role === "supervisor") {
+            setLocation("/supervisor/dashboard", { replace: true });
+          } else if (role === "health_inspector") {
+            setLocation("/health-inspector/dashboard", { replace: true });
+          } else if (role === "environmental_engineer") {
+            setLocation("/env-engineer/dashboard", { replace: true });
+          } else if (role === "community_mobiliser") {
+            setLocation("/community-mobiliser/dashboard", { replace: true });
           } else {
             setLocation("/", { replace: true });
           }
@@ -76,9 +108,9 @@ export default function LoginPage({ portalType }: LoginProps) {
 
   const headerBg = isAdmin ? "bg-slate-800" : isMaster ? "bg-indigo-700" : "bg-green-700";
   const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700" : isMaster ? "bg-indigo-700 hover:bg-indigo-600" : "bg-green-700 hover:bg-green-600";
-  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : "Officer Portal";
-  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : "Field Officer Login";
-  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "officer@udupicivicspot.com";
+  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : "Staff Portal";
+  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : "Field Staff Login";
+  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "Phone number or email";
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
@@ -119,11 +151,11 @@ export default function LoginPage({ portalType }: LoginProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Email
+                        Phone number or email
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                           <Input
                             placeholder={placeholder}
                             className="pl-9"

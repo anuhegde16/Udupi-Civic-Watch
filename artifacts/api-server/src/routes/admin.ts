@@ -1028,4 +1028,35 @@ router.post("/admin/test-emails", requireControlCenter, async (req, res): Promis
   });
 });
 
+// ── Udupi hierarchy pending activation accounts ───────────────────────────────
+// Returns accounts that still have a pending activation token so the admin
+// can distribute tokens to staff members. Activation tokens are cleared
+// after the staff member sets their own password via POST /auth/activate.
+
+router.get("/admin/hierarchy-accounts", requireAdmin, async (req, res): Promise<void> => {
+  try {
+    const rows = await db.execute(sql`
+      SELECT id, name, phone, role, panchayat_name, activation_token, password_reset_required
+      FROM users
+      WHERE panchayat_name = 'Udupi' AND phone IS NOT NULL
+      ORDER BY role, name
+    `);
+    res.json({
+      accounts: (rows.rows as any[]).map((r) => ({
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        role: r.role,
+        panchayatName: r.panchayat_name,
+        activated: !r.password_reset_required,
+        // Only expose token for pending accounts so it can be distributed
+        activationToken: r.password_reset_required ? r.activation_token : null,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, "Error fetching hierarchy accounts");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
