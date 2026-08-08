@@ -25,7 +25,7 @@ const schema = z.object({
 });
 
 interface LoginProps {
-  portalType?: "staff" | "admin" | "master";
+  portalType?: "staff" | "admin" | "master" | "supervisory";
 }
 
 export default function LoginPage({ portalType }: LoginProps) {
@@ -36,6 +36,7 @@ export default function LoginPage({ portalType }: LoginProps) {
 
   const isAdmin = portalType === "admin";
   const isMaster = portalType === "master";
+  const isSupervisory = portalType === "supervisory";
 
   const defaultEmail = isAdmin
     ? "admin@udupicivicwatch.com"
@@ -79,8 +80,10 @@ export default function LoginPage({ portalType }: LoginProps) {
           const role = body?.user?.role;
           if (role === "admin" || role === "control_center") {
             setLocation("/admin/dashboard", { replace: true });
-          } else if (role === "panchayat_admin" || role === "commissioner") {
+          } else if (role === "panchayat_admin") {
             setLocation("/master/dashboard", { replace: true });
+          } else if (role === "commissioner") {
+            setLocation("/commissioner/dashboard", { replace: true });
           } else if (role === "officer" || role === "field_officer") {
             setLocation("/officer/dashboard", { replace: true });
           } else if (role === "supervisor") {
@@ -106,14 +109,14 @@ export default function LoginPage({ portalType }: LoginProps) {
     );
   }
 
-  const headerBg = isAdmin ? "bg-slate-800" : isMaster ? "bg-indigo-700" : "bg-green-700";
-  const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700" : isMaster ? "bg-indigo-700 hover:bg-indigo-600" : "bg-green-700 hover:bg-green-600";
-  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : "Staff Portal";
-  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : "Field Staff Login";
-  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "Phone number or email";
+  const headerBg = isAdmin ? "bg-slate-800" : isMaster ? "bg-indigo-700" : isSupervisory ? "bg-violet-700" : "bg-green-700";
+  const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700" : isMaster ? "bg-indigo-700 hover:bg-indigo-600" : isSupervisory ? "bg-violet-700 hover:bg-violet-600" : "bg-green-700 hover:bg-green-600";
+  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : isSupervisory ? "Supervisory Staff Portal" : "Staff Portal";
+  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : isSupervisory ? "Health Inspectors & Environmental Engineers" : "Field Staff Login";
+  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "Phone number";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 bg-gradient-to-br ${isAdmin ? "from-slate-100 to-slate-200" : isMaster ? "from-indigo-50 to-indigo-100" : isSupervisory ? "from-violet-50 to-purple-100" : "from-green-50 to-emerald-100"}`}>
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
         <div className={`px-8 py-6 text-white ${headerBg}`}>

@@ -25,6 +25,7 @@ import SupervisorDashboard from "@/pages/supervisor-dashboard";
 import HealthInspectorDashboard from "@/pages/health-inspector-dashboard";
 import EnvEngineerDashboard from "@/pages/env-engineer-dashboard";
 import CommunityMobiliserDashboard from "@/pages/community-mobiliser-dashboard";
+import CommissionerDashboard from "@/pages/commissioner-dashboard";
 import ChangePassword from "@/pages/change-password";
 import Activate from "@/pages/activate";
 
@@ -42,6 +43,7 @@ function Router() {
         <Route path="/staff/login">{() => <Login portalType="staff" />}</Route>
         <Route path="/admin/login">{() => <Login portalType="admin" />}</Route>
         <Route path="/master/login">{() => <Login portalType="master" />}</Route>
+        <Route path="/supervisory/login">{() => <Login portalType="supervisory" />}</Route>
         
         {/* Protected Officer Routes */}
         <Route path="/officer/dashboard">
@@ -55,20 +57,27 @@ function Router() {
           </AuthGuard>
         </Route>
 
-        {/* Protected Panchayat Admin Routes — commissioner also permitted */}
+        {/* Protected Panchayat Admin Routes */}
         <Route path="/master/dashboard">
-          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
+          <AuthGuard roles={["panchayat_admin"]}>
             <MasterDashboard />
           </AuthGuard>
         </Route>
         <Route path="/master/reports">
-          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
+          <AuthGuard roles={["panchayat_admin"]}>
             <MasterReports />
           </AuthGuard>
         </Route>
         <Route path="/master/analytics">
-          <AuthGuard roles={["panchayat_admin", "commissioner"]}>
+          <AuthGuard roles={["panchayat_admin"]}>
             <MasterAnalytics />
+          </AuthGuard>
+        </Route>
+
+        {/* Commissioner dashboard */}
+        <Route path="/commissioner/dashboard">
+          <AuthGuard roles={["commissioner"]}>
+            <CommissionerDashboard />
           </AuthGuard>
         </Route>
 

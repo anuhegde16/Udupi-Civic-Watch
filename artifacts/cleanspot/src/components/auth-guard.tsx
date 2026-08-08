@@ -8,9 +8,9 @@ const ROLE_ALIASES: Record<string, string[]> = {
   control_center: ["admin", "control_center"],
   officer: ["officer", "field_officer"],
   field_officer: ["officer", "field_officer"],
-  // commissioner inherits panchayat_admin permissions
-  panchayat_admin: ["panchayat_admin", "commissioner"],
-  commissioner: ["panchayat_admin", "commissioner"],
+  // panchayat_admin and commissioner are now independent roles
+  panchayat_admin: ["panchayat_admin"],
+  commissioner: ["commissioner"],
 };
 
 function expandRoles(roles: string[]): string[] {
@@ -23,7 +23,8 @@ function expandRoles(roles: string[]): string[] {
 
 function dashboardFor(role: string): string {
   if (role === "admin" || role === "control_center") return "/admin/dashboard";
-  if (role === "panchayat_admin" || role === "commissioner") return "/master/dashboard";
+  if (role === "panchayat_admin") return "/master/dashboard";
+  if (role === "commissioner") return "/commissioner/dashboard";
   if (role === "supervisor") return "/supervisor/dashboard";
   if (role === "health_inspector") return "/health-inspector/dashboard";
   if (role === "environmental_engineer") return "/env-engineer/dashboard";
@@ -45,6 +46,10 @@ export function AuthGuard({ children, roles }: { children: React.ReactNode, role
             ? "/admin/login"
             : roles?.some((r) => r === "panchayat_admin")
             ? "/master/login"
+            : roles?.some((r) => r === "commissioner")
+            ? "/master/login"
+            : roles?.some((r) => r === "health_inspector" || r === "environmental_engineer")
+            ? "/supervisory/login"
             : "/staff/login";
         setLocation(loginPath, { replace: true });
       } else if (allowedRoles && user?.role && !allowedRoles.includes(user.role)) {

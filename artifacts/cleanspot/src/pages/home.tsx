@@ -150,8 +150,27 @@ export default function Home() {
         </div>
       </section>
       
-      <div className="mt-12 text-center text-sm text-muted-foreground pb-8">
-        <p>Udupi Civic Watch • Protecting the Arabian Sea</p>
+      {/* Staff Portals */}
+      <div className="mt-8 pb-8 border-t border-border/40 pt-8">
+        <p className="text-center text-xs text-muted-foreground font-medium mb-4 uppercase tracking-wider">Staff Access</p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href="/staff/login">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border/60 rounded-full px-4 py-1.5 hover:border-border transition-colors">
+              Field Staff Portal
+            </span>
+          </Link>
+          <Link href="/supervisory/login">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border/60 rounded-full px-4 py-1.5 hover:border-border transition-colors">
+              Supervisory Staff Portal
+            </span>
+          </Link>
+          <Link href="/master/login">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border/60 rounded-full px-4 py-1.5 hover:border-border transition-colors">
+              Panchayat Admin Portal
+            </span>
+          </Link>
+        </div>
+        <p className="text-center text-xs text-muted-foreground mt-6">Udupi Civic Watch • Protecting the Arabian Sea</p>
       </div>
     </div>
   );
