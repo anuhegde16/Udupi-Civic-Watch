@@ -169,6 +169,11 @@ export default function Home() {
               Panchayat Admin Portal
             </span>
           </Link>
+          <Link href="/commissioner/login">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border/60 rounded-full px-4 py-1.5 hover:border-border transition-colors">
+              Commissioner Portal
+            </span>
+          </Link>
         </div>
         <p className="text-center text-xs text-muted-foreground mt-6">Udupi Civic Watch • Protecting the Arabian Sea</p>
       </div>

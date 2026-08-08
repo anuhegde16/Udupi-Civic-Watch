@@ -44,6 +44,7 @@ function Router() {
         <Route path="/admin/login">{() => <Login portalType="admin" />}</Route>
         <Route path="/master/login">{() => <Login portalType="master" />}</Route>
         <Route path="/supervisory/login">{() => <Login portalType="supervisory" />}</Route>
+        <Route path="/commissioner/login">{() => <Login portalType="commissioner" />}</Route>
         
         {/* Protected Officer Routes */}
         <Route path="/officer/dashboard">

@@ -47,7 +47,7 @@ export function AuthGuard({ children, roles }: { children: React.ReactNode, role
             : roles?.some((r) => r === "panchayat_admin")
             ? "/master/login"
             : roles?.some((r) => r === "commissioner")
-            ? "/master/login"
+            ? "/commissioner/login"
             : roles?.some((r) => r === "health_inspector" || r === "environmental_engineer")
             ? "/supervisory/login"
             : "/staff/login";
