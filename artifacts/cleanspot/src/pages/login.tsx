@@ -25,7 +25,8 @@ const schema = z.object({
 });
 
 interface LoginProps {
-  portalType?: "staff" | "admin" | "master" | "supervisory" | "commissioner";
+  portalType?: "staff" | "admin" | "master" | "supervisory" | "commissioner"
+    | "community-mobiliser" | "supervisor" | "health-inspector" | "env-engineer";
 }
 
 export default function LoginPage({ portalType }: LoginProps) {
@@ -38,6 +39,10 @@ export default function LoginPage({ portalType }: LoginProps) {
   const isMaster = portalType === "master";
   const isSupervisory = portalType === "supervisory";
   const isCommissioner = portalType === "commissioner";
+  const isCommunityMobiliser = portalType === "community-mobiliser";
+  const isSupervisor = portalType === "supervisor";
+  const isHealthInspector = portalType === "health-inspector";
+  const isEnvEngineer = portalType === "env-engineer";
 
   const defaultEmail = isAdmin
     ? "admin@udupicivicwatch.com"
@@ -110,14 +115,58 @@ export default function LoginPage({ portalType }: LoginProps) {
     );
   }
 
-  const headerBg = isAdmin ? "bg-slate-800" : isMaster ? "bg-indigo-700" : isSupervisory ? "bg-violet-700" : isCommissioner ? "bg-teal-800" : "bg-green-700";
-  const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700" : isMaster ? "bg-indigo-700 hover:bg-indigo-600" : isSupervisory ? "bg-violet-700 hover:bg-violet-600" : isCommissioner ? "bg-teal-800 hover:bg-teal-700" : "bg-green-700 hover:bg-green-600";
-  const portalLabel = isAdmin ? "Control Center" : isMaster ? "Panchayat Admin Portal" : isSupervisory ? "Supervisory Staff Portal" : isCommissioner ? "Municipality Commissioner" : "Staff Portal";
-  const portalDesc = isAdmin ? "District Administration Login" : isMaster ? "Panchayat Administration Login" : isSupervisory ? "Health Inspectors & Environmental Engineers" : isCommissioner ? "Commissioner Administration Login" : "Field Staff Login";
-  const placeholder = isAdmin ? "admin@udupicivicwatch.com" : isMaster ? "saligrama@udupicivicspot.com" : "Phone number";
+  const headerBg = isAdmin ? "bg-slate-800"
+    : isMaster ? "bg-indigo-700"
+    : isSupervisory ? "bg-violet-700"
+    : isCommissioner ? "bg-teal-800"
+    : isCommunityMobiliser ? "bg-emerald-700"
+    : isSupervisor ? "bg-blue-700"
+    : isHealthInspector ? "bg-violet-700"
+    : isEnvEngineer ? "bg-orange-700"
+    : "bg-green-700";
+  const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700"
+    : isMaster ? "bg-indigo-700 hover:bg-indigo-600"
+    : isSupervisory ? "bg-violet-700 hover:bg-violet-600"
+    : isCommissioner ? "bg-teal-800 hover:bg-teal-700"
+    : isCommunityMobiliser ? "bg-emerald-700 hover:bg-emerald-600"
+    : isSupervisor ? "bg-blue-700 hover:bg-blue-600"
+    : isHealthInspector ? "bg-violet-700 hover:bg-violet-600"
+    : isEnvEngineer ? "bg-orange-700 hover:bg-orange-600"
+    : "bg-green-700 hover:bg-green-600";
+  const portalLabel = isAdmin ? "Control Center"
+    : isMaster ? "Panchayat Admin Portal"
+    : isSupervisory ? "Supervisory Staff Portal"
+    : isCommissioner ? "Municipality Commissioner"
+    : isCommunityMobiliser ? "Community Mobiliser Portal"
+    : isSupervisor ? "Supervisor Portal"
+    : isHealthInspector ? "Health Inspector Portal"
+    : isEnvEngineer ? "Environmental Engineer Portal"
+    : "Staff Portal";
+  const portalDesc = isAdmin ? "District Administration Login"
+    : isMaster ? "Panchayat Administration Login"
+    : isSupervisory ? "Health Inspectors & Environmental Engineers"
+    : isCommissioner ? "Commissioner Administration Login"
+    : isCommunityMobiliser ? "Community Mobiliser Login"
+    : isSupervisor ? "Supervisor Login"
+    : isHealthInspector ? "Health Inspector Login"
+    : isEnvEngineer ? "Environmental Engineer Login"
+    : "Field Staff Login";
+  const placeholder = isAdmin ? "admin@udupicivicwatch.com"
+    : isMaster ? "saligrama@udupicivicspot.com"
+    : "Phone number";
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-4 bg-gradient-to-br ${isAdmin ? "from-slate-100 to-slate-200" : isMaster ? "from-indigo-50 to-indigo-100" : isSupervisory ? "from-violet-50 to-purple-100" : isCommissioner ? "from-teal-50 to-cyan-100" : "from-green-50 to-emerald-100"}`}>
+    <div className={`min-h-screen flex items-center justify-center p-4 bg-gradient-to-br ${
+      isAdmin ? "from-slate-100 to-slate-200"
+      : isMaster ? "from-indigo-50 to-indigo-100"
+      : isSupervisory ? "from-violet-50 to-purple-100"
+      : isCommissioner ? "from-teal-50 to-cyan-100"
+      : isCommunityMobiliser ? "from-emerald-50 to-green-100"
+      : isSupervisor ? "from-blue-50 to-blue-100"
+      : isHealthInspector ? "from-violet-50 to-purple-100"
+      : isEnvEngineer ? "from-orange-50 to-amber-100"
+      : "from-green-50 to-emerald-100"
+    }`}>
       <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
         <div className={`px-8 py-6 text-white ${headerBg}`}>
