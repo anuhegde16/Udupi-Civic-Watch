@@ -1522,6 +1522,7 @@ router.get("/commissioner/map-reports", requireCommissioner, async (req, res): P
 // ── GET /api/health-inspector/reports ─────────────────────────────────────────
 // Flat list of all reports under this HI's supervisor wards.
 // Optional ?status=reported|cleaning|cleaned filter.
+// Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
 router.get("/health-inspector/reports", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
@@ -1529,6 +1530,7 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
   if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
     res.status(400).json({ error: "Invalid status" }); return;
   }
+  const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT id, name, ward_names AS "wardNames"
@@ -1578,6 +1580,7 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
     const reports = (rawRows.rows as any[]).flatMap(r => {
       const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
       if (!match) return [];
+      if (wardFilter && match.wardName !== wardFilter) return [];
       return [{ ...r, wardName: match.wardName, supervisorName: match.svName }];
     });
     res.json({ reports, total: reports.length });
@@ -1590,6 +1593,7 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
 // ── GET /api/env-engineer/reports ─────────────────────────────────────────────
 // Flat list of all reports under this EE's HIs + supervisors.
 // Optional ?status=reported|cleaning|cleaned filter.
+// Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
 router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
@@ -1597,6 +1601,7 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
   if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
     res.status(400).json({ error: "Invalid status" }); return;
   }
+  const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   try {
     const hiRows = await db.execute(sql`
       SELECT id, name FROM health_inspectors
@@ -1657,6 +1662,7 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
     const reports = (rawRows.rows as any[]).flatMap(r => {
       const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
       if (!match) return [];
+      if (wardFilter && match.wardName !== wardFilter) return [];
       return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
     });
     res.json({ reports, total: reports.length });
@@ -1669,6 +1675,7 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
 // ── GET /api/commissioner/reports ─────────────────────────────────────────────
 // Flat list of all reports in the commissioner's panchayat.
 // Optional ?status=reported|cleaning|cleaned filter.
+// Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
 router.get("/commissioner/reports", requireCommissioner, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   const panchayat = user.panchayatName ?? "Udupi";
@@ -1676,6 +1683,7 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
   if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
     res.status(400).json({ error: "Invalid status" }); return;
   }
+  const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   try {
     // Resolve EE for this panchayat
     const eeRow = await db.execute(sql`
@@ -1742,6 +1750,7 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
     const reports = (rawRows.rows as any[]).flatMap(r => {
       const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
       if (!match) return [];
+      if (wardFilter && match.wardName !== wardFilter) return [];
       return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
     });
     res.json({ reports, total: reports.length });

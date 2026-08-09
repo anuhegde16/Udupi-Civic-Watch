@@ -30,6 +30,12 @@ interface StatusDrilldownSheetProps {
   title: string;
   reports: DrilldownReport[];
   isLoading: boolean;
+  /** Currently active ward filter */
+  wardName?: string | null;
+  /** All wards available for filtering */
+  availableWards?: string[];
+  /** Called when the user picks a ward (null = all) */
+  onWardChange?: (ward: string | null) => void;
 }
 
 function TimelineStep({
@@ -85,8 +91,12 @@ export function StatusDrilldownSheet({
   title,
   reports,
   isLoading,
+  wardName,
+  availableWards,
+  onWardChange,
 }: StatusDrilldownSheetProps) {
   const { lightbox, open: openLightbox } = useImageLightbox();
+  const showWardFilter = onWardChange && availableWards && availableWards.length > 1;
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -102,6 +112,20 @@ export function StatusDrilldownSheet({
             <p className="text-sm text-muted-foreground font-medium mt-0.5">
               {reports.length} complaint{reports.length !== 1 ? "s" : ""}
             </p>
+          )}
+          {showWardFilter && (
+            <div className="mt-3">
+              <select
+                value={wardName ?? ""}
+                onChange={(e) => onWardChange!(e.target.value || null)}
+                className="w-full text-sm font-semibold rounded-xl border border-border/60 bg-muted/40 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">All wards</option>
+                {availableWards!.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 

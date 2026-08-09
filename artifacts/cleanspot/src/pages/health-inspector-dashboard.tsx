@@ -495,18 +495,38 @@ export default function HealthInspectorDashboard() {
   const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
+  const [drillWard, setDrillWard] = useState<string | null>(null);
+
+  const drillOpen = drillStatus !== null || drillWard !== null;
+
+  const drillParams = new URLSearchParams();
+  if (drillStatus) drillParams.set("status", drillStatus);
+  if (drillWard)   drillParams.set("wardName", drillWard);
+  const drillQs = drillParams.toString();
+
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["hi-drill", drillStatus],
-    queryFn: () => customFetch(`/api/health-inspector/reports${drillStatus ? `?status=${drillStatus}` : ""}`),
-    enabled: drillStatus !== null,
+    queryKey: ["hi-drill", drillStatus, drillWard],
+    queryFn: () => customFetch(`/api/health-inspector/reports${drillQs ? `?${drillQs}` : ""}`),
+    enabled: drillOpen,
     staleTime: 60_000,
   });
   const drillReports = drillData?.reports ?? [];
 
-  const drillTitle =
-    drillStatus === "reported" ? "New Reports · Health Inspector" :
-    drillStatus === "cleaning" ? "In Progress · Health Inspector" :
-    drillStatus === "cleaned"  ? "Cleaned · Health Inspector" : "";
+  const statusLabel =
+    drillStatus === "reported" ? "New Reports" :
+    drillStatus === "cleaning" ? "In Progress" :
+    drillStatus === "cleaned"  ? "Cleaned" : "All Reports";
+  const drillTitle = `${statusLabel}${drillWard ? ` · ${drillWard}` : " · Health Inspector"}`;
+
+  const availableWards = useMemo(() => {
+    const seen = new Set<string>();
+    for (const sv of supervisors) {
+      for (const wn of (Array.isArray(sv.wardNames) ? sv.wardNames : [])) {
+        seen.add(svWardToGeoName(wn));
+      }
+    }
+    return [...seen].sort();
+  }, [supervisors]);
 
   const { data: mapData } = useMapReports();
   const mapReports = mapData?.reports ?? [];
@@ -525,11 +545,14 @@ export default function HealthInspectorDashboard() {
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       <StatusDrilldownSheet
-        open={drillStatus !== null}
-        onClose={() => setDrillStatus(null)}
+        open={drillOpen}
+        onClose={() => { setDrillStatus(null); setDrillWard(null); }}
         title={drillTitle}
         reports={drillReports}
         isLoading={drillLoading}
+        wardName={drillWard}
+        availableWards={availableWards}
+        onWardChange={setDrillWard}
       />
 
       {/* Header */}
@@ -584,8 +607,9 @@ export default function HealthInspectorDashboard() {
           wardGeoNames={wardGeoNames}
           wardGroups={wardGroups}
           title="Coverage Overview"
-          subtitle="Wards coloured by field officer · tap a pin for details"
+          subtitle="Wards coloured by field officer · tap a ward to filter complaints"
           height="340px"
+          onWardTap={(geoName) => { setDrillWard(geoName); }}
         />
       )}
 

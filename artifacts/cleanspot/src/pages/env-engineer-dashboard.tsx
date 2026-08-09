@@ -369,17 +369,40 @@ export default function EnvEngineerDashboard() {
   }, [his]);
 
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
+  const [drillWard, setDrillWard] = useState<string | null>(null);
+
+  const drillOpen = drillStatus !== null || drillWard !== null;
+
+  const drillParams = new URLSearchParams();
+  if (drillStatus) drillParams.set("status", drillStatus);
+  if (drillWard)   drillParams.set("wardName", drillWard);
+  const drillQs = drillParams.toString();
+
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["ee-drill", drillStatus],
-    queryFn: () => customFetch(`/api/env-engineer/reports${drillStatus ? `?status=${drillStatus}` : ""}`),
-    enabled: drillStatus !== null,
+    queryKey: ["ee-drill", drillStatus, drillWard],
+    queryFn: () => customFetch(`/api/env-engineer/reports${drillQs ? `?${drillQs}` : ""}`),
+    enabled: drillOpen,
     staleTime: 60_000,
   });
   const drillReports = drillData?.reports ?? [];
-  const drillTitle =
-    drillStatus === "reported" ? "New Reports · Env. Engineer" :
-    drillStatus === "cleaning" ? "In Progress · Env. Engineer" :
-    drillStatus === "cleaned"  ? "Cleaned · Env. Engineer" : "";
+
+  const statusLabel =
+    drillStatus === "reported" ? "New Reports" :
+    drillStatus === "cleaning" ? "In Progress" :
+    drillStatus === "cleaned"  ? "Cleaned" : "All Reports";
+  const drillTitle = `${statusLabel}${drillWard ? ` · ${drillWard}` : " · Env. Engineer"}`;
+
+  const availableWards = useMemo(() => {
+    const seen = new Set<string>();
+    for (const hi of his) {
+      for (const sv of hi.supervisors) {
+        for (const wn of (Array.isArray(sv.wardNames) ? sv.wardNames : [])) {
+          seen.add(svWardToGeoName(wn));
+        }
+      }
+    }
+    return [...seen].sort();
+  }, [his]);
 
   const { data: mapData } = useMapReports();
   const mapReports = mapData?.reports ?? [];
@@ -400,11 +423,14 @@ export default function EnvEngineerDashboard() {
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       <StatusDrilldownSheet
-        open={drillStatus !== null}
-        onClose={() => setDrillStatus(null)}
+        open={drillOpen}
+        onClose={() => { setDrillStatus(null); setDrillWard(null); }}
         title={drillTitle}
         reports={drillReports}
         isLoading={drillLoading}
+        wardName={drillWard}
+        availableWards={availableWards}
+        onWardChange={setDrillWard}
       />
 
       {/* Header */}
@@ -459,8 +485,9 @@ export default function EnvEngineerDashboard() {
           wardGeoNames={wardGeoNames}
           wardGroups={wardGroups}
           title="Zone Coverage Map"
-          subtitle="Wards coloured by health inspector zone · orange outline = <50% resolved"
+          subtitle="Wards coloured by health inspector zone · tap a ward to filter complaints"
           height="340px"
+          onWardTap={(geoName) => { setDrillWard(geoName); }}
         />
       )}
 

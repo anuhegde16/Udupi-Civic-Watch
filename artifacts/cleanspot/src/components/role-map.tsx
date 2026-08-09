@@ -45,6 +45,8 @@ export interface RoleMapProps {
   height?: string;
   /** Supervisor mode: pulse ward outline when ≥ 3 unresolved reports */
   highlightBacklogWards?: boolean;
+  /** Called when a user taps a ward polygon — receives the geo name e.g. "Udupi Ward 5" */
+  onWardTap?: (wardGeoName: string) => void;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -86,6 +88,7 @@ export function RoleMap({
   subtitle,
   height = "320px",
   highlightBacklogWards,
+  onWardTap,
 }: RoleMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<any>(null);
@@ -228,13 +231,18 @@ export function RoleMap({
         const resRate    = wardGroupResRate.get(wardName);
         const isLowRes   = resRate !== undefined && resRate < 50 && (wardGroups?.length ?? 0) > 0;
 
-        L.polygon(latlngs, {
+        const poly = L.polygon(latlngs, {
           color:       isBacklog ? "#ef4444" : (isLowRes ? "#f97316" : color),
           weight:      isBacklog ? 2.5 : (isLowRes ? 2 : 1.5),
           dashArray:   (isBacklog || isLowRes) ? undefined : "5 3",
           fillColor:   color,
           fillOpacity: 0.13,
-        }).addTo(map);
+        });
+        if (onWardTap) {
+          poly.options.interactive = true;
+          poly.on("click", () => onWardTap(wardName));
+        }
+        poly.addTo(map);
 
         // Centroid badge
         if (openCnt > 0) {
@@ -343,7 +351,7 @@ export function RoleMap({
 
     return () => cancelAnimationFrame(rafId);
   }, [reports, wardGeoNames, wardGroups, mapReady, activeLayer,
-      wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards]);
+      wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards, onWardTap]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   const showLegend = wardGroups && wardGroups.length > 0;
