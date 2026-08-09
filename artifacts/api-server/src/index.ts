@@ -320,46 +320,11 @@ async function seedUdupiHierarchy() {
     const PANCHAYAT = "Udupi";
 
     // ── Initial password provisioning ────────────────────────────────────────
-    // Plaintext passwords are NEVER logged. Instead, each account is given a
-    // one-time ACTIVATION TOKEN. The admin retrieves pending tokens via:
-    //   GET /api/admin/hierarchy-accounts  (requires admin/control_center role)
-    // Staff visit /activate?token=<token> to set their own password.
-    //
-    // Additionally, any existing accounts whose password_hash still matches the
-    // previously-exposed "Udupi@1234" credential are locked (hash reset to an
-    // unguessable bcrypt string) so that credential no longer works.
+    // New accounts are created with a locked hash; the admin retrieves
+    // activation tokens via GET /api/admin/hierarchy-accounts and staff
+    // visit /activate?token=<token> to set their own password.
     const { randomBytes } = await import("crypto");
-
-    // Invalidate ALL accounts (regardless of password_reset_required flag) that
-    // still carry the known-bad exposed "Udupi@1234" credential.
-    // For each affected account we ALSO provision a fresh activation_token and
-    // set password_reset_required=true so the owner has a supported path to
-    // regain access via /activate?token=<token>.
-    const { comparePassword: cmp } = await import("./lib/auth");
-    const KNOWN_BAD_PASSWORD = "Udupi@1234";
     const lockedHash = await hashPassword(randomBytes(32).toString("hex")); // unguessable
-    const staleAccounts = await db.execute(sql`
-      SELECT id, password_hash FROM users
-      WHERE panchayat_name = ${PANCHAYAT} AND phone IS NOT NULL
-    `);
-    let rotated = 0;
-    for (const row of staleAccounts.rows as any[]) {
-      const isExposed = await cmp(KNOWN_BAD_PASSWORD, row.password_hash);
-      if (isExposed) {
-        const activationToken = randomBytes(20).toString("hex");
-        await db.execute(sql`
-          UPDATE users
-          SET password_hash = ${lockedHash},
-              password_reset_required = true,
-              activation_token = ${activationToken}
-          WHERE id = ${row.id}
-        `);
-        rotated++;
-      }
-    }
-    if (rotated > 0) {
-      logger.info({ rotated }, "Udupi hierarchy: invalidated exposed Udupi@1234 hashes and provisioned activation tokens — retrieve via GET /api/admin/hierarchy-accounts");
-    }
 
     // New accounts use a random locked hash; staff activate via token
     const passwordHash = lockedHash;
