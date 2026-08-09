@@ -47,6 +47,8 @@ export interface RoleMapProps {
   highlightBacklogWards?: boolean;
   /** Called when a user taps a ward polygon — receives the geo name e.g. "Udupi Ward 5" */
   onWardTap?: (wardGeoName: string) => void;
+  /** Highlight one ward and dim all others; also flies the map to that ward's bounds */
+  focusedWardGeoName?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export function RoleMap({
   height = "320px",
   highlightBacklogWards,
   onWardTap,
+  focusedWardGeoName,
 }: RoleMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<any>(null);
@@ -231,12 +234,34 @@ export function RoleMap({
         const resRate    = wardGroupResRate.get(wardName);
         const isLowRes   = resRate !== undefined && resRate < 50 && (wardGroups?.length ?? 0) > 0;
 
+        // Focus mode: highlight the selected ward, dim all others
+        const isFocusActive    = focusedWardGeoName !== undefined;
+        const isThisWardFocused = isFocusActive && focusedWardGeoName === wardName;
+        const isOtherWardFocused = isFocusActive && !isThisWardFocused;
+
+        const polyColor       = isOtherWardFocused ? "#9ca3af"
+                              : isBacklog           ? "#ef4444"
+                              : isLowRes            ? "#f97316"
+                              :                       color;
+        const polyFillColor   = isOtherWardFocused ? "#9ca3af" : color;
+        const polyFillOpacity = isOtherWardFocused ? 0.03
+                              : isThisWardFocused   ? 0.35
+                              :                       0.13;
+        const polyWeight      = isOtherWardFocused ? 1
+                              : isThisWardFocused   ? 2.5
+                              : isBacklog           ? 2.5
+                              : isLowRes            ? 2
+                              :                       1.5;
+        const polyDash        = isOtherWardFocused             ? "4 3"
+                              : (isBacklog || isLowRes || isThisWardFocused) ? undefined
+                              :                                                 "5 3";
+
         const poly = L.polygon(latlngs, {
-          color:       isBacklog ? "#ef4444" : (isLowRes ? "#f97316" : color),
-          weight:      isBacklog ? 2.5 : (isLowRes ? 2 : 1.5),
-          dashArray:   (isBacklog || isLowRes) ? undefined : "5 3",
-          fillColor:   color,
-          fillOpacity: 0.13,
+          color:       polyColor,
+          weight:      polyWeight,
+          dashArray:   polyDash,
+          fillColor:   polyFillColor,
+          fillOpacity: polyFillOpacity,
         });
         if (onWardTap) {
           poly.options.interactive = true;
@@ -351,7 +376,29 @@ export function RoleMap({
 
     return () => cancelAnimationFrame(rafId);
   }, [reports, wardGeoNames, wardGroups, mapReady, activeLayer,
-      wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards, onWardTap]);
+      wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards, onWardTap,
+      focusedWardGeoName]);
+
+  // ── Fly to focused ward ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !focusedWardGeoName) return;
+    (async () => {
+      const L = (await import("leaflet")).default;
+      const map = mapRef.current;
+      if (!map) return;
+      const feat = geofencesData.features.find(
+        f => f.geometry.type === "Polygon" && (f.properties as any)?.name === focusedWardGeoName
+      );
+      if (!feat) return;
+      const coords = feat.geometry.coordinates[0] as [number, number][];
+      const lats = coords.map(([, lat]) => lat);
+      const lngs = coords.map(([lng]) => lng);
+      map.flyToBounds(
+        [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]],
+        { padding: [20, 20], duration: 0.5 }
+      );
+    })();
+  }, [mapReady, focusedWardGeoName]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   const showLegend = wardGroups && wardGroups.length > 0;

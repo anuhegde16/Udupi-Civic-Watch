@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -111,6 +111,8 @@ export default function SupervisorDashboard() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
+  const [focusedWard, setFocusedWard] = useState<string | null>(null);
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   const { data: profile, isLoading: profileLoading } = useProfile();
@@ -185,14 +187,33 @@ export default function SupervisorDashboard() {
             </p>
           )}
 
-          {/* Ward chips */}
+          {/* Ward chips — tap to highlight that ward on the map */}
           {wardNames.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
-              {wardNames.map((w) => (
-                <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full">
-                  {w}
-                </span>
-              ))}
+              {wardNames.map((w) => {
+                const geoName = svWardToGeoName(w);
+                const isActive = focusedWard === geoName;
+                return (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => {
+                      const next = isActive ? null : geoName;
+                      setFocusedWard(next);
+                      if (next !== null && mapWrapperRef.current) {
+                        mapWrapperRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                      }
+                    }}
+                    className={`text-xs font-bold px-3 py-1 rounded-full border transition-all ${
+                      isActive
+                        ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                    }`}
+                  >
+                    {w}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -223,14 +244,17 @@ export default function SupervisorDashboard() {
 
       {/* Ward coverage map */}
       {wardGeoNames.length > 0 && (
-        <RoleMap
-          reports={mapReports}
-          wardGeoNames={wardGeoNames}
-          title="Your Ward Coverage"
-          subtitle={`${wardNames.length} ward${wardNames.length !== 1 ? "s" : ""} — tap any pin to see details`}
-          height="320px"
-          highlightBacklogWards
-        />
+        <div ref={mapWrapperRef}>
+          <RoleMap
+            reports={mapReports}
+            wardGeoNames={wardGeoNames}
+            title="Your Ward Coverage"
+            subtitle={`${wardNames.length} ward${wardNames.length !== 1 ? "s" : ""} — tap any pin to see details`}
+            height="320px"
+            highlightBacklogWards
+            focusedWardGeoName={focusedWard ?? undefined}
+          />
+        </div>
       )}
 
       {/* Filters */}
