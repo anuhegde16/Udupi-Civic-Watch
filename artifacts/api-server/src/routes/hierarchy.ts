@@ -447,20 +447,23 @@ router.patch("/health-inspector/supervisor/:id/credentials", requireHealthInspec
         WHERE id = ${svId}
       `);
 
-      if (newHash) {
-        await tx.execute(sql`
-          UPDATE users
-          SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
-          WHERE (email = ${oldEmail} OR phone = ${existing.phone})
-            AND role IN ('supervisor', 'field_officer', 'officer')
-        `);
-      } else {
-        await tx.execute(sql`
-          UPDATE users
-          SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
-          WHERE (email = ${oldEmail} OR phone = ${existing.phone})
-            AND role IN ('supervisor', 'field_officer', 'officer')
-        `);
+      // Identify the users row by its immutable officer_id link, not by mutable phone/email.
+      const userUpdate = newHash
+        ? await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}, password_hash = ${newHash}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `)
+        : await tx.execute(sql`
+            UPDATE users
+            SET name = ${newName}, phone = ${newPhone}, email = ${newEmail}
+            WHERE officer_id = ${String(svId)} AND role = 'supervisor'
+            RETURNING id
+          `);
+
+      if (userUpdate.rows.length !== 1) {
+        throw new Error(`Expected 1 users row for supervisor ${svId}, got ${userUpdate.rows.length}`);
       }
     });
 
