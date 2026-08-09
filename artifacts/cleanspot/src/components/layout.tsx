@@ -295,7 +295,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ) : (
               /* Public citizen menu */
               <SheetContent side="right" className="w-[280px] sm:w-[300px] bg-background border-l-primary/10">
-                <div className="flex flex-col h-full mt-6">
+                <div className="flex flex-col h-full mt-6 overflow-y-auto">
                   <div className="flex items-center gap-3 px-2 mb-6">
                     <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-md shadow-primary/20">
                       <Waves className="w-5 h-5" />
