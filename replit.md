@@ -102,6 +102,31 @@ Note: Ward 1 email has a typo (`gmai.com`) and Ward 2 has a typo (`gamil.com`) �
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run build` — build API server
 
+## Dev Utilities
+
+### Reset dev hierarchy account passwords
+
+Restores all dev hierarchy accounts (commissioner, environmental engineer,
+health inspectors, supervisors) to a known password without touching any
+other data.  Safe to run repeatedly — idempotent.
+
+```bash
+pnpm --filter @workspace/scripts run reset:dev-passwords -- <newPassword>
+```
+
+**Safety guards** — the script refuses to run if:
+- `NODE_ENV=production`
+- `DATABASE_URL` points to a cloud/production host (neon.tech, supabase.co, etc.)
+
+**Accounts reset** — only the phone-identified Udupi hierarchy accounts seeded
+by the API server on first boot:
+- Commissioner · Environmental Engineer · 4 Health Inspectors · 11 Supervisors
+
+The script sets `password_reset_required = false` and clears `activation_token`
+so the accounts are immediately usable with the new password.  It prints a
+warning (but does not error) for any account that hasn't been seeded yet —
+boot the API server once to seed, then re-run the script.
+
 ## File Structure
 
 ```

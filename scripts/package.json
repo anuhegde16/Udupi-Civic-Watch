@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "validate:geo": "tsx ./src/validate-geo-routing.ts",
     "seed:ward-reports": "tsx ./src/seed-udupi-ward-reports.ts",
-    "seed:clean": "tsx ./src/clean-seed-reports.ts"
+    "seed:clean": "tsx ./src/clean-seed-reports.ts",
+    "reset:dev-passwords": "tsx ./src/reset-dev-passwords.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",
