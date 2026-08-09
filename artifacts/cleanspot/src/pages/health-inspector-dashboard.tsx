@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
@@ -493,6 +494,20 @@ export default function HealthInspectorDashboard() {
 
   const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
+  const [drillStatus, setDrillStatus] = useState<string | null>(null);
+  const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
+    queryKey: ["hi-drill", drillStatus],
+    queryFn: () => customFetch(`/api/health-inspector/reports${drillStatus ? `?status=${drillStatus}` : ""}`),
+    enabled: drillStatus !== null,
+    staleTime: 60_000,
+  });
+  const drillReports = drillData?.reports ?? [];
+
+  const drillTitle =
+    drillStatus === "reported" ? "New Reports · Health Inspector" :
+    drillStatus === "cleaning" ? "In Progress · Health Inspector" :
+    drillStatus === "cleaned"  ? "Cleaned · Health Inspector" : "";
+
   const { data: mapData } = useMapReports();
   const mapReports = mapData?.reports ?? [];
   const wardGroups = useMemo((): WardGroup[] =>
@@ -509,6 +524,14 @@ export default function HealthInspectorDashboard() {
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
+      <StatusDrilldownSheet
+        open={drillStatus !== null}
+        onClose={() => setDrillStatus(null)}
+        title={drillTitle}
+        reports={drillReports}
+        isLoading={drillLoading}
+      />
+
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-violet-500/5 rounded-bl-[100px] pointer-events-none" />
@@ -523,22 +546,34 @@ export default function HealthInspectorDashboard() {
           {profile?.panchayat_name ?? "Udupi"} · {supervisors.length} Field Officer{supervisors.length !== 1 ? "s" : ""}
         </p>
 
-        {/* Summary stats */}
+        {/* Summary stats — first 3 are clickable drill-downs */}
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "New Reports", value: totals.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
-            { label: "In Progress", value: totals.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50" },
-            { label: "Cleaned", value: totals.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
-            { label: "Resolution Rate", value: `${overallRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "text-emerald-600", bg: "bg-emerald-50" },
+            { label: "New Reports", value: totals.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8", filter: "reported" },
+            { label: "In Progress", value: totals.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50", filter: "cleaning" },
+            { label: "Cleaned", value: totals.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8", filter: "cleaned" },
           ].map((s) => (
-            <div key={s.label} className={`${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => setDrillStatus(drillStatus === s.filter ? null : s.filter)}
+              className={`${drillStatus === s.filter ? "ring-2 ring-offset-1 brightness-95" : ""} ${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3 transition-all cursor-pointer text-left w-full hover:brightness-95`}
+            >
               <div className={s.color}>{s.icon}</div>
               <div>
                 <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
                 <div className="text-xs text-muted-foreground font-semibold">{s.label}</div>
               </div>
-            </div>
+            </button>
           ))}
+          {/* Resolution Rate — non-interactive */}
+          <div className="bg-emerald-50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <div className="text-emerald-600"><TrendingUp className="w-5 h-5" /></div>
+            <div>
+              <div className="text-2xl font-black text-emerald-600">{overallRate}%</div>
+              <div className="text-xs text-muted-foreground font-semibold">Resolution Rate</div>
+            </div>
+          </div>
         </div>
       </div>
 

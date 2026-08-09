@@ -1519,4 +1519,237 @@ router.get("/commissioner/map-reports", requireCommissioner, async (req, res): P
   }
 });
 
+// ── GET /api/health-inspector/reports ─────────────────────────────────────────
+// Flat list of all reports under this HI's supervisor wards.
+// Optional ?status=reported|cleaning|cleaned filter.
+router.get("/health-inspector/reports", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
+  const statusFilter = req.query.status as string | undefined;
+  if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
+    res.status(400).json({ error: "Invalid status" }); return;
+  }
+  try {
+    const svRows = await db.execute(sql`
+      SELECT id, name, ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id = ${Number(user.officerId)}
+    `);
+    const svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
+    if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name });
+      }
+    }
+    if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+    const rawRows = await db.execute(
+      statusFilter
+        ? sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.status = ${statusFilter}
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+        : sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+    );
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.wardName, supervisorName: match.svName }];
+    });
+    res.json({ reports, total: reports.length });
+  } catch (err) {
+    logger.error({ err }, "Error fetching HI flat reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/env-engineer/reports ─────────────────────────────────────────────
+// Flat list of all reports under this EE's HIs + supervisors.
+// Optional ?status=reported|cleaning|cleaned filter.
+router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
+  const statusFilter = req.query.status as string | undefined;
+  if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
+    res.status(400).json({ error: "Invalid status" }); return;
+  }
+  try {
+    const hiRows = await db.execute(sql`
+      SELECT id, name FROM health_inspectors
+      WHERE environmental_engineer_id = ${Number(user.officerId)}
+    `);
+    const hiList = hiRows.rows as { id: number; name: string }[];
+    if (!hiList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const hiIds = hiList.map(h => h.id);
+    const hiNameById = new Map(hiList.map(h => [h.id, h.name]));
+
+    const svRows = await db.execute(sql`
+      SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
+    `);
+    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name, hiName });
+      }
+    }
+    if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+    const rawRows = await db.execute(
+      statusFilter
+        ? sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.status = ${statusFilter}
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+        : sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+    );
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
+    });
+    res.json({ reports, total: reports.length });
+  } catch (err) {
+    logger.error({ err }, "Error fetching EE flat reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/commissioner/reports ─────────────────────────────────────────────
+// Flat list of all reports in the commissioner's panchayat.
+// Optional ?status=reported|cleaning|cleaned filter.
+router.get("/commissioner/reports", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+  const statusFilter = req.query.status as string | undefined;
+  if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
+    res.status(400).json({ error: "Invalid status" }); return;
+  }
+  try {
+    // Resolve EE for this panchayat
+    const eeRow = await db.execute(sql`
+      SELECT id FROM environmental_engineers WHERE panchayat_name = ${panchayat} LIMIT 1
+    `);
+    if (!eeRow.rows.length) { res.json({ reports: [], total: 0 }); return; }
+    const eeId = (eeRow.rows[0] as any).id as number;
+
+    const hiRows = await db.execute(sql`
+      SELECT id, name FROM health_inspectors WHERE environmental_engineer_id = ${eeId}
+    `);
+    const hiList = hiRows.rows as { id: number; name: string }[];
+    if (!hiList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const hiIds = hiList.map(h => h.id);
+    const hiNameById = new Map(hiList.map(h => [h.id, h.name]));
+
+    const svRows = await db.execute(sql`
+      SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
+    `);
+    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name, hiName });
+      }
+    }
+    if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+    const rawRows = await db.execute(
+      statusFilter
+        ? sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.status = ${statusFilter}
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+        : sql`
+            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                   r.created_at AS "createdAt",
+                   r.cleaning_started_at AS "cleaningStartedAt",
+                   r.cleaned_at AS "cleanedAt"
+            FROM reports r
+            WHERE r.deleted_at IS NULL
+              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+            ORDER BY r.created_at DESC`
+    );
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
+    });
+    res.json({ reports, total: reports.length });
+  } catch (err) {
+    logger.error({ err }, "Error fetching commissioner flat reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
+
