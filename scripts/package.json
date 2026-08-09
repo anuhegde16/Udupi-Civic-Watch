@@ -10,7 +10,8 @@
     "test:emails": "tsx ./src/test-emails.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "validate:geo": "tsx ./src/validate-geo-routing.ts",
-    "seed:ward-reports": "tsx ./src/seed-udupi-ward-reports.ts"
+    "seed:ward-reports": "tsx ./src/seed-udupi-ward-reports.ts",
+    "seed:clean": "tsx ./src/clean-seed-reports.ts"
   },
   "dependencies": {
     "@turf/turf": "^7.3.5",
