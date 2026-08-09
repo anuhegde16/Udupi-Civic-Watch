@@ -1271,6 +1271,65 @@ function ringsBbox(rings: { ring: [number, number][] }[]): {
   return { minLat, maxLat, minLng, maxLng };
 }
 
+/**
+ * Shared helper: bbox SQL query + PiP filter for a set of ward entries.
+ *
+ * Each entry carries the ward polygon ring plus metadata fields that are
+ * merged into every matching report row:
+ *   - wardName    — always present
+ *   - svName      — supervisor name, returned as `supervisorName`
+ *   - hiName      — health inspector name, returned as `hiName` (omitted when undefined)
+ *
+ * Using a single function here means the PiP logic and bbox calculation only
+ * live in one place. A bug fix or invariant change (e.g. adding `archived`
+ * status support) only needs to happen here, not in three separate endpoints.
+ */
+async function fetchReportsInWardEntries(
+  wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName?: string }[],
+  options: { statusFilter?: string; wardFilter?: string },
+): Promise<any[]> {
+  if (!wardEntries.length) return [];
+  const { statusFilter, wardFilter } = options;
+  const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+  const rawRows = await db.execute(
+    statusFilter
+      ? sql`
+          SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                 r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                 r.created_at AS "createdAt",
+                 r.cleaning_started_at AS "cleaningStartedAt",
+                 r.cleaned_at AS "cleanedAt"
+          FROM reports r
+          WHERE r.deleted_at IS NULL
+            AND r.status = ${statusFilter}
+            AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+            AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+          ORDER BY r.created_at DESC`
+      : sql`
+          SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+                 r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+                 r.created_at AS "createdAt",
+                 r.cleaning_started_at AS "cleaningStartedAt",
+                 r.cleaned_at AS "cleanedAt"
+          FROM reports r
+          WHERE r.deleted_at IS NULL
+            AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+            AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+          ORDER BY r.created_at DESC`
+  );
+  return (rawRows.rows as any[]).flatMap(r => {
+    const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
+    if (!match) return [];
+    if (wardFilter && match.wardName !== wardFilter) return [];
+    return [{
+      ...r,
+      wardName: match.wardName,
+      supervisorName: match.svName,
+      ...(match.hiName !== undefined ? { hiName: match.hiName } : {}),
+    }];
+  });
+}
+
 // ── GET /api/community-mobiliser/map-reports ──────────────────────────────────
 router.get("/community-mobiliser/map-reports", requireCommunityMobiliser, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
@@ -1550,39 +1609,7 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-    const rawRows = await db.execute(
-      statusFilter
-        ? sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.status = ${statusFilter}
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-        : sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-    );
-    const reports = (rawRows.rows as any[]).flatMap(r => {
-      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
-      if (!match) return [];
-      if (wardFilter && match.wardName !== wardFilter) return [];
-      return [{ ...r, wardName: match.wardName, supervisorName: match.svName }];
-    });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching HI flat reports");
@@ -1632,39 +1659,7 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-    const rawRows = await db.execute(
-      statusFilter
-        ? sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.status = ${statusFilter}
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-        : sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-    );
-    const reports = (rawRows.rows as any[]).flatMap(r => {
-      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
-      if (!match) return [];
-      if (wardFilter && match.wardName !== wardFilter) return [];
-      return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
-    });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching EE flat reports");
@@ -1720,39 +1715,7 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-    const rawRows = await db.execute(
-      statusFilter
-        ? sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.status = ${statusFilter}
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-        : sql`
-            SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                   r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                   r.created_at AS "createdAt",
-                   r.cleaning_started_at AS "cleaningStartedAt",
-                   r.cleaned_at AS "cleanedAt"
-            FROM reports r
-            WHERE r.deleted_at IS NULL
-              AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-              AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-            ORDER BY r.created_at DESC`
-    );
-    const reports = (rawRows.rows as any[]).flatMap(r => {
-      const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
-      if (!match) return [];
-      if (wardFilter && match.wardName !== wardFilter) return [];
-      return [{ ...r, wardName: match.wardName, supervisorName: match.svName, hiName: match.hiName }];
-    });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching commissioner flat reports");
