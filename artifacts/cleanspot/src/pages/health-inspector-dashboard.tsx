@@ -317,11 +317,31 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
   const { lightbox, open: openLightbox } = useImageLightbox();
   const { data: reportsData, isLoading } = useSupervisorReports(expanded ? sv.id : null);
 
+  const [pillDrill, setPillDrill] = useState<string | null>(null);
+  const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[] }>({
+    queryKey: ["hi-sv-pill-drill", sv.id, pillDrill],
+    queryFn: () => customFetch(`/api/health-inspector/supervisor/${sv.id}/reports?status=${pillDrill}`),
+    enabled: pillDrill !== null,
+    staleTime: 60_000,
+  });
+  const drillReports = drillData?.reports ?? [];
+  const pillDrillTitle =
+    pillDrill === "reported" ? `${sv.name} · New` :
+    pillDrill === "cleaning" ? `${sv.name} · In Progress` :
+    pillDrill === "cleaned"  ? `${sv.name} · Cleaned` : "";
+
   const wardNames: string[] = Array.isArray(sv.wardNames) ? sv.wardNames : [];
   const resolutionRate = sv.totalCount > 0 ? Math.round((sv.cleanedCount / sv.totalCount) * 100) : 0;
 
   return (
     <>
+      <StatusDrilldownSheet
+        open={pillDrill !== null}
+        onClose={() => setPillDrill(null)}
+        title={pillDrillTitle}
+        reports={drillReports}
+        isLoading={drillLoading}
+      />
       <EditCredentialsModal sv={sv} open={editOpen} onOpenChange={setEditOpen} />
       {reassignReport && (
         <ReassignModal
@@ -366,15 +386,20 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
                 )}
                 {/* Status pills + resolution rate */}
                 <div className="flex gap-2 flex-wrap items-center">
-                  <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
-                    {sv.reportedCount} New
-                  </span>
-                  <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
-                    {sv.cleaningCount} In Progress
-                  </span>
-                  <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
-                    {sv.cleanedCount} Cleaned
-                  </span>
+                  {[
+                    { status: "reported", label: `${sv.reportedCount} New`, cls: "bg-destructive/10 text-destructive border-destructive/20" },
+                    { status: "cleaning", label: `${sv.cleaningCount} In Progress`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                    { status: "cleaned",  label: `${sv.cleanedCount} Cleaned`,    cls: "bg-primary/10 text-primary border-primary/20" },
+                  ].map((p) => (
+                    <button
+                      key={p.status}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setPillDrill(pillDrill === p.status ? null : p.status); }}
+                      className={`${p.cls} ${pillDrill === p.status ? "ring-2 ring-offset-1 brightness-95" : ""} text-xs font-bold px-2.5 py-1 rounded-full border transition-all hover:brightness-95`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
                   <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
                     <TrendingUp className="w-3 h-3" /> {resolutionRate}%
                   </span>

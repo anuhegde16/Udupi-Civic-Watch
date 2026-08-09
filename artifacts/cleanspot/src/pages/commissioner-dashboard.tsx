@@ -318,6 +318,20 @@ function HiCard({
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  // HI-level pill drill (badges on the HI card header)
+  const [pillDrill, setPillDrill] = useState<string | null>(null);
+  const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
+    queryKey: ["comm-hi-pill-drill", hi.id, pillDrill],
+    queryFn: () => customFetch(`/api/commissioner/reports?hiId=${hi.id}&status=${pillDrill}`),
+    enabled: pillDrill !== null,
+    staleTime: 60_000,
+  });
+  const drillReports = drillData?.reports ?? [];
+  const drillTitle =
+    pillDrill === "reported" ? `${hi.name} · New` :
+    pillDrill === "cleaning" ? `${hi.name} · In Progress` :
+    pillDrill === "cleaned"  ? `${hi.name} · Cleaned` : "";
+
   const wardCount = useMemo(() => {
     const seen = new Set<string>();
     for (const sv of hi.supervisors) {
@@ -328,6 +342,14 @@ function HiCard({
   }, [hi.supervisors]);
 
   return (
+    <>
+    <StatusDrilldownSheet
+      open={pillDrill !== null}
+      onClose={() => setPillDrill(null)}
+      title={drillTitle}
+      reports={drillReports}
+      isLoading={drillLoading}
+    />
     <div className="bg-card border border-border/50 rounded-2xl overflow-hidden">
       <button
         type="button"
@@ -358,15 +380,20 @@ function HiCard({
               {hi.supervisorCount} field officer{hi.supervisorCount !== 1 ? "s" : ""} · {wardCount} ward{wardCount !== 1 ? "s" : ""}
             </p>
             <div className="flex gap-2 flex-wrap">
-              <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">
-                {hi.reportedCount} New
-              </span>
-              <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                {hi.cleaningCount} In Progress
-              </span>
-              <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full border border-primary/20">
-                {hi.cleanedCount} Cleaned
-              </span>
+              {[
+                { status: "reported", label: `${hi.reportedCount} New`,        cls: "bg-destructive/10 text-destructive border-destructive/20" },
+                { status: "cleaning", label: `${hi.cleaningCount} In Progress`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                { status: "cleaned",  label: `${hi.cleanedCount} Cleaned`,     cls: "bg-primary/10 text-primary border-primary/20" },
+              ].map((p) => (
+                <button
+                  key={p.status}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPillDrill(pillDrill === p.status ? null : p.status); }}
+                  className={`${p.cls} ${pillDrill === p.status ? "ring-2 ring-offset-1 brightness-95" : ""} text-xs font-bold px-2 py-0.5 rounded-full border transition-all hover:brightness-95`}
+                >
+                  {p.label}
+                </button>
+              ))}
               <ResolutionPill cleaned={hi.cleanedCount} total={hi.totalCount} size="sm" />
             </div>
           </div>
@@ -388,6 +415,7 @@ function HiCard({
         </div>
       )}
     </div>
+    </>
   );
 }
 

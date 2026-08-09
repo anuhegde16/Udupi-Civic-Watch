@@ -211,6 +211,35 @@ function HiCard({ hi }: { hi: HealthInspector }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<EditTarget | null>(null);
 
+  // HI-level pill drill (badges on the HI card header)
+  const [hiPillDrill, setHiPillDrill] = useState<string | null>(null);
+  const { data: hiDrillData, isLoading: hiDrillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
+    queryKey: ["ee-hi-pill-drill", hi.id, hiPillDrill],
+    queryFn: () => customFetch(`/api/env-engineer/reports?hiId=${hi.id}&status=${hiPillDrill}`),
+    enabled: hiPillDrill !== null,
+    staleTime: 60_000,
+  });
+  const hiDrillReports = hiDrillData?.reports ?? [];
+  const hiDrillTitle =
+    hiPillDrill === "reported" ? `${hi.name} · New` :
+    hiPillDrill === "cleaning" ? `${hi.name} · In Progress` :
+    hiPillDrill === "cleaned"  ? `${hi.name} · Cleaned` : "";
+
+  // Supervisor-level pill drill (badges on supervisor sub-cards)
+  const [svPillDrill, setSvPillDrill] = useState<{ svId: number; svName: string; status: string } | null>(null);
+  const { data: svDrillData, isLoading: svDrillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
+    queryKey: ["ee-sv-pill-drill", svPillDrill?.svId, svPillDrill?.status],
+    queryFn: () => customFetch(`/api/env-engineer/reports?supervisorId=${svPillDrill!.svId}&status=${svPillDrill!.status}`),
+    enabled: svPillDrill !== null,
+    staleTime: 60_000,
+  });
+  const svDrillReports = svDrillData?.reports ?? [];
+  const svDrillTitle = svPillDrill
+    ? (svPillDrill.status === "reported" ? `${svPillDrill.svName} · New` :
+       svPillDrill.status === "cleaning" ? `${svPillDrill.svName} · In Progress` :
+       `${svPillDrill.svName} · Cleaned`)
+    : "";
+
   const wardSet = useMemo(() => {
     const seen = new Set<string>();
     for (const sv of hi.supervisors) {
@@ -222,6 +251,20 @@ function HiCard({ hi }: { hi: HealthInspector }) {
 
   return (
     <>
+      <StatusDrilldownSheet
+        open={hiPillDrill !== null}
+        onClose={() => setHiPillDrill(null)}
+        title={hiDrillTitle}
+        reports={hiDrillReports}
+        isLoading={hiDrillLoading}
+      />
+      <StatusDrilldownSheet
+        open={svPillDrill !== null}
+        onClose={() => setSvPillDrill(null)}
+        title={svDrillTitle}
+        reports={svDrillReports}
+        isLoading={svDrillLoading}
+      />
       {editing && <EditCredentialsModal target={editing} onClose={() => setEditing(null)} />}
 
       <Card className="rounded-3xl border-border/50 overflow-hidden">
@@ -262,15 +305,20 @@ function HiCard({ hi }: { hi: HealthInspector }) {
               </p>
 
               <div className="flex gap-2 flex-wrap">
-                <span className="bg-destructive/10 text-destructive text-xs font-bold px-2.5 py-1 rounded-full border border-destructive/20">
-                  {hi.reportedCount} New
-                </span>
-                <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full border border-blue-200">
-                  {hi.cleaningCount} In Progress
-                </span>
-                <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full border border-primary/20">
-                  {hi.cleanedCount} Cleaned
-                </span>
+                {[
+                  { status: "reported", label: `${hi.reportedCount} New`,       cls: "bg-destructive/10 text-destructive border-destructive/20" },
+                  { status: "cleaning", label: `${hi.cleaningCount} In Progress`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                  { status: "cleaned",  label: `${hi.cleanedCount} Cleaned`,    cls: "bg-primary/10 text-primary border-primary/20" },
+                ].map((p) => (
+                  <button
+                    key={p.status}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setHiPillDrill(hiPillDrill === p.status ? null : p.status); }}
+                    className={`${p.cls} ${hiPillDrill === p.status ? "ring-2 ring-offset-1 brightness-95" : ""} text-xs font-bold px-2.5 py-1 rounded-full border transition-all hover:brightness-95`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
                 <ResolutionPill cleaned={hi.cleanedCount} total={hi.totalCount} />
               </div>
             </div>
@@ -322,15 +370,24 @@ function HiCard({ hi }: { hi: HealthInspector }) {
                   )}
 
                   <div className="flex gap-2 flex-wrap">
-                    <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded-full border border-destructive/20">
-                      {sv.reportedCount} New
-                    </span>
-                    <span className="bg-blue-50 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                      {sv.cleaningCount} In Progress
-                    </span>
-                    <span className="bg-primary/10 text-primary text-xs font-bold px-2 py-0.5 rounded-full border border-primary/20">
-                      {sv.cleanedCount} Cleaned
-                    </span>
+                    {[
+                      { status: "reported", label: `${sv.reportedCount} New`,       cls: "bg-destructive/10 text-destructive border-destructive/20" },
+                      { status: "cleaning", label: `${sv.cleaningCount} In Progress`, cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                      { status: "cleaned",  label: `${sv.cleanedCount} Cleaned`,    cls: "bg-primary/10 text-primary border-primary/20" },
+                    ].map((p) => (
+                      <button
+                        key={p.status}
+                        type="button"
+                        onClick={() => setSvPillDrill(
+                          svPillDrill?.svId === sv.id && svPillDrill.status === p.status
+                            ? null
+                            : { svId: sv.id, svName: sv.name, status: p.status }
+                        )}
+                        className={`${p.cls} ${svPillDrill?.svId === sv.id && svPillDrill.status === p.status ? "ring-2 ring-offset-1 brightness-95" : ""} text-xs font-bold px-2 py-0.5 rounded-full border transition-all hover:brightness-95`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
                     <ResolutionPill cleaned={sv.cleanedCount} total={sv.totalCount} />
                   </div>
                 </div>

@@ -346,17 +346,22 @@ router.get("/health-inspector/supervisor-stats", requireHealthInspector, async (
 });
 
 // ── GET /api/health-inspector/supervisor/:supervisorId/reports ─────────────────
-// Returns all reports for a specific supervisor (must be under this HI).
+// Returns reports for a specific supervisor (must be under this HI).
+// Optional ?status=reported|cleaning|cleaned filter.
 router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
   const rawSvId = Array.isArray(req.params.supervisorId) ? req.params.supervisorId[0] : req.params.supervisorId;
   const svId = parseInt(rawSvId, 10);
   if (isNaN(svId)) { res.status(400).json({ error: "Invalid supervisorId" }); return; }
+  const statusFilter = req.query.status as string | undefined;
+  if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
+    res.status(400).json({ error: "Invalid status" }); return;
+  }
   try {
-    // Verify supervisor belongs to this HI and fetch ward names
+    // Verify supervisor belongs to this HI and fetch name + ward names
     const svRow = await db.execute(sql`
-      SELECT ward_names AS "wardNames" FROM supervisors
+      SELECT name, ward_names AS "wardNames" FROM supervisors
       WHERE id = ${svId} AND health_inspector_id = ${Number(user.officerId)}
       LIMIT 1
     `);
@@ -364,35 +369,18 @@ router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthIn
       res.status(403).json({ error: "Supervisor not under your team" });
       return;
     }
-    const wardNames: string[] = (svRow.rows[0] as any).wardNames ?? [];
+    const { name: svName, wardNames } = svRow.rows[0] as any;
 
-    const rings: { name: string; ring: [number, number][] }[] = [];
-    for (const wn of wardNames) {
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
+    for (const wn of (wardNames ?? []) as string[]) {
       const m = wn.match(/^Ward (\d+)/);
       if (!m) continue;
       const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
-      if (entry) rings.push(entry);
+      if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName });
     }
-    if (!rings.length) { res.json({ reports: [] }); return; }
+    if (!wardEntries.length) { res.json({ reports: [] }); return; }
 
-    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
-    const rawRows = await db.execute(sql`
-      SELECT
-        r.id, r.status, r.address, r.description, r.latitude, r.longitude,
-        r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-        r.waste_types AS "wasteTypes", r.waste_severity AS "wasteSeverity",
-        r.created_at AS "createdAt"
-      FROM reports r
-      WHERE r.deleted_at IS NULL
-        AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-        AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-      ORDER BY r.created_at DESC
-    `);
-    const reports = (rawRows.rows as any[]).flatMap(r => {
-      const match = rings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
-      if (!match) return [];
-      return [{ ...r, wardName: match.name }];
-    });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter });
     res.json({ reports });
   } catch (err) {
     logger.error({ err }, "Error fetching supervisor reports for HI");
@@ -1621,6 +1609,8 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
 // Flat list of all reports under this EE's HIs + supervisors.
 // Optional ?status=reported|cleaning|cleaned filter.
 // Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
+// Optional ?hiId=<int> — restrict to one health inspector's supervisors.
+// Optional ?supervisorId=<int> — restrict to a single supervisor's wards.
 router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
@@ -1629,6 +1619,8 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
     res.status(400).json({ error: "Invalid status" }); return;
   }
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
+  const hiIdFilter = typeof req.query.hiId === "string" ? parseInt(req.query.hiId, 10) : undefined;
+  const svIdFilter = typeof req.query.supervisorId === "string" ? parseInt(req.query.supervisorId, 10) : undefined;
   try {
     const hiRows = await db.execute(sql`
       SELECT id, name FROM health_inspectors
@@ -1644,7 +1636,12 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
       SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
       FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
     `);
-    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    let svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    // Apply entity scope filters (already verified safe — svList is scoped to this EE)
+    if (hiIdFilter !== undefined && !isNaN(hiIdFilter)) svList = svList.filter(sv => sv.hiId === hiIdFilter);
+    if (svIdFilter !== undefined && !isNaN(svIdFilter)) svList = svList.filter(sv => sv.id === svIdFilter);
     if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
 
     const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
@@ -1671,6 +1668,8 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
 // Flat list of all reports in the commissioner's panchayat.
 // Optional ?status=reported|cleaning|cleaned filter.
 // Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
+// Optional ?hiId=<int> — restrict to one health inspector's supervisors.
+// Optional ?supervisorId=<int> — restrict to a single supervisor's wards.
 router.get("/commissioner/reports", requireCommissioner, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   const panchayat = user.panchayatName ?? "Udupi";
@@ -1679,6 +1678,8 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
     res.status(400).json({ error: "Invalid status" }); return;
   }
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
+  const hiIdFilter = typeof req.query.hiId === "string" ? parseInt(req.query.hiId, 10) : undefined;
+  const svIdFilter = typeof req.query.supervisorId === "string" ? parseInt(req.query.supervisorId, 10) : undefined;
   try {
     // Resolve EE for this panchayat
     const eeRow = await db.execute(sql`
@@ -1700,7 +1701,12 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
       SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
       FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
     `);
-    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    let svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    // Apply entity scope filters (already verified safe — svList is scoped to this panchayat)
+    if (hiIdFilter !== undefined && !isNaN(hiIdFilter)) svList = svList.filter(sv => sv.hiId === hiIdFilter);
+    if (svIdFilter !== undefined && !isNaN(svIdFilter)) svList = svList.filter(sv => sv.id === svIdFilter);
     if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
 
     const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
