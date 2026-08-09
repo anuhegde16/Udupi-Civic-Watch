@@ -179,23 +179,43 @@ router.get("/supervisor/reports", requireSupervisor, async (req, res): Promise<v
     return;
   }
   try {
-    const rows = await db.execute(sql`
+    const profRow = await db.execute(sql`
+      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
+    `);
+    if (!profRow.rows.length) { res.json({ reports: [], total: 0 }); return; }
+    const wardNames: string[] = (profRow.rows[0] as any).ward_names as string[];
+
+    // Convert "Ward N/Town" → Udupi ward rings for PiP filtering
+    const rings: { name: string; ring: [number, number][] }[] = [];
+    for (const wn of wardNames) {
+      const m = wn.match(/^Ward (\d+)/);
+      if (!m) continue;
+      const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+      if (entry) rings.push(entry);
+    }
+    if (!rings.length) { res.json({ reports: [], total: 0 }); return; }
+
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    const rawRows = await db.execute(sql`
       SELECT
         r.id, r.status, r.address, r.description, r.latitude, r.longitude,
         r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
         r.cleanup_image_url AS "cleanupImageUrl", r.cleanup_image_urls AS "cleanupImageUrls",
         r.waste_types AS "wasteTypes", r.waste_severity AS "wasteSeverity",
         r.created_at AS "createdAt", r.updated_at AS "updatedAt",
-        r.cleaning_started_at AS "cleaningStartedAt", r.cleaned_at AS "cleanedAt",
-        o.id AS "officerId", o.name AS "officerName", o.area_name AS "wardName"
-      FROM supervisors sv
-      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-      WHERE sv.id = ${Number(user.officerId)}
+        r.cleaning_started_at AS "cleaningStartedAt", r.cleaned_at AS "cleanedAt"
+      FROM reports r
+      WHERE r.deleted_at IS NULL
+        AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND r.longitude BETWEEN ${minLng} AND ${maxLng}
       ORDER BY r.created_at DESC
     `);
-    const reports = (rows.rows as any[]);
+
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = rings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.name }];
+    });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching supervisor reports");
@@ -217,17 +237,29 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
     return;
   }
   try {
-    // Verify the report is in one of this supervisor's wards
-    const check = await db.execute(sql`
-      SELECT r.id
-      FROM supervisors sv
-      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-      WHERE sv.id = ${Number(user.officerId)} AND r.id = ${id}
-      LIMIT 1
+    // Verify the report is in one of this supervisor's wards (PiP)
+    const reportRow = await db.execute(sql`
+      SELECT id, latitude, longitude FROM reports
+      WHERE id = ${id} AND deleted_at IS NULL LIMIT 1
     `);
-    if (!check.rows.length) {
+    if (!reportRow.rows.length) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+    const rpt = reportRow.rows[0] as any;
+
+    const svRow = await db.execute(sql`
+      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
+    `);
+    const wardNames: string[] = (svRow.rows[0] as any)?.ward_names ?? [];
+    const svRings = wardNames.flatMap((wn: string) => {
+      const m = wn.match(/^Ward (\d+)/);
+      if (!m) return [];
+      const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+      return entry ? [entry] : [];
+    });
+    const inWard = svRings.some(r => pip(Number(rpt.latitude), Number(rpt.longitude), r.ring));
+    if (!inWard) {
       res.status(403).json({ error: "Report not in your wards" });
       return;
     }
@@ -259,22 +291,54 @@ router.get("/health-inspector/supervisor-stats", requireHealthInspector, async (
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "HI profile not found" }); return; }
   try {
-    const rows = await db.execute(sql`
-      SELECT
-        sv.id, sv.name, sv.phone, sv.ward_names AS "wardNames",
-        COUNT(r.id) FILTER (WHERE r.status = 'reported') ::int AS "reportedCount",
-        COUNT(r.id) FILTER (WHERE r.status = 'cleaning') ::int AS "cleaningCount",
-        COUNT(r.id) FILTER (WHERE r.status = 'cleaned')  ::int AS "cleanedCount",
-        COUNT(r.id)::int AS "totalCount"
-      FROM supervisors sv
-      LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-      WHERE sv.health_inspector_id = ${Number(user.officerId)}
-      GROUP BY sv.id, sv.name, sv.phone, sv.ward_names
-      ORDER BY sv.name
+    // Load all supervisors under this HI
+    const svRows = await db.execute(sql`
+      SELECT id, name, phone, ward_names AS "wardNames"
+      FROM supervisors
+      WHERE health_inspector_id = ${Number(user.officerId)}
+      ORDER BY name
     `);
-    res.json({ supervisors: rows.rows });
+    const svList = svRows.rows as { id: number; name: string; phone: string; wardNames: string[] }[];
+    if (!svList.length) { res.json({ supervisors: [] }); return; }
+
+    // Build ring → supervisorId index for PiP aggregation
+    const wardEntries: { ring: [number, number][]; svId: number }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, svId: sv.id });
+      }
+    }
+
+    // Zero-initialise counts for every supervisor
+    type Counts = { reportedCount: number; cleaningCount: number; cleanedCount: number; totalCount: number };
+    const counts = new Map<number, Counts>();
+    for (const sv of svList) counts.set(sv.id, { reportedCount: 0, cleaningCount: 0, cleanedCount: 0, totalCount: 0 });
+
+    if (wardEntries.length) {
+      const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+      const rawRows = await db.execute(sql`
+        SELECT latitude, longitude, status FROM reports
+        WHERE deleted_at IS NULL
+          AND latitude  BETWEEN ${minLat} AND ${maxLat}
+          AND longitude BETWEEN ${minLng} AND ${maxLng}
+      `);
+      for (const r of rawRows.rows as any[]) {
+        const lat = Number(r.latitude), lng = Number(r.longitude);
+        const match = wardEntries.find(e => pip(lat, lng, e.ring));
+        if (!match) continue;
+        const c = counts.get(match.svId)!;
+        if (r.status === "reported") c.reportedCount++;
+        else if (r.status === "cleaning") c.cleaningCount++;
+        else if (r.status === "cleaned") c.cleanedCount++;
+        c.totalCount++;
+      }
+    }
+
+    const supervisors = svList.map(sv => ({ ...sv, ...counts.get(sv.id)! }));
+    res.json({ supervisors });
   } catch (err) {
     logger.error({ err }, "Error fetching HI supervisor stats");
     res.status(500).json({ error: "Internal server error" });
@@ -290,21 +354,46 @@ router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthIn
   const svId = parseInt(rawSvId, 10);
   if (isNaN(svId)) { res.status(400).json({ error: "Invalid supervisorId" }); return; }
   try {
-    const rows = await db.execute(sql`
+    // Verify supervisor belongs to this HI and fetch ward names
+    const svRow = await db.execute(sql`
+      SELECT ward_names AS "wardNames" FROM supervisors
+      WHERE id = ${svId} AND health_inspector_id = ${Number(user.officerId)}
+      LIMIT 1
+    `);
+    if (!svRow.rows.length) {
+      res.status(403).json({ error: "Supervisor not under your team" });
+      return;
+    }
+    const wardNames: string[] = (svRow.rows[0] as any).wardNames ?? [];
+
+    const rings: { name: string; ring: [number, number][] }[] = [];
+    for (const wn of wardNames) {
+      const m = wn.match(/^Ward (\d+)/);
+      if (!m) continue;
+      const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+      if (entry) rings.push(entry);
+    }
+    if (!rings.length) { res.json({ reports: [] }); return; }
+
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    const rawRows = await db.execute(sql`
       SELECT
         r.id, r.status, r.address, r.description, r.latitude, r.longitude,
         r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
         r.waste_types AS "wasteTypes", r.waste_severity AS "wasteSeverity",
-        r.created_at AS "createdAt",
-        o.area_name AS "wardName"
-      FROM supervisors sv
-      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-      WHERE sv.health_inspector_id = ${Number(user.officerId)} AND sv.id = ${svId}
+        r.created_at AS "createdAt"
+      FROM reports r
+      WHERE r.deleted_at IS NULL
+        AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND r.longitude BETWEEN ${minLng} AND ${maxLng}
       ORDER BY r.created_at DESC
     `);
-    res.json({ reports: rows.rows });
+    const reports = (rawRows.rows as any[]).flatMap(r => {
+      const match = rings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
+      if (!match) return [];
+      return [{ ...r, wardName: match.name }];
+    });
+    res.json({ reports });
   } catch (err) {
     logger.error({ err }, "Error fetching supervisor reports for HI");
     res.status(500).json({ error: "Internal server error" });
@@ -327,19 +416,46 @@ router.post("/health-inspector/reports/:reportId/reassign", requireHealthInspect
   if (isNaN(targetSvId)) { res.status(400).json({ error: "targetSupervisorId required" }); return; }
 
   try {
-    // Verify the report is in one of this HI's supervisor wards
-    const reportCheck = await db.execute(sql`
-      SELECT r.id, r.status
-      FROM supervisors sv
-      JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-      WHERE sv.health_inspector_id = ${Number(user.officerId)} AND r.id = ${reportId}
-      LIMIT 1
+    // Fetch the report to get coordinates and status for PiP auth
+    const reportRow = await db.execute(sql`
+      SELECT id, status, latitude, longitude FROM reports
+      WHERE id = ${reportId} AND deleted_at IS NULL LIMIT 1
     `);
-    if (!reportCheck.rows.length) {
-      res.status(403).json({ error: "Report not in your wards" });
-      return;
+    if (!reportRow.rows.length) { res.status(404).json({ error: "Report not found" }); return; }
+    const report = reportRow.rows[0] as any;
+
+    // Build PiP rings for all supervisors under this HI
+    const svHiRows = await db.execute(sql`
+      SELECT id, ward_names AS "wardNames" FROM supervisors
+      WHERE health_inspector_id = ${Number(user.officerId)}
+    `);
+    const hiRings: [number, number][][] = [];
+    for (const sv of svHiRows.rows as any[]) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) hiRings.push(entry.ring);
+      }
+    }
+
+    // Auth: report must fall inside one of this HI's supervisor wards (geo/PiP)
+    // or be directly assigned to one of their officers (Saligrama fallback).
+    const lat = Number(report.latitude), lng = Number(report.longitude);
+    const inHiWardGeo = hiRings.some(ring => pip(lat, lng, ring));
+    if (!inHiWardGeo) {
+      const assignedCheck = await db.execute(sql`
+        SELECT r.id FROM supervisors sv
+        JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
+        JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
+        JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
+        WHERE sv.health_inspector_id = ${Number(user.officerId)} AND r.id = ${reportId}
+        LIMIT 1
+      `);
+      if (!assignedCheck.rows.length) {
+        res.status(403).json({ error: "Report not in your wards" });
+        return;
+      }
     }
 
     // Verify target supervisor is under this HI
@@ -353,8 +469,11 @@ router.post("/health-inspector/reports/:reportId/reassign", requireHealthInspect
       return;
     }
 
-    // Find the first active officer in the target supervisor's wards
-    const officerCheck = await db.execute(sql`
+    // Find the first active officer in the target supervisor's wards.
+    // For geo-routed panchayats (e.g. Udupi), no officer row will exist —
+    // in that case we allow the update with a null assigned_officer_id so the
+    // report stays visible via geography.
+    const officerLookup = await db.execute(sql`
       SELECT o.id AS officer_id
       FROM supervisors sv
       JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
@@ -362,11 +481,9 @@ router.post("/health-inspector/reports/:reportId/reassign", requireHealthInspect
       WHERE sv.id = ${targetSvId}
       LIMIT 1
     `);
-    if (!officerCheck.rows.length) {
-      res.status(400).json({ error: "No active field officer found in target supervisor's wards" });
-      return;
-    }
-    const targetOfficerId = (officerCheck.rows[0] as any).officer_id;
+    const targetOfficerId = officerLookup.rows.length
+      ? (officerLookup.rows[0] as any).officer_id
+      : null;
 
     // Atomically update the report only if it is still in "reported" status.
     // This prevents a race where a concurrent status change (e.g. officer starts cleaning)
@@ -480,42 +597,79 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "EE profile not found" }); return; }
   try {
+    // Load HI list (supervisor count only — no officer join)
     const hiRows = await db.execute(sql`
       SELECT hi.id, hi.name, hi.phone,
-             COUNT(DISTINCT sv.id)::int AS "supervisorCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
-             COUNT(DISTINCT r.id)::int AS "totalCount"
+             COUNT(DISTINCT sv.id)::int AS "supervisorCount"
       FROM health_inspectors hi
       LEFT JOIN supervisors sv ON sv.health_inspector_id = hi.id
-      LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
       WHERE hi.environmental_engineer_id = ${Number(user.officerId)}
       GROUP BY hi.id, hi.name, hi.phone
       ORDER BY hi.name
     `);
+    const hiList = hiRows.rows as { id: number; name: string; phone: string; supervisorCount: number }[];
+    if (!hiList.length) { res.json({ healthInspectors: [] }); return; }
 
-    const healthInspectors = await Promise.all(
-      (hiRows.rows as any[]).map(async (hi) => {
-        const svRows = await db.execute(sql`
-          SELECT sv.id, sv.name, sv.phone, sv.ward_names AS "wardNames",
-                 COUNT(r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
-                 COUNT(r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-                 COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
-                 COUNT(r.id)::int AS "totalCount"
-          FROM supervisors sv
-          LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-          LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-          LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-          WHERE sv.health_inspector_id = ${hi.id}
-          GROUP BY sv.id, sv.name, sv.phone, sv.ward_names
-          ORDER BY sv.name
-        `);
-        return { ...hi, supervisors: svRows.rows };
-      })
-    );
+    // Load all supervisors for these HIs in one query
+    // (sql.raw is safe here — hiIds are integer PKs from our own DB, not user input)
+    const hiIds = hiList.map(h => h.id);
+    const svRows = await db.execute(sql`
+      SELECT id, name, phone, ward_names AS "wardNames", health_inspector_id AS "hiId"
+      FROM supervisors
+      WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
+      ORDER BY name
+    `);
+    const svList = svRows.rows as { id: number; name: string; phone: string; wardNames: string[]; hiId: number }[];
+
+    // Build ring → {hiId, svId} index for PiP aggregation
+    const wardEntries: { ring: [number, number][]; hiId: number; svId: number }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, hiId: sv.hiId, svId: sv.id });
+      }
+    }
+
+    // Zero-initialise counts
+    type Counts = { reportedCount: number; cleaningCount: number; cleanedCount: number; totalCount: number };
+    const hiCounts = new Map<number, Counts>();
+    const svCounts = new Map<number, Counts>();
+    for (const hi of hiList) hiCounts.set(hi.id, { reportedCount: 0, cleaningCount: 0, cleanedCount: 0, totalCount: 0 });
+    for (const sv of svList) svCounts.set(sv.id, { reportedCount: 0, cleaningCount: 0, cleanedCount: 0, totalCount: 0 });
+
+    if (wardEntries.length) {
+      const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+      const rawRows = await db.execute(sql`
+        SELECT latitude, longitude, status FROM reports
+        WHERE deleted_at IS NULL
+          AND latitude  BETWEEN ${minLat} AND ${maxLat}
+          AND longitude BETWEEN ${minLng} AND ${maxLng}
+      `);
+      const bump = (c: Counts, s: string) => {
+        if (s === "reported") c.reportedCount++;
+        else if (s === "cleaning") c.cleaningCount++;
+        else if (s === "cleaned") c.cleanedCount++;
+        c.totalCount++;
+      };
+      for (const r of rawRows.rows as any[]) {
+        const lat = Number(r.latitude), lng = Number(r.longitude);
+        const match = wardEntries.find(e => pip(lat, lng, e.ring));
+        if (!match) continue;
+        bump(hiCounts.get(match.hiId)!, r.status);
+        bump(svCounts.get(match.svId)!, r.status);
+      }
+    }
+
+    // Assemble response — same shape the frontend expects
+    const healthInspectors = hiList.map(hi => ({
+      ...hi,
+      ...hiCounts.get(hi.id)!,
+      supervisors: svList
+        .filter(sv => sv.hiId === hi.id)
+        .map(sv => ({ id: sv.id, name: sv.name, phone: sv.phone, wardNames: sv.wardNames, ...svCounts.get(sv.id)! })),
+    }));
 
     res.json({ healthInspectors });
   } catch (err) {
@@ -687,43 +841,52 @@ router.patch("/env-engineer/supervisor/:id/credentials", requireEnvEngineer, asy
 });
 
 // ── GET /api/community-mobiliser/reports ──────────────────────────────────────
-// Read-only: all active Udupi reports with ward, status, AI data, photos.
+// Read-only: active Udupi reports within the CM's assigned ward.
 // No PII (no reporter email/IP). Guarded by requireCommunityMobiliser.
 router.get("/community-mobiliser/reports", requireCommunityMobiliser, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+  const wasteTypeFilter = typeof req.query.wasteType === "string" ? req.query.wasteType : undefined;
   try {
-    const wardFilter = typeof req.query.ward === "string" ? req.query.ward : undefined;
-    const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
-    const wasteTypeFilter = typeof req.query.wasteType === "string" ? req.query.wasteType : undefined;
+    if (!user.officerId) { res.status(404).json({ error: "CM profile not found" }); return; }
 
-    let whereClause = sql`r.deleted_at IS NULL`;
-    if (wardFilter) {
-      whereClause = sql`${whereClause} AND o.area_name = ${wardFilter}`;
-    }
-    if (statusFilter) {
-      whereClause = sql`${whereClause} AND r.status = ${statusFilter}`;
-    }
-    if (wasteTypeFilter) {
-      whereClause = sql`${whereClause} AND r.waste_types @> ${JSON.stringify([wasteTypeFilter])}::jsonb`;
-    }
+    // Look up CM's ward and find its polygon ring
+    const profRow = await db.execute(sql`
+      SELECT ward_number FROM community_mobilisers WHERE id = ${Number(user.officerId)} LIMIT 1
+    `);
+    if (!profRow.rows.length) { res.json({ reports: [], total: 0 }); return; }
+    const wardNumber = (profRow.rows[0] as any).ward_number as number;
+    const geoWardName = `Udupi Ward ${wardNumber}`;
+    const wardEntry = udupiWardRings.find(w => w.name === geoWardName);
+    if (!wardEntry) { res.json({ reports: [], total: 0, geoWardName }); return; }
 
-    const rows = await db.execute(sql`
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox([wardEntry]);
+
+    // Build optional SQL filters for status / waste type
+    let extraWhere = sql``;
+    if (statusFilter) extraWhere = sql`${extraWhere} AND r.status = ${statusFilter}`;
+    if (wasteTypeFilter) extraWhere = sql`${extraWhere} AND r.waste_types @> ${JSON.stringify([wasteTypeFilter])}::jsonb`;
+
+    const rawRows = await db.execute(sql`
       SELECT
         r.id, r.status, r.address, r.description, r.latitude, r.longitude,
         r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
         r.cleanup_image_url AS "cleanupImageUrl",
         r.waste_types AS "wasteTypes", r.waste_severity AS "wasteSeverity",
         r.brand_names AS "brandNames",
-        r.created_at AS "createdAt",
-        o.area_name AS "wardName",
-        o.panchayat_name AS "panchayatName"
+        r.created_at AS "createdAt"
       FROM reports r
-      LEFT JOIN officers o ON o.id = r.assigned_officer_id AND o.deleted_at IS NULL
-      WHERE ${whereClause}
+      WHERE r.deleted_at IS NULL
+        AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+        ${extraWhere}
       ORDER BY r.created_at DESC
-      LIMIT 500
     `);
 
-    const reports = rows.rows as any[];
+    const reports = (rawRows.rows as any[])
+      .filter(r => pip(Number(r.latitude), Number(r.longitude), wardEntry.ring))
+      .map(r => ({ ...r, wardName: geoWardName, panchayatName: "Udupi" }));
+
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching community mobiliser reports");
@@ -764,6 +927,7 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
   const user = (req as any).user as SessionUser;
   const panchayat = user.panchayatName ?? "Udupi";
   try {
+    // Resolve EE for this panchayat
     const eeRows = await db.execute(sql`
       SELECT ee.id, ee.name, ee.phone,
              COUNT(DISTINCT hi.id)::int AS "hiCount"
@@ -776,42 +940,78 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
     if (!eeRows.rows.length) { res.json({ environmentalEngineer: null }); return; }
     const ee = eeRows.rows[0] as any;
 
+    // Load HI list (supervisor count only — no officer join)
     const hiRows = await db.execute(sql`
       SELECT hi.id, hi.name, hi.phone,
-             COUNT(DISTINCT sv.id)::int AS "supervisorCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-             COUNT(DISTINCT r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
-             COUNT(DISTINCT r.id)::int AS "totalCount"
+             COUNT(DISTINCT sv.id)::int AS "supervisorCount"
       FROM health_inspectors hi
       LEFT JOIN supervisors sv ON sv.health_inspector_id = hi.id
-      LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-      LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-      LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
       WHERE hi.environmental_engineer_id = ${ee.id}
       GROUP BY hi.id, hi.name, hi.phone
       ORDER BY hi.name
     `);
+    const hiList = hiRows.rows as { id: number; name: string; phone: string; supervisorCount: number }[];
 
-    const healthInspectors = await Promise.all(
-      (hiRows.rows as any[]).map(async (hi) => {
-        const svRows = await db.execute(sql`
-          SELECT sv.id, sv.name, sv.phone, sv.ward_names AS "wardNames",
-                 COUNT(r.id) FILTER (WHERE r.status = 'reported')::int AS "reportedCount",
-                 COUNT(r.id) FILTER (WHERE r.status = 'cleaning')::int AS "cleaningCount",
-                 COUNT(r.id) FILTER (WHERE r.status = 'cleaned')::int  AS "cleanedCount",
-                 COUNT(r.id)::int AS "totalCount"
-          FROM supervisors sv
-          LEFT JOIN LATERAL jsonb_array_elements_text(sv.ward_names) AS wn ON true
-          LEFT JOIN officers o ON o.area_name = split_part(wn, '/', 1) AND o.deleted_at IS NULL
-          LEFT JOIN reports r ON r.assigned_officer_id = o.id AND r.deleted_at IS NULL
-          WHERE sv.health_inspector_id = ${hi.id}
-          GROUP BY sv.id, sv.name, sv.phone, sv.ward_names
-          ORDER BY sv.name
-        `);
-        return { ...hi, supervisors: svRows.rows };
-      })
-    );
+    // Load all supervisors for these HIs in one query
+    // (sql.raw is safe — hiIds are integer PKs from our own DB, not user input)
+    const hiIds = hiList.map(h => h.id);
+    const svRows = hiIds.length ? await db.execute(sql`
+      SELECT id, name, phone, ward_names AS "wardNames", health_inspector_id AS "hiId"
+      FROM supervisors
+      WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
+      ORDER BY name
+    `) : { rows: [] };
+    const svList = svRows.rows as { id: number; name: string; phone: string; wardNames: string[]; hiId: number }[];
+
+    // Build ring → {hiId, svId} index for PiP aggregation
+    const wardEntries: { ring: [number, number][]; hiId: number; svId: number }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, hiId: sv.hiId, svId: sv.id });
+      }
+    }
+
+    // Zero-initialise counts
+    type Counts = { reportedCount: number; cleaningCount: number; cleanedCount: number; totalCount: number };
+    const hiCounts = new Map<number, Counts>();
+    const svCounts = new Map<number, Counts>();
+    for (const hi of hiList) hiCounts.set(hi.id, { reportedCount: 0, cleaningCount: 0, cleanedCount: 0, totalCount: 0 });
+    for (const sv of svList) svCounts.set(sv.id, { reportedCount: 0, cleaningCount: 0, cleanedCount: 0, totalCount: 0 });
+
+    if (wardEntries.length) {
+      const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
+      const rawRows = await db.execute(sql`
+        SELECT latitude, longitude, status FROM reports
+        WHERE deleted_at IS NULL
+          AND latitude  BETWEEN ${minLat} AND ${maxLat}
+          AND longitude BETWEEN ${minLng} AND ${maxLng}
+      `);
+      const bump = (c: Counts, s: string) => {
+        if (s === "reported") c.reportedCount++;
+        else if (s === "cleaning") c.cleaningCount++;
+        else if (s === "cleaned") c.cleanedCount++;
+        c.totalCount++;
+      };
+      for (const r of rawRows.rows as any[]) {
+        const lat = Number(r.latitude), lng = Number(r.longitude);
+        const match = wardEntries.find(e => pip(lat, lng, e.ring));
+        if (!match) continue;
+        bump(hiCounts.get(match.hiId)!, r.status);
+        bump(svCounts.get(match.svId)!, r.status);
+      }
+    }
+
+    // Assemble response — same shape the frontend expects
+    const healthInspectors = hiList.map(hi => ({
+      ...hi,
+      ...hiCounts.get(hi.id)!,
+      supervisors: svList
+        .filter(sv => sv.hiId === hi.id)
+        .map(sv => ({ id: sv.id, name: sv.name, phone: sv.phone, wardNames: sv.wardNames, ...svCounts.get(sv.id)! })),
+    }));
 
     res.json({ environmentalEngineer: { ...ee, healthInspectors } });
   } catch (err) {

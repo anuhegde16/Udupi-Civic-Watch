@@ -198,6 +198,17 @@ test.describe("admin reports list page", () => {
       "admin@udupicivicwatch.com",
       "/admin/login",
     );
+    // Auto-dismiss the push-notification opt-in dialog whenever it appears.
+    // It can pop up at any point during the test and intercept clicks /
+    // keyboard events, so we register a locator handler rather than a one-shot
+    // conditional check.
+    await page.addLocatorHandler(
+      page.getByRole("dialog", { name: /stay in the loop/i }),
+      async (dialog) => {
+        await dialog.getByRole("button", { name: /not now/i }).click();
+      },
+    );
+
     await page.goto(`/admin/reports`, { waitUntil: "load" });
     await expect(page.getByText(/All Reports/i).first()).toBeVisible({
       timeout: 12_000,
