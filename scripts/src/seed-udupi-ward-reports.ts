@@ -1,9 +1,13 @@
 /**
- * seed-udupi-ward-reports.ts  (v2 — enriched, 30-day window)
+ * seed-udupi-ward-reports.ts  (v3 — enriched, PiP-safe coordinates)
  *
  * Wipes all existing [SEED] reports and inserts 6 enriched reports per
  * Udupi ward (35 wards → 210 reports) with:
- *   - Realistic 30-day timelines per status
+ *   - Coordinates guaranteed inside the ward polygon via rejection sampling
+ *   - Realistic timelines:
+ *       reported  → created 0–14 days ago
+ *       cleaning  → created 7–30 days ago, cleaning started 1–5 days later
+ *       cleaned   → created 30–90 days ago, cleaned within 1–7 + 1–5 days
  *   - Addresses derived from ward localities
  *   - Brand names on ~25 % of reports
  *   - Status distributions engineered to trigger every dashboard alert:
@@ -21,6 +25,8 @@
  */
 
 import pg from "pg";
+import * as turf from "@turf/turf";
+import type { Feature, Polygon } from "geojson";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
@@ -127,22 +133,44 @@ const DESCRIPTIONS = [
 
 // ── geometry ──────────────────────────────────────────────────────────────────
 
-function wardCentroid(wardName: string): { lat: number; lng: number } | null {
+/** Return the GeoJSON Feature for a ward polygon, or null if not found. */
+function wardFeature(wardName: string): Feature<Polygon> | null {
   const f = (geofencesData.features as any[]).find(
     (x) =>
       x.geometry.type === "Polygon" &&
       x.properties?.type === "ward" &&
       x.properties?.name === wardName
   );
-  if (!f) return null;
-  const coords: [number, number][] = f.geometry.coordinates[0];
+  return f ?? null;
+}
+
+/**
+ * Sample a random point guaranteed inside the ward polygon.
+ * Uses bbox rejection sampling (up to maxTries), then falls back to
+ * turf.pointOnFeature which is always on-surface.
+ */
+function pointInPolygon(
+  feature: Feature<Polygon>,
+  rand: () => number,
+  maxTries = 100
+): { lat: number; lng: number } {
+  const [minLng, minLat, maxLng, maxLat] = turf.bbox(feature);
+  for (let i = 0; i < maxTries; i++) {
+    const lng = minLng + rand() * (maxLng - minLng);
+    const lat = minLat + rand() * (maxLat - minLat);
+    if (turf.booleanPointInPolygon(turf.point([lng, lat]), feature)) {
+      return { lat, lng };
+    }
+  }
+  // Guaranteed fallback: centroid-of-largest-ring interior point
+  const interior = turf.pointOnFeature(feature);
   return {
-    lat: coords.reduce((s, [, y]) => s + y, 0) / coords.length,
-    lng: coords.reduce((s, [x]) => s + x, 0) / coords.length,
+    lat: interior.geometry.coordinates[1],
+    lng: interior.geometry.coordinates[0],
   };
 }
 
-// ── timestamp helpers (30-day window) ─────────────────────────────────────────
+// ── timestamp helpers ─────────────────────────────────────────────────────────
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -156,17 +184,18 @@ function timestampsFor(
   let cleanedAt: Date | null = null;
 
   if (status === "reported") {
-    // Recent — 0 to 10 days ago
-    createdAt = new Date(now - rand() * 10 * DAY);
+    // Recent — 0 to 14 days ago
+    createdAt = new Date(now - rand() * 14 * DAY);
   } else if (status === "cleaning") {
-    // Mid-range — created 10–20 days ago, cleaning started 1–4 days later
-    createdAt = new Date(now - (10 + rand() * 10) * DAY);
-    cleaningStartedAt = new Date(createdAt.getTime() + (1 + rand() * 3) * DAY);
-  } else {
-    // Older — created 15–30 days ago, resolved within a week
-    createdAt = new Date(now - (15 + rand() * 15) * DAY);
+    // Mid-range — created 7–30 days ago, cleaning started 1–5 days later
+    createdAt = new Date(now - (7 + rand() * 23) * DAY);
     cleaningStartedAt = new Date(createdAt.getTime() + (1 + rand() * 4) * DAY);
-    cleanedAt = new Date(cleaningStartedAt.getTime() + (1 + rand() * 3) * DAY);
+  } else {
+    // Resolved — created 30–90 days ago
+    // cleaningStartedAt = created + 1–7 days; cleanedAt = cleaningStartedAt + 1–5 days
+    createdAt = new Date(now - (30 + rand() * 60) * DAY);
+    cleaningStartedAt = new Date(createdAt.getTime() + (1 + rand() * 6) * DAY);
+    cleanedAt = new Date(cleaningStartedAt.getTime() + (1 + rand() * 4) * DAY);
   }
 
   const updatedAt = cleanedAt ?? cleaningStartedAt ?? createdAt;
@@ -178,7 +207,7 @@ function timestampsFor(
 async function main() {
   const client = await pool.connect();
   try {
-    console.log("=== Udupi ward report seed — v2 (30-day enriched) ===\n");
+    console.log("=== Udupi ward report seed — v3 (PiP-safe, 90-day window) ===\n");
 
     // Wipe previous seed rows (Saligrama safe: real reports have no [SEED] prefix)
     const { rowCount: wiped } = await client.query(
@@ -189,14 +218,17 @@ async function main() {
     const now = Date.now();
     let totalInserted = 0;
 
-    for (let w = 1; w <= 35; w++) {
-      const wardName  = `Udupi Ward ${w}`;
-      const locality  = WARD_LOCALITY[w] ?? `Ward ${w}`;
-      const hiGroup   = (WARD_HI_GROUP[w] ?? 1) as 1 | 2 | 3 | 4;
-      const statuses  = STATUS_POOL[hiGroup];
-      const centroid  = wardCentroid(wardName);
+    // Track inserted coordinates for post-insert PiP verification
+    const insertedPoints: Array<{ wardNum: number; wardName: string; lat: number; lng: number }> = [];
 
-      if (!centroid) {
+    for (let w = 1; w <= 35; w++) {
+      const wardName = `Udupi Ward ${w}`;
+      const locality = WARD_LOCALITY[w] ?? `Ward ${w}`;
+      const hiGroup  = (WARD_HI_GROUP[w] ?? 1) as 1 | 2 | 3 | 4;
+      const statuses = STATUS_POOL[hiGroup];
+      const feature  = wardFeature(wardName);
+
+      if (!feature) {
         console.warn(`  ⚠️  No polygon for ${wardName} — skipping`);
         continue;
       }
@@ -205,8 +237,8 @@ async function main() {
       const rand = makeLcg(w * 31337 + 2025);
 
       for (const status of statuses) {
-        const lat = centroid.lat + (rand() - 0.5) * 0.001;
-        const lng = centroid.lng + (rand() - 0.5) * 0.001;
+        // Always sample a point guaranteed inside the ward polygon
+        const { lat, lng } = pointInPolygon(feature, rand);
 
         const landmark  = LANDMARKS[Math.floor(rand() * LANDMARKS.length)];
         const address   = `${landmark}, ${locality}, Udupi District`;
@@ -234,6 +266,7 @@ async function main() {
           ]
         );
         totalInserted++;
+        insertedPoints.push({ wardNum: w, wardName, lat, lng });
       }
 
       const label =
@@ -244,7 +277,55 @@ async function main() {
       console.log(`  ✓ ${wardName.padEnd(16)} [${statuses.join(", ")}]  ${label}`);
     }
 
-    // Summary
+    // ── Post-insert PiP verification (queries persisted rows from DB) ─────────
+    console.log("\n── Verifying persisted rows are inside their ward polygons ──");
+
+    // Fetch all inserted seed rows (latitude/longitude as stored in DB)
+    const { rows: persistedRows } = await client.query<{
+      latitude: string; longitude: string;
+    }>(
+      `SELECT latitude::text, longitude::text FROM reports WHERE description LIKE '[SEED]%'`
+    );
+
+    // Build a lookup from in-memory tracking: wardName per coord (nearest match)
+    // We verify every persisted row against all ward polygons — each must be inside exactly one ward
+    let pipFails = 0;
+    for (const row of persistedRows) {
+      const lat = parseFloat(row.latitude);
+      const lng = parseFloat(row.longitude);
+      const pt = turf.point([lng, lat]);
+
+      // Find which ward this point belongs to
+      const matched = (geofencesData.features as any[]).find(
+        (f) =>
+          f.geometry.type === "Polygon" &&
+          f.properties?.type === "ward" &&
+          turf.booleanPointInPolygon(pt, f)
+      );
+      if (!matched) {
+        console.error(`  ❌ Persisted point [${lat.toFixed(6)}, ${lng.toFixed(6)}] is OUTSIDE all ward polygons`);
+        pipFails++;
+      }
+    }
+
+    // Also verify each point is inside its intended ward (using in-memory tracking)
+    for (const { wardNum, wardName, lat, lng } of insertedPoints) {
+      const feature = wardFeature(wardName);
+      if (!feature) continue;
+      const inside = turf.booleanPointInPolygon(turf.point([lng, lat]), feature);
+      if (!inside) {
+        console.error(`  ❌ Ward ${wardNum} (${wardName}): point [${lat.toFixed(6)}, ${lng.toFixed(6)}] is outside intended polygon`);
+        pipFails++;
+      }
+    }
+
+    if (pipFails === 0) {
+      console.log(`  ✅ All ${persistedRows.length} persisted rows confirmed inside ward polygons.`);
+    } else {
+      throw new Error(`PiP verification failed: ${pipFails} point(s) outside ward polygon. Aborting.`);
+    }
+
+    // ── Summary ───────────────────────────────────────────────────────────────
     const { rows: summary } = await client.query<{
       status: string; cnt: string;
     }>(

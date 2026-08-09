@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "catalog:",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.14",
