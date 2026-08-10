@@ -31,9 +31,9 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import {
-  LineChart, Line, BarChart, Bar,
+  LineChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  ResponsiveContainer, Legend,
 } from "recharts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -416,14 +416,23 @@ function HiCard({ hi }: { hi: HealthInspector }) {
 // ── Analytics ──────────────────────────────────────────────────────────────────
 
 type PerfRow = { name: string; open: number; cleaning: number; cleaned: number; total: number; rate: number; avgCleanupHours: number };
-type TrendRow = { date: string; reported: number; cleaned: number };
+type TrendRow = { date: string; reported: number; cleaning: number; cleaned: number };
 type BacklogRow = { wardName: string; open: number };
+type SvTableRow = {
+  svId: number; name: string; hiName: string; wards: string;
+  open: number; cleaning: number; cleaned: number; total: number;
+  avgResHrs: number; rate: number; zeroResolvedIn7d: boolean;
+};
 type EEAnalytics = {
-  kpis: { open: number; cleaning: number; resolvedThisMonth: number; totalCleaned: number; total: number; avgCleanupHours: number; resolutionRate: number };
+  kpis: {
+    open: number; cleaning: number; resolvedThisMonth: number; totalCleaned: number;
+    total: number; avgCleanupHours: number; resolutionRate: number;
+    openThisWeek: number; resolvedPriorMonth: number;
+  };
   dailyTrend: TrendRow[];
   wardBacklog: BacklogRow[];
   hiPerformance: PerfRow[];
-  supervisorPerformance: PerfRow[];
+  supervisorTable: SvTableRow[];
 };
 
 function useEEAnalytics() {
@@ -446,37 +455,22 @@ function fmtHours(h: number) {
   return `${Math.round(h / 24)}d`;
 }
 
-function PerfBars({ rows, label }: { rows: PerfRow[]; label: string }) {
-  if (!rows.length) return null;
-  return (
-    <div className="bg-card border border-border/50 rounded-3xl p-5">
-      <h3 className="text-sm font-black text-foreground mb-0.5">{label}</h3>
-      <p className="text-xs text-muted-foreground mb-4">Resolution rate · open count</p>
-      <div className="space-y-3">
-        {rows.map(row => (
-          <div key={row.name}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-foreground truncate max-w-[55%]">{row.name}</span>
-              <div className="flex items-center gap-2 text-xs shrink-0 ml-2">
-                <span className="text-destructive font-semibold">{row.open} open</span>
-                <span className="font-black text-foreground">{row.rate}%</span>
-              </div>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${row.rate >= 60 ? "bg-primary" : row.rate >= 30 ? "bg-amber-500" : "bg-destructive"}`}
-                style={{ width: `${row.rate}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const hiBarColor = (rate: number) =>
+  rate >= 80 ? "#22c55e" : rate >= 50 ? "#f59e0b" : "#ef4444";
 
-function EEAnalyticsPanel() {
+type SvSortCol = "name" | "hiName" | "open" | "cleaned" | "rate" | "avgResHrs";
+
+function EEAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string) => void }) {
   const { data, isLoading } = useEEAnalytics();
+  const [selectedHI, setSelectedHI] = useState<string | null>(null);
+  const [svSortCol, setSvSortCol] = useState<SvSortCol>("rate");
+  const [svSortDir, setSvSortDir] = useState<"asc" | "desc">("desc");
+
+  function toggleSvSort(col: SvSortCol) {
+    if (svSortCol === col) setSvSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSvSortCol(col); setSvSortDir("desc"); }
+  }
+
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
       <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
@@ -484,71 +478,191 @@ function EEAnalyticsPanel() {
     </div>
   );
   if (!data) return null;
-  const { kpis, dailyTrend, wardBacklog, hiPerformance, supervisorPerformance } = data;
+
+  const { kpis, dailyTrend, wardBacklog, hiPerformance, supervisorTable } = data;
+
+  const filteredSvTable = selectedHI
+    ? (supervisorTable ?? []).filter(r => r.hiName === selectedHI)
+    : (supervisorTable ?? []);
+
+  const sortedSvTable = [...filteredSvTable].sort((a, b) => {
+    const av: string | number = a[svSortCol] ?? 0;
+    const bv: string | number = b[svSortCol] ?? 0;
+    if (typeof av === "string") return svSortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+    return svSortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
+
+  const SvSortBtn = ({ col, label }: { col: SvSortCol; label: string }) => (
+    <button type="button" onClick={() => toggleSvSort(col)}
+      className="flex items-center gap-0.5 font-black text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+      {label}{svSortCol === col && <span className="text-primary ml-0.5">{svSortDir === "asc" ? "↑" : "↓"}</span>}
+    </button>
+  );
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
+      {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Open Reports",      value: kpis.open,              color: "text-destructive", bg: "bg-destructive/8" },
-          { label: "In Progress",       value: kpis.cleaning,          color: "text-blue-500",    bg: "bg-blue-50"       },
-          { label: "Cleaned (30d)",     value: kpis.resolvedThisMonth, color: "text-primary",     bg: "bg-primary/8"     },
-          { label: "Avg. Cleanup Time", value: fmtHours(kpis.avgCleanupHours), color: "text-amber-600", bg: "bg-amber-50" },
-        ].map(k => (
-          <div key={k.label} className={`${k.bg} rounded-2xl px-4 py-3`}>
-            <div className={`text-2xl font-black ${k.color}`}>{k.value}</div>
-            <div className="text-xs text-muted-foreground font-semibold mt-0.5">{k.label}</div>
-          </div>
-        ))}
+        <div className="bg-destructive/8 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-destructive">{kpis.open}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Open Reports</div>
+          {(kpis.openThisWeek ?? 0) > 0 && (
+            <div className="text-xs text-destructive font-bold mt-1">+{kpis.openThisWeek} this week</div>
+          )}
+        </div>
+        <div className="bg-blue-50 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-blue-500">{kpis.cleaning}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">In Progress</div>
+        </div>
+        <div className="bg-primary/8 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-primary">{kpis.resolvedThisMonth}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Resolved (30d)</div>
+          {(kpis.resolvedPriorMonth ?? 0) > 0 && (
+            <div className={`text-xs font-bold mt-1 ${kpis.resolvedThisMonth >= kpis.resolvedPriorMonth ? "text-primary" : "text-destructive"}`}>
+              {kpis.resolvedThisMonth >= kpis.resolvedPriorMonth ? "▲" : "▼"} vs prior 30d ({kpis.resolvedPriorMonth})
+            </div>
+          )}
+        </div>
+        <div className="bg-amber-50 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-amber-600">{fmtHours(kpis.avgCleanupHours)}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Avg. Cleanup Time</div>
+        </div>
       </div>
 
+      {/* 30-day trend — 3 lines */}
       {dailyTrend.length > 0 && (
         <div className="bg-card border border-border/50 rounded-3xl p-5">
           <h3 className="text-sm font-black text-foreground mb-0.5">30-Day Activity</h3>
-          <p className="text-xs text-muted-foreground mb-4">Reports received vs cleaned per day</p>
-          <ResponsiveContainer width="100%" height={180}>
+          <p className="text-xs text-muted-foreground mb-3">Daily report flow across all stages</p>
+          <ResponsiveContainer width="100%" height={200}>
             <LineChart data={dailyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" tickFormatter={fmtDateShort} tick={{ fontSize: 10 }} interval={6} />
               <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
               <Tooltip labelFormatter={(l: string) => fmtDateShort(l)} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               <Line type="monotone" dataKey="reported" stroke="#ef4444" strokeWidth={2} dot={false} name="New Reports" />
+              <Line type="monotone" dataKey="cleaning" stroke="#3b82f6" strokeWidth={2} dot={false} name="Started Cleaning" />
               <Line type="monotone" dataKey="cleaned"  stroke="#22c55e" strokeWidth={2} dot={false} name="Cleaned" />
             </LineChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      <PerfBars rows={hiPerformance ?? []} label="Health Inspector Performance" />
-      <PerfBars rows={supervisorPerformance ?? []} label="Field Officer Performance" />
-
-      {wardBacklog.length > 0 && (
+      {/* HI performance — vertical bar chart, clickable */}
+      {(hiPerformance ?? []).length > 0 && (
         <div className="bg-card border border-border/50 rounded-3xl p-5">
-          <h3 className="text-sm font-black text-foreground mb-0.5">Ward Backlog</h3>
-          <p className="text-xs text-muted-foreground mb-4">Open reports per ward</p>
-          <ResponsiveContainer width="100%" height={Math.max(140, wardBacklog.length * 26)}>
-            <BarChart layout="vertical" data={wardBacklog} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
-              <Tooltip />
-              <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} />
+          <div className="flex items-start justify-between mb-0.5">
+            <h3 className="text-sm font-black text-foreground">Health Inspector Performance</h3>
+            {selectedHI && (
+              <button type="button" onClick={() => setSelectedHI(null)}
+                className="text-xs text-primary font-bold hover:underline shrink-0 ml-2">Clear filter</button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">Resolution rate % · tap a bar to filter officers below</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart
+              data={hiPerformance ?? []}
+              margin={{ top: 5, right: 10, left: -20, bottom: 30 }}
+              onClick={(chartData) => {
+                const name = (chartData?.activePayload?.[0]?.payload as PerfRow | undefined)?.name;
+                if (name) setSelectedHI(prev => prev === name ? null : name);
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-25} textAnchor="end" interval={0} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+              <Tooltip formatter={(v: number) => [`${v}%`, "Resolution Rate"]} />
+              <Bar dataKey="rate" name="Resolution Rate" radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false}>
+                {(hiPerformance ?? []).map((hi, i) => (
+                  <Cell key={i} fill={hiBarColor(hi.rate)}
+                    opacity={selectedHI && selectedHI !== hi.name ? 0.3 : 1} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {(hiPerformance ?? []).filter(e => e.avgCleanupHours > 0).length > 0 && (
+      {/* Supervisor table — sortable, amber for 0 resolved in 7d */}
+      {sortedSvTable.length > 0 && (
         <div className="bg-card border border-border/50 rounded-3xl p-5">
-          <h3 className="text-sm font-black text-foreground mb-0.5">Avg. Cleanup Time by Inspector</h3>
-          <p className="text-xs text-muted-foreground mb-4">Time from report received to cleaned</p>
-          <div className="divide-y divide-border/30">
-            {(hiPerformance ?? []).filter(e => e.avgCleanupHours > 0).map(hi => (
-              <div key={hi.name} className="flex items-center justify-between py-2.5">
-                <span className="text-xs font-bold text-foreground truncate">{hi.name}</span>
-                <span className="text-sm font-black text-amber-600 shrink-0 ml-3">{fmtHours(hi.avgCleanupHours)}</span>
-              </div>
-            ))}
+          <div className="flex items-start justify-between mb-0.5">
+            <h3 className="text-sm font-black text-foreground">
+              Field Officer Performance{selectedHI ? ` · ${selectedHI}` : ""}
+            </h3>
+            {selectedHI && (
+              <button type="button" onClick={() => setSelectedHI(null)}
+                className="text-xs text-primary font-bold hover:underline shrink-0 ml-2">Show all</button>
+            )}
           </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Tap column headers to sort · <span className="text-amber-600 font-semibold">amber row</span> = no resolutions in last 7 days
+          </p>
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-xs min-w-[480px]">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="text-left pb-2 pr-2"><SvSortBtn col="name" label="Officer" /></th>
+                  <th className="text-left pb-2 pr-2"><SvSortBtn col="hiName" label="HI" /></th>
+                  <th className="text-left pb-2 pr-2 font-black text-muted-foreground">Wards</th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="open" label="Open" /></th>
+                  <th className="text-right pb-2 px-2 font-black text-muted-foreground">Cleaning</th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="cleaned" label="Cleaned" /></th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="avgResHrs" label="Avg Time" /></th>
+                  <th className="text-right pb-2 pl-2"><SvSortBtn col="rate" label="Rate" /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedSvTable.map(sv => (
+                  <tr key={sv.svId}
+                    className={`border-b border-border/20 last:border-0 transition-colors ${sv.zeroResolvedIn7d ? "bg-amber-50" : "hover:bg-muted/30"}`}>
+                    <td className="py-2 pr-2 font-bold text-foreground max-w-[110px]">
+                      <span className="block truncate" title={sv.name}>{sv.name}</span>
+                    </td>
+                    <td className="py-2 pr-2 text-muted-foreground max-w-[90px]">
+                      <span className="block truncate" title={sv.hiName}>{sv.hiName}</span>
+                    </td>
+                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards}</td>
+                    <td className="py-2 px-2 text-right text-destructive font-semibold">{sv.open}</td>
+                    <td className="py-2 px-2 text-right text-blue-500 font-semibold">{sv.cleaning}</td>
+                    <td className="py-2 px-2 text-right text-primary font-semibold">{sv.cleaned}</td>
+                    <td className="py-2 px-2 text-right text-amber-600 font-semibold">{fmtHours(sv.avgResHrs)}</td>
+                    <td className="py-2 pl-2 text-right">
+                      <span className={`font-black text-sm ${sv.rate >= 80 ? "text-primary" : sv.rate >= 50 ? "text-amber-600" : "text-destructive"}`}>
+                        {sv.rate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Ward backlog — clickable */}
+      {wardBacklog.length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <h3 className="text-sm font-black text-foreground mb-0.5">Ward Backlog</h3>
+          <p className="text-xs text-muted-foreground mb-4">Open reports per ward · tap a bar to view them</p>
+          <ResponsiveContainer width="100%" height={Math.max(140, wardBacklog.length * 26)}>
+            <BarChart
+              layout="vertical"
+              data={wardBacklog}
+              margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
+              onClick={(chartData) => {
+                const payload = chartData?.activePayload?.[0]?.payload as BacklogRow | undefined;
+                if (payload?.wardName) onWardClick?.(payload.wardName.replace("W", "Udupi Ward "));
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
+              <Tooltip />
+              <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 
@@ -742,7 +856,9 @@ export default function EnvEngineerDashboard() {
         </>
       )}
 
-      {tab === "analytics" && <EEAnalyticsPanel />}
+      {tab === "analytics" && (
+        <EEAnalyticsPanel onWardClick={(wardGeoName) => setDrillWard(wardGeoName)} />
+      )}
     </div>
   );
 }

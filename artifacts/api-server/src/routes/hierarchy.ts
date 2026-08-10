@@ -1912,20 +1912,49 @@ router.get("/env-engineer/analytics", requireEnvEngineer, async (req, res): Prom
       return;
     }
     const allReports = await fetchReportsInWardEntries(wardEntries, {});
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 24 * 3_600_000;
+    const sixtyDaysAgo  = now - 60 * 24 * 3_600_000;
+    const sevenDaysAgo  = now -  7 * 24 * 3_600_000;
+
     const open = allReports.filter(r => r.status === "reported").length;
     const cleaning = allReports.filter(r => r.status === "cleaning").length;
-    const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const resolvedThisMonth  = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const resolvedPriorMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= sixtyDaysAgo && new Date(r.cleanedAt).getTime() < thirtyDaysAgo).length;
+    const openThisWeek = allReports.filter(r => r.createdAt && new Date(r.createdAt).getTime() >= sevenDaysAgo && r.status === "reported").length;
     const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
     const total = allReports.length;
+
+    // Supervisor performance table with 7-day resolved flag
+    const supervisorTable = svList.map(sv => {
+      const svReports = allReports.filter(r => r.supervisorName === sv.name);
+      const svOpen     = svReports.filter(r => r.status === "reported").length;
+      const svCleaning = svReports.filter(r => r.status === "cleaning").length;
+      const svCleaned  = svReports.filter(r => r.status === "cleaned").length;
+      const svTotal    = svReports.length;
+      const resolvedIn7d = svReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= sevenDaysAgo).length;
+      const avgResHrs  = computeAvgCleanupHrs(svReports);
+      const rate = svTotal > 0 ? Math.round((svCleaned / svTotal) * 100) : 0;
+      const wardShort = (sv.wardNames ?? []).map((w: string) => w.replace("Ward ", "W")).join(", ");
+      return {
+        svId: sv.id, name: sv.name,
+        hiName: hiNameById.get(sv.hiId) ?? "",
+        wards: wardShort,
+        open: svOpen, cleaning: svCleaning, cleaned: svCleaned, total: svTotal,
+        avgResHrs, rate,
+        zeroResolvedIn7d: resolvedIn7d === 0 && svTotal > 0,
+      };
+    });
+
     res.json({
       kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
               avgCleanupHours: computeAvgCleanupHrs(allReports),
-              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0,
+              openThisWeek, resolvedPriorMonth },
       dailyTrend: buildDailyTrend(allReports),
       wardBacklog: buildWardBacklog(allReports),
       hiPerformance: toPerf(groupByKey(allReports, "hiName")),
-      supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
+      supervisorTable,
     });
   } catch (err) {
     logger.error({ err }, "Error computing EE analytics");
