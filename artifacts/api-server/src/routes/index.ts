@@ -8,6 +8,7 @@ import uploadsRouter from "./uploads";
 import panchayatRouter from "./panchayat";
 import notificationsRouter from "./notifications";
 import hierarchyRouter from "./hierarchy";
+import controlCenterStaffRouter from "./control-center-staff";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(panchayatRouter);
 router.use(uploadsRouter);
 router.use(notificationsRouter);
 router.use(hierarchyRouter);
+router.use(controlCenterStaffRouter);
 
 export default router;

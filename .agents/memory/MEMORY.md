@@ -9,3 +9,4 @@
 - [District boundary derived from ward union](district-boundary-derivation.md) — Saligrama district polygon must be regenerated from ward union via script, never hand-edited, or coverage gaps reappear.
 - [Destructive endpoint tests wipe seeded data](destructive-tests-shared-dev-db.md) — purge/bulk-archive tests hit all `is_test` rows, not just their own; snapshot + restore in teardown; empty dashboard ⇒ check `GROUP BY deleted_at`.
 - [Cleaning-status color = blue](status-color-conventions.md) — "cleaning" status is blue (#3b82f6) everywhere, not amber/orange; amber/orange stays reserved for warnings, zone palettes, and hotspots.
+- [Staff ↔ login account linking](staff-account-linking.md) — resolve accounts by (role, officer_id), never name/email; duplicate names silently rewrite the wrong login.

@@ -1,13 +1,6 @@
-import { useState, useEffect } from "react";
-import {
-  useListOfficers,
-  useCreateOfficer,
-  useDeleteOfficer,
-  useUpdateOfficer,
-  getListOfficersQueryKey,
-} from "@workspace/api-client-react";
-import type { Officer, OfficerList } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -48,12 +41,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   Loader2,
   Plus,
   Users,
@@ -62,318 +49,510 @@ import {
   Mail,
   Trash2,
   Shield,
-  Map,
-  Save,
+  Map as MapIcon,
   Pencil,
   KeyRound,
   ChevronDown,
+  Search,
+  UserCog,
+  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { OfficerZonesMap } from "@/components/officer-zones-map";
-import { OfficerAreaEditMap } from "@/components/officer-area-edit-map";
-import geofencesData from "@/data/geofences.json";
-import { formatWardLabel } from "@/lib/ward-names";
+import { OfficerZonesMap, type StaffZone } from "@/components/officer-zones-map";
+import {
+  PANCHAYAT_NAMES,
+  PANCHAYAT_WARDS,
+  STAFF_COLORS,
+  STAFF_LABELS,
+  STAFF_ORDER,
+  STAFF_SHORT_LABELS,
+  hasDerivedWards,
+  keyToSupervisorWard,
+  staffTypesForPanchayat,
+  supervisorWardToKey,
+  supportsMultipleWards,
+  usesPhoneLogin,
+  wardChipLabel,
+  type StaffMember,
+  type StaffRosterResponse,
+  type StaffType,
+} from "@/lib/staff-roster";
 
-const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
-const ZONE_COLORS = ["#f97316", "#8b5cf6", "#f43f5e", "#3b82f6", "#10b981", "#ec4899"];
+const STAFF_QUERY_KEY = ["control-center", "staff"] as const;
 
-const panchayatNames: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
-  .map((f) => (f.properties as any)?.name ?? "")
-  .filter(Boolean);
+// ── Forms ────────────────────────────────────────────────────────────────────
 
-const allWardNames: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
-  .map((f) => (f.properties as any)?.name ?? "Zone");
+const createStaffSchema = z
+  .object({
+    panchayatName: z.string().min(1, "Panchayat is required"),
+    staffType: z.string().min(1, "Role is required"),
+    name: z.string().min(2, "Name is required"),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    healthInspectorId: z.string().optional(),
+    environmentalEngineerId: z.string().optional(),
+    wardKeys: z.array(z.string()).default([]),
+  })
+  .superRefine((d, ctx) => {
+    const type = d.staffType as StaffType;
+    if (!type) return;
+    if (usesPhoneLogin(type)) {
+      const digits = (d.phone ?? "").replace(/\D/g, "");
+      if (digits.length < 10) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["phone"], message: "A 10-digit phone number is required" });
+      }
+    } else if (!d.email || !/^\S+@\S+\.\S+$/.test(d.email)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Valid email is required" });
+    }
+    if (type === "supervisor" && !d.healthInspectorId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["healthInspectorId"], message: "Choose the reporting health inspector" });
+    }
+    if (type === "community_mobiliser" && d.wardKeys.length !== 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wardKeys"], message: "Select exactly one ward" });
+    }
+  });
 
-// Ward features don't carry an explicit panchayat — all wards belong to the single district.
-// When multiple panchayats are added, add a "panchayat" property to each ward feature.
-const wardsByPanchayat: Record<string, string[]> = {};
-panchayatNames.forEach((p) => { wardsByPanchayat[p] = allWardNames; });
+type CreateStaffValues = z.infer<typeof createStaffSchema>;
 
-const geoZoneNames = allWardNames;
+const editStaffSchema = z
+  .object({
+    name: z.string().min(2, "Name is required"),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    password: z.string().optional(),
+    confirmPassword: z.string().optional(),
+    healthInspectorId: z.string().optional(),
+    wardKeys: z.array(z.string()).default([]),
+  })
+  .refine((d) => !d.password || d.password.length >= 6, {
+    message: "Password must be at least 6 characters",
+    path: ["password"],
+  })
+  .refine((d) => !d.password || d.password === d.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-const createOfficerSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  email: z.string().email("Valid email is required"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  phone: z.string().optional(),
-  panchayatName: z.string().min(1, "Panchayat is required"),
-  areaName: z.string().optional(),
-});
+type EditStaffValues = z.infer<typeof editStaffSchema>;
 
-type CreateOfficerValues = z.infer<typeof createOfficerSchema>;
+// ── Small presentational helpers ─────────────────────────────────────────────
 
-const editDetailsSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  phone: z.string().optional(),
-  email: z.string().email("Valid email required"),
-  password: z.string().optional(),
-  confirmPassword: z.string().optional(),
-}).refine(
-  (d) => !d.password || d.password.length >= 6,
-  { message: "Password must be at least 6 characters", path: ["password"] }
-).refine(
-  (d) => !d.password || d.password === d.confirmPassword,
-  { message: "Passwords do not match", path: ["confirmPassword"] }
-);
-
-type EditDetailsValues = z.infer<typeof editDetailsSchema>;
-
-interface OfficerZoneDraft {
-  officerId: number;
-  name: string;
-  email: string;
-  areaName: string;
-  lat: number;
-  lng: number;
-  colorIdx: number;
+function RoleBadge({ staffType }: { staffType: StaffType }) {
+  const color = STAFF_COLORS[staffType];
+  return (
+    <span
+      className="inline-flex items-center text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md shrink-0"
+      style={{ color, background: `${color}14`, border: `1px solid ${color}33` }}
+    >
+      {STAFF_SHORT_LABELS[staffType]}
+    </span>
+  );
 }
 
+function WardChips({ wardKeys, limit = 3 }: { wardKeys: string[]; limit?: number }) {
+  if (!wardKeys.length) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+        No ward
+      </span>
+    );
+  }
+  const shown = wardKeys.slice(0, limit);
+  const rest = wardKeys.length - shown.length;
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {shown.map((w) => (
+        <span
+          key={w}
+          className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 bg-primary/8 px-1.5 py-0.5 rounded-md"
+        >
+          <MapPin className="w-2.5 h-2.5 shrink-0" />
+          {wardChipLabel(w)}
+        </span>
+      ))}
+      {rest > 0 && (
+        <span className="text-[10px] font-bold text-muted-foreground">+{rest}</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Compact ward line for the collapsed card header. Long ward names and
+ * many-ward supervisors would otherwise blow out the row, so anything past a
+ * single ward collapses to a count.
+ */
+function WardSummary({ staffType, wardKeys }: { staffType: StaffType; wardKeys: string[] }) {
+  if (hasDerivedWards(staffType)) {
+    return (
+      <span className="text-[10px] font-semibold text-muted-foreground truncate">
+        {wardKeys.length ? `${wardKeys.length} wards via team` : "Full panchayat"}
+      </span>
+    );
+  }
+  if (!wardKeys.length) {
+    return (
+      <span className="text-[10px] font-semibold text-amber-600 shrink-0">No ward</span>
+    );
+  }
+  if (wardKeys.length === 1) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 min-w-0 max-w-full">
+        <MapPin className="w-2.5 h-2.5 shrink-0" />
+        <span className="truncate">{wardChipLabel(wardKeys[0])}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 shrink-0">
+      <MapPin className="w-2.5 h-2.5 shrink-0" />
+      {wardKeys.length} wards
+    </span>
+  );
+}
+
+/** Multi-select ward picker used by both the create and edit forms. */
+function WardPicker({
+  wards,
+  value,
+  onChange,
+  multiple,
+  disabled,
+}: {
+  wards: string[];
+  value: string[];
+  onChange: (next: string[]) => void;
+  multiple: boolean;
+  disabled?: boolean;
+}) {
+  const toggle = (ward: string) => {
+    if (disabled) return;
+    if (multiple) {
+      onChange(value.includes(ward) ? value.filter((w) => w !== ward) : [...value, ward]);
+    } else {
+      onChange(value.includes(ward) ? [] : [ward]);
+    }
+  };
+
+  if (!wards.length) {
+    return <p className="text-sm text-muted-foreground font-medium">Select a panchayat first.</p>;
+  }
+
+  return (
+    <div className="max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-muted/30 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+      {wards.map((ward) => {
+        const selected = value.includes(ward);
+        return (
+          <button
+            key={ward}
+            type="button"
+            disabled={disabled}
+            onClick={() => toggle(ward)}
+            className={`text-left text-xs font-semibold px-2 py-1.5 rounded-lg border transition-colors ${
+              selected
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border/50 hover:border-primary/40 text-foreground"
+            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {wardChipLabel(ward)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
+
 export default function AdminOfficers() {
-  const { data: officersData, isLoading } = useListOfficers();
-  const createOfficer = useCreateOfficer();
-  const deleteOfficer = useDeleteOfficer();
-  const updateOfficer = useUpdateOfficer();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editingZone, setEditingZone] = useState<OfficerZoneDraft | null>(null);
-  const [pendingSubmitData, setPendingSubmitData] = useState<CreateOfficerValues | null>(null);
-  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
-  const [editDetailsOfficer, setEditDetailsOfficer] = useState<(typeof officers)[0] | null>(null);
-  const [expandedOfficers, setExpandedOfficers] = useState<Set<number>>(new Set());
+  const { data, isLoading } = useQuery<StaffRosterResponse>({
+    queryKey: STAFF_QUERY_KEY,
+    queryFn: () => customFetch<StaffRosterResponse>("/api/control-center/staff"),
+  });
 
-  function toggleExpanded(id: number) {
-    setExpandedOfficers((prev) => {
+  const staff = useMemo(() => data?.staff ?? [], [data]);
+
+  const [panchayatFilter, setPanchayatFilter] = useState<string>("all");
+  const [wardFilter, setWardFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<StaffMember | null>(null);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: STAFF_QUERY_KEY });
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+
+  const createStaff = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      customFetch("/api/control-center/staff", { method: "POST", body: JSON.stringify(body) }),
+  });
+
+  const updateStaff = useMutation({
+    mutationFn: ({ staffType, id, body }: { staffType: StaffType; id: number; body: Record<string, unknown> }) =>
+      customFetch(`/api/control-center/staff/${staffType}/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+  });
+
+  const removeStaff = useMutation({
+    mutationFn: ({ staffType, id }: { staffType: StaffType; id: number }) =>
+      customFetch(`/api/control-center/staff/${staffType}/${id}`, { method: "DELETE" }),
+  });
+
+  // ── Filtering ──────────────────────────────────────────────────────────────
+
+  const wardOptions = panchayatFilter === "all" ? [] : PANCHAYAT_WARDS[panchayatFilter] ?? [];
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return staff
+      .filter((s) => panchayatFilter === "all" || s.panchayatName === panchayatFilter)
+      .filter((s) => wardFilter === "all" || s.wardKeys.includes(wardFilter))
+      .filter((s) => roleFilter === "all" || s.staffType === roleFilter)
+      .filter(
+        (s) =>
+          !term ||
+          s.name.toLowerCase().includes(term) ||
+          (s.email ?? "").toLowerCase().includes(term) ||
+          (s.phone ?? "").includes(term)
+      )
+      .sort((a, b) => {
+        const p = (a.panchayatName ?? "").localeCompare(b.panchayatName ?? "");
+        if (p !== 0) return p;
+        const r = STAFF_ORDER[a.staffType] - STAFF_ORDER[b.staffType];
+        if (r !== 0) return r;
+        return a.name.localeCompare(b.name);
+      });
+  }, [staff, panchayatFilter, wardFilter, roleFilter, search]);
+
+  const mapZones: StaffZone[] = useMemo(
+    () =>
+      filtered
+        .filter((s) => !hasDerivedWards(s.staffType))
+        .filter((s) => s.wardKeys.length > 0 || s.centerLat != null)
+        .map((s) => ({
+          key: s.key,
+          name: s.name,
+          wardKeys: s.wardKeys,
+          centerLat: s.centerLat,
+          centerLng: s.centerLng,
+        })),
+    [filtered]
+  );
+
+  const counts = useMemo(() => {
+    const byType = new Map<StaffType, number>();
+    for (const s of filtered) byType.set(s.staffType, (byType.get(s.staffType) ?? 0) + 1);
+    return byType;
+  }, [filtered]);
+
+  function toggleExpanded(key: string) {
+    setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
 
-  const editDetailsForm = useForm<EditDetailsValues>({
-    resolver: zodResolver(editDetailsSchema),
-    defaultValues: { name: "", phone: "", email: "", password: "", confirmPassword: "" },
-  });
+  // ── Create form ────────────────────────────────────────────────────────────
 
-  // Local string state for coordinate inputs — updated on blur, not every keystroke
-  const [latStr, setLatStr] = useState("");
-  const [lngStr, setLngStr] = useState("");
-
-  // Keep string inputs in sync when editingZone changes externally (map drag)
-  useEffect(() => {
-    if (!editingZone) return;
-    setLatStr(editingZone.lat.toFixed(6));
-    setLngStr(editingZone.lng.toFixed(6));
-  }, [editingZone?.lat, editingZone?.lng]);
-
-  const form = useForm<CreateOfficerValues>({
-    resolver: zodResolver(createOfficerSchema),
+  const createForm = useForm<CreateStaffValues>({
+    resolver: zodResolver(createStaffSchema),
     defaultValues: {
+      panchayatName: "",
+      staffType: "",
       name: "",
       email: "",
-      password: "",
       phone: "",
-      panchayatName: "",
-      areaName: "",
+      password: "",
+      healthInspectorId: "",
+      environmentalEngineerId: "",
+      wardKeys: [],
     },
   });
 
-  const selectedPanchayat = useWatch({ control: form.control, name: "panchayatName" });
-  const visibleWards = selectedPanchayat ? (wardsByPanchayat[selectedPanchayat] ?? []) : [];
+  const createPanchayat = useWatch({ control: createForm.control, name: "panchayatName" });
+  const createType = useWatch({ control: createForm.control, name: "staffType" }) as StaffType | "";
+  const createWardKeys = useWatch({ control: createForm.control, name: "wardKeys" }) ?? [];
 
-  const officers = officersData?.officers || [];
+  const availableTypes = createPanchayat ? staffTypesForPanchayat(createPanchayat) : [];
+  const createWards = createPanchayat ? PANCHAYAT_WARDS[createPanchayat] ?? [] : [];
 
-  // areaName → officer name for wards already taken
-  const assignedWardsMap: Record<string, string> = Object.fromEntries(
-    officers
-      .filter((o) => o.areaName)
-      .map((o) => [o.areaName as string, o.name])
+  const inspectorOptions = useMemo(
+    () => staff.filter((s) => s.staffType === "health_inspector" && s.panchayatName === createPanchayat),
+    [staff, createPanchayat]
+  );
+  const engineerOptions = useMemo(
+    () => staff.filter((s) => s.staffType === "environmental_engineer" && s.panchayatName === createPanchayat),
+    [staff, createPanchayat]
   );
 
-  function openZoneEditor(id: number) {
-    const idx = officers.findIndex((o) => o.id === id);
-    if (idx === -1) return;
-    const officer = officers[idx];
-    setEditingZone({
-      officerId: officer.id,
-      name: officer.name,
-      email: officer.email,
-      areaName: officer.areaName ?? "",
-      lat: officer.centerLat ?? UDUPI_CENTER.lat,
-      lng: officer.centerLng ?? UDUPI_CENTER.lng,
-      colorIdx: idx,
-    });
-  }
-
-  function openEditDetails(officer: (typeof officers)[0]) {
-    setEditDetailsOfficer(officer);
-    editDetailsForm.reset({ name: officer.name, phone: officer.phone ?? "", email: officer.email, password: "", confirmPassword: "" });
-    setEditDetailsOpen(true);
-  }
-
-  function handleSaveDetails(data: EditDetailsValues) {
-    if (!editDetailsOfficer) return;
-    const passwordChanged = !!data.password;
-    const payload: Record<string, any> = { name: data.name, phone: data.phone || null };
-    if (data.email && data.email !== editDetailsOfficer.email) payload.email = data.email;
-    if (passwordChanged) payload.password = data.password;
-    updateOfficer.mutate(
-      { id: editDetailsOfficer.id, data: payload },
-      {
-        onSuccess: () => {
-          toast({ title: passwordChanged ? "Password reset successfully" : "Officer updated" });
-          setEditDetailsOpen(false);
-          setEditDetailsOfficer(null);
-          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
-        },
-        onError: (err) => {
-          toast({ title: "Failed to update officer", description: err.message, variant: "destructive" });
-        },
-      }
-    );
-  }
-
-  const doCreateOfficer = (data: CreateOfficerValues) => {
-    const cleanData = {
-      ...data,
-      areaName: data.areaName || undefined,
-      panchayatName: data.panchayatName,
+  function submitCreate(values: CreateStaffValues) {
+    const type = values.staffType as StaffType;
+    const body: Record<string, unknown> = {
+      staffType: type,
+      name: values.name.trim(),
+      panchayatName: values.panchayatName,
+      password: values.password,
     };
-    createOfficer.mutate(
-      { data: cleanData },
-      {
-        onSuccess: () => {
-          toast({ title: "Officer created successfully" });
-          setCreateModalOpen(false);
-          setPendingSubmitData(null);
-          form.reset();
-          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
-        },
-        onError: (err) => {
-          setPendingSubmitData(null);
-          toast({
-            title: "Failed to create officer",
-            description: err.message,
-            variant: "destructive",
-          });
-        },
-      }
-    );
-  };
+    if (usesPhoneLogin(type)) body.phone = values.phone?.trim();
+    else body.email = values.email?.trim();
+    if (values.phone?.trim() && !usesPhoneLogin(type)) body.phone = values.phone.trim();
 
-  const onSubmit = (data: CreateOfficerValues) => {
-    if (data.areaName && assignedWardsMap[data.areaName]) {
-      setPendingSubmitData(data);
-      return;
+    if (type === "supervisor") {
+      body.healthInspectorId = Number(values.healthInspectorId);
+      body.wardNames = values.wardKeys
+        .map(keyToSupervisorWard)
+        .filter((w): w is string => Boolean(w));
+    } else if (type === "health_inspector") {
+      if (values.environmentalEngineerId) body.environmentalEngineerId = Number(values.environmentalEngineerId);
+    } else if (type === "field_officer" || type === "community_mobiliser") {
+      body.wardNames = values.wardKeys.slice(0, 1);
     }
-    doCreateOfficer(data);
-  };
 
-  const handleDelete = (id: number) => {
-    deleteOfficer.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          toast({ title: "Officer removed" });
-          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
-        },
-        onError: (err) => {
-          toast({
-            title: "Failed to remove officer",
-            description: err.message,
-            variant: "destructive",
-          });
-        },
-      }
-    );
-  };
-
-  const handleSaveZone = async () => {
-    if (!editingZone) return;
-    const snapshot = editingZone;
-
-    // Optimistic update before firing the mutation
-    await queryClient.cancelQueries({ queryKey: getListOfficersQueryKey() });
-    const previous = queryClient.getQueryData<OfficerList>(getListOfficersQueryKey());
-    queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), (old) => {
-      if (!old) return old;
-      return {
-        ...old,
-        officers: old.officers.map((o: Officer) =>
-          o.id === snapshot.officerId
-            ? {
-                ...o,
-                areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
-                centerLat: snapshot.lat,
-                centerLng: snapshot.lng,
-              }
-            : o
-        ),
-      };
-    });
-
-    updateOfficer.mutate(
-      {
-        id: snapshot.officerId,
-        data: {
-          areaName: snapshot.areaName !== "" ? snapshot.areaName : null,
-          centerLat: snapshot.lat,
-          centerLng: snapshot.lng,
-        },
+    createStaff.mutate(body, {
+      onSuccess: () => {
+        toast({ title: `${STAFF_LABELS[type]} added` });
+        setCreateOpen(false);
+        createForm.reset();
+        invalidate();
       },
+      onError: (err: any) =>
+        toast({ title: "Could not add staff member", description: err?.message, variant: "destructive" }),
+    });
+  }
+
+  // ── Edit form ──────────────────────────────────────────────────────────────
+
+  const editForm = useForm<EditStaffValues>({
+    resolver: zodResolver(editStaffSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+      healthInspectorId: "",
+      wardKeys: [],
+    },
+  });
+
+  const editWardKeys = useWatch({ control: editForm.control, name: "wardKeys" }) ?? [];
+
+  function openEdit(member: StaffMember) {
+    setEditTarget(member);
+    editForm.reset({
+      name: member.name,
+      email: member.email ?? "",
+      phone: member.phone ?? "",
+      password: "",
+      confirmPassword: "",
+      healthInspectorId: member.parentId ? String(member.parentId) : "",
+      wardKeys: member.wardKeys,
+    });
+  }
+
+  function submitEdit(values: EditStaffValues) {
+    if (!editTarget) return;
+    const type = editTarget.staffType;
+    const body: Record<string, unknown> = { name: values.name.trim() };
+
+    if (usesPhoneLogin(type)) {
+      if (values.phone?.trim()) body.phone = values.phone.trim();
+    } else {
+      if (values.email?.trim() && values.email.trim() !== editTarget.email) body.email = values.email.trim();
+      body.phone = values.phone?.trim() ?? "";
+    }
+    if (values.password) body.password = values.password;
+
+    // Only send ward assignment when it actually changed. The server recomputes a
+    // staff member's map centre from the ward polygon whenever wardNames is present,
+    // which would silently relocate a field officer's hand-placed zone dot on an
+    // unrelated edit such as a rename or password change.
+    const wardsChanged =
+      values.wardKeys.length !== editTarget.wardKeys.length ||
+      values.wardKeys.some((w) => !editTarget.wardKeys.includes(w));
+
+    if (type === "supervisor") {
+      if (wardsChanged) {
+        body.wardNames = values.wardKeys
+          .map(keyToSupervisorWard)
+          .filter((w): w is string => Boolean(w));
+      }
+      if (values.healthInspectorId && Number(values.healthInspectorId) !== editTarget.parentId) {
+        body.healthInspectorId = Number(values.healthInspectorId);
+      }
+    } else if ((type === "field_officer" || type === "community_mobiliser") && wardsChanged) {
+      body.wardNames = values.wardKeys.slice(0, 1);
+    }
+
+    updateStaff.mutate(
+      { staffType: type, id: editTarget.id, body },
       {
-        onError: (err) => {
-          // Rollback optimistic update on error
-          if (previous) {
-            queryClient.setQueryData<OfficerList>(getListOfficersQueryKey(), previous);
-          }
-          toast({
-            title: "Failed to save zone",
-            description: err.message,
-            variant: "destructive",
-          });
-        },
         onSuccess: () => {
-          toast({
-            title: "Zone saved",
-            description: `${snapshot.name}'s coverage area has been updated.`,
-          });
-          setEditingZone(null);
+          toast({ title: values.password ? "Password changed" : "Staff details updated" });
+          setEditTarget(null);
+          invalidate();
         },
-        onSettled: () => {
-          queryClient.invalidateQueries({ queryKey: getListOfficersQueryKey() });
-        },
+        onError: (err: any) =>
+          toast({ title: "Could not save changes", description: err?.message, variant: "destructive" }),
       }
     );
-  };
+  }
 
-  const zoneColor = editingZone
-    ? ZONE_COLORS[editingZone.colorIdx % ZONE_COLORS.length]
-    : "#0d9488";
+  function handleRemove(member: StaffMember) {
+    removeStaff.mutate(
+      { staffType: member.staffType, id: member.id },
+      {
+        onSuccess: () => {
+          toast({ title: `${member.name} removed` });
+          invalidate();
+        },
+        onError: (err: any) =>
+          toast({ title: "Could not remove staff member", description: err?.message, variant: "destructive" }),
+      }
+    );
+  }
+
+  const editInspectorOptions = useMemo(
+    () =>
+      editTarget
+        ? staff.filter((s) => s.staffType === "health_inspector" && s.panchayatName === editTarget.panchayatName)
+        : [],
+    [staff, editTarget]
+  );
+  const editWards = editTarget?.panchayatName ? PANCHAYAT_WARDS[editTarget.panchayatName] ?? [] : [];
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="pb-12 animate-in fade-in duration-500">
-      <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden mb-8">
+      <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden mb-6">
         <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-bl-[120px] pointer-events-none" />
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
           <div>
             <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">Team Roster</h1>
             <p className="text-muted-foreground font-medium text-lg">
-              Manage coastal sanitation officers and their assigned zones.
+              Every sanitation staff member across Udupi and Saligrama, with their assigned wards.
             </p>
           </div>
 
-          <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button
                 size="lg"
                 className="h-14 rounded-2xl font-black shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground hover:-translate-y-1 transition-all"
               >
-                <Plus className="w-5 h-5 mr-2" /> Add Officer
+                <Plus className="w-5 h-5 mr-2" /> Add Staff
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-2xl rounded-[2rem] p-0 border-border/50 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -383,192 +562,263 @@ export default function AdminOfficers() {
                     <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                       <Shield className="w-5 h-5" />
                     </div>
-                    <DialogTitle className="text-2xl font-black tracking-tight">
-                      New Officer
-                    </DialogTitle>
+                    <DialogTitle className="text-2xl font-black tracking-tight">New Staff Member</DialogTitle>
                   </div>
                 </DialogHeader>
               </div>
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
-                  <div className="overflow-y-auto flex-1 px-8 py-2 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Jane Doe"
-                              {...field}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="officer@udupicivicwatch.in"
-                              type="email"
-                              {...field}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="font-bold text-foreground">Temporary Password</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="text"
-                              placeholder="min 6 characters"
-                              {...field}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="font-bold text-foreground">
-                            Phone{" "}
-                            <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="+91 98765 43210"
-                              {...field}
-                              className="bg-muted/50 rounded-xl h-12 focus:ring-primary border-border/50 font-medium"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="md:col-span-2 pt-4 pb-2">
-                      <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-                        <h3 className="font-black text-primary flex items-center gap-2 mb-1">
-                          <MapPin className="w-5 h-5" /> Service Zone Assignment
-                        </h3>
-                        <p className="text-sm text-foreground/70 font-medium">
-                          Select the panchayat first, then assign the ward. Reports in that ward will be auto-routed to this officer.
-                        </p>
-                      </div>
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="panchayatName"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="font-bold text-foreground">Panchayat</FormLabel>
-                          <Select
-                            onValueChange={(v) => {
-                              field.onChange(v);
-                              form.setValue("areaName", "");
-                            }}
-                            value={field.value || ""}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
-                                <SelectValue placeholder="Select panchayat…" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {panchayatNames.map((p) => (
-                                <SelectItem key={p} value={p}>
-                                  <span className="flex items-center gap-2">
-                                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                    {p}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="areaName"
-                      render={({ field }) => (
-                        <FormItem className="md:col-span-2">
-                          <FormLabel className="font-bold text-foreground">
-                            Ward{" "}
-                            <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
-                          </FormLabel>
-                          <Select
-                            onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
-                            value={field.value || "__none__"}
-                            disabled={!selectedPanchayat}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
-                                <SelectValue placeholder={selectedPanchayat ? "Select a ward…" : "Select panchayat first"} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="max-h-56 overflow-y-auto">
-                              <SelectItem value="__none__">
-                                <span className="text-muted-foreground">No ward assigned</span>
-                              </SelectItem>
-                              {visibleWards.map((wardName) => {
-                                const assignedTo = assignedWardsMap[wardName];
-                                return (
-                                  <SelectItem key={wardName} value={wardName}>
-                                    <span className="flex items-center gap-2 min-w-0">
+              <Form {...createForm}>
+                <form onSubmit={createForm.handleSubmit(submitCreate)} className="flex flex-col flex-1 min-h-0">
+                  <div className="overflow-y-auto flex-1 px-8 py-2 space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <FormField
+                        control={createForm.control}
+                        name="panchayatName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground">Panchayat</FormLabel>
+                            <Select
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                createForm.setValue("staffType", "");
+                                createForm.setValue("wardKeys", []);
+                                createForm.setValue("healthInspectorId", "");
+                                createForm.setValue("environmentalEngineerId", "");
+                              }}
+                              value={field.value || ""}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                  <SelectValue placeholder="Select panchayat…" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {PANCHAYAT_NAMES.map((p) => (
+                                  <SelectItem key={p} value={p}>
+                                    <span className="flex items-center gap-2">
                                       <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                      <span className="font-medium">{formatWardLabel(wardName)}</span>
-                                      {assignedTo && (
-                                        <span className="ml-1 text-[11px] text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
-                                          {assignedTo}
-                                        </span>
-                                      )}
+                                      {p}
                                     </span>
                                   </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={createForm.control}
+                        name="staffType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground">Role</FormLabel>
+                            <Select
+                              onValueChange={(v) => {
+                                field.onChange(v);
+                                createForm.setValue("wardKeys", []);
+                              }}
+                              value={field.value || ""}
+                              disabled={!createPanchayat}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                  <SelectValue placeholder={createPanchayat ? "Select role…" : "Select panchayat first"} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {availableTypes.map((t) => (
+                                  <SelectItem key={t} value={t}>
+                                    {STAFF_LABELS[t]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={createForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Jane Doe"
+                                {...field}
+                                className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {createType && usesPhoneLogin(createType) ? (
+                        <FormField
+                          control={createForm.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-bold text-foreground">Phone (Login)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="98765 43210"
+                                  {...field}
+                                  className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      ) : (
+                        <FormField
+                          control={createForm.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="email"
+                                  placeholder="officer@udupicivicwatch.in"
+                                  {...field}
+                                  className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       )}
-                    />
+
+                      <FormField
+                        control={createForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground">Temporary Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="text"
+                                placeholder="min 6 characters"
+                                {...field}
+                                className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {createType === "supervisor" && (
+                        <FormField
+                          control={createForm.control}
+                          name="healthInspectorId"
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                              <FormLabel className="font-bold text-foreground">Reports To (Health Inspector)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                    <SelectValue placeholder="Select health inspector…" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {inspectorOptions.map((hi) => (
+                                    <SelectItem key={hi.id} value={String(hi.id)}>
+                                      {hi.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {createType === "health_inspector" && engineerOptions.length > 0 && (
+                        <FormField
+                          control={createForm.control}
+                          name="environmentalEngineerId"
+                          render={({ field }) => (
+                            <FormItem className="md:col-span-2">
+                              <FormLabel className="font-bold text-foreground">
+                                Reports To (Environmental Engineer)
+                              </FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-muted/50 rounded-xl h-12 border-border/50 font-medium">
+                                    <SelectValue placeholder="Default engineer for this panchayat" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {engineerOptions.map((ee) => (
+                                    <SelectItem key={ee.id} value={String(ee.id)}>
+                                      {ee.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    {createType && !hasDerivedWards(createType) && (
+                      <FormField
+                        control={createForm.control}
+                        name="wardKeys"
+                        render={({ field }) => (
+                          <FormItem>
+                            <div className="bg-primary/5 rounded-xl p-4 border border-primary/10 mb-3">
+                              <h3 className="font-black text-primary flex items-center gap-2 mb-1">
+                                <MapPin className="w-5 h-5" /> Ward Assignment
+                              </h3>
+                              <p className="text-sm text-foreground/70 font-medium">
+                                {supportsMultipleWards(createType)
+                                  ? "Supervisors cover several wards — pick all of them."
+                                  : "Reports inside this ward are routed to this staff member."}
+                              </p>
+                            </div>
+                            <WardPicker
+                              wards={createWards}
+                              value={field.value ?? []}
+                              onChange={field.onChange}
+                              multiple={supportsMultipleWards(createType)}
+                            />
+                            {createWardKeys.length > 0 && (
+                              <p className="text-xs text-muted-foreground font-medium mt-2">
+                                {createWardKeys.length} ward{createWardKeys.length === 1 ? "" : "s"} selected
+                              </p>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {createType && hasDerivedWards(createType) && (
+                      <div className="rounded-xl border border-border/50 bg-muted/30 p-4 text-sm text-muted-foreground font-medium">
+                        Ward coverage for a {STAFF_LABELS[createType].toLowerCase()} is derived from the
+                        supervisors beneath them — no direct ward assignment needed.
+                      </div>
+                    )}
                   </div>
-                  </div>{/* end scroll area */}
 
                   <div className="shrink-0 px-8 pb-8 pt-4 border-t border-border/50 flex justify-end gap-3">
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => setCreateModalOpen(false)}
+                      onClick={() => setCreateOpen(false)}
                       className="rounded-xl h-12 font-bold px-6"
                     >
                       Cancel
@@ -576,12 +826,10 @@ export default function AdminOfficers() {
                     <Button
                       type="submit"
                       className="rounded-xl h-12 font-black px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
-                      disabled={createOfficer.isPending}
+                      disabled={createStaff.isPending}
                     >
-                      {createOfficer.isPending ? (
-                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      ) : null}
-                      Create Officer
+                      {createStaff.isPending && <Loader2 className="w-5 h-5 mr-2 animate-spin" />}
+                      Create Staff
                     </Button>
                   </div>
                 </form>
@@ -591,240 +839,327 @@ export default function AdminOfficers() {
         </div>
       </div>
 
-      <AlertDialog
-        open={!!pendingSubmitData}
-        onOpenChange={(open) => { if (!open) setPendingSubmitData(null); }}
-      >
-        <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-black text-2xl text-foreground font-display">
-              Ward already assigned
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-base text-muted-foreground mt-3 leading-relaxed">
-              {pendingSubmitData?.areaName && assignedWardsMap[pendingSubmitData.areaName] ? (
-                <>
-                  <span className="font-semibold text-foreground">{formatWardLabel(pendingSubmitData.areaName)}</span>
-                  {" is already assigned to "}
-                  <span className="font-semibold text-foreground">{assignedWardsMap[pendingSubmitData.areaName]}</span>
-                  {". Do you want to reassign it to the new officer?"}
-                </>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-8 gap-3 sm:gap-0">
-            <AlertDialogCancel
-              className="rounded-xl font-bold h-12 px-6 border-border/50"
-              onClick={() => setPendingSubmitData(null)}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-xl font-black h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
-              onClick={() => { if (pendingSubmitData) doCreateOfficer(pendingSubmitData); }}
-            >
-              Reassign Ward
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Filters */}
+      <div className="bg-card rounded-3xl border border-border/50 shadow-sm p-4 md:p-5 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, email, phone…"
+              className="pl-9 rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+            />
+          </div>
 
-      {!isLoading && officers.length > 0 && (
-        <div className="bg-card rounded-3xl border border-border/50 shadow-sm overflow-hidden mb-8">
+          <Select
+            value={panchayatFilter}
+            onValueChange={(v) => {
+              setPanchayatFilter(v);
+              setWardFilter("all");
+            }}
+          >
+            <SelectTrigger
+              data-testid="filter-panchayat"
+              className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All panchayats</SelectItem>
+              {PANCHAYAT_NAMES.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={wardFilter} onValueChange={setWardFilter} disabled={panchayatFilter === "all"}>
+            <SelectTrigger
+              data-testid="filter-ward"
+              className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+            >
+              <SelectValue placeholder={panchayatFilter === "all" ? "Select panchayat first" : "All wards"} />
+            </SelectTrigger>
+            <SelectContent className="max-h-64">
+              <SelectItem value="all">All wards</SelectItem>
+              {wardOptions.map((w) => (
+                <SelectItem key={w} value={w}>
+                  {wardChipLabel(w)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger
+              data-testid="filter-role"
+              className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              {(Object.keys(STAFF_LABELS) as StaffType[])
+                .sort((a, b) => STAFF_ORDER[a] - STAFF_ORDER[b])
+                .map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {STAFF_LABELS[t]}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {!isLoading && (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <span
+              data-testid="roster-summary"
+              className="text-xs font-bold text-muted-foreground uppercase tracking-wide"
+            >
+              {filtered.length} of {staff.length} staff
+            </span>
+            {(Object.keys(STAFF_LABELS) as StaffType[])
+              .sort((a, b) => STAFF_ORDER[a] - STAFF_ORDER[b])
+              .filter((t) => (counts.get(t) ?? 0) > 0)
+              .map((t) => (
+                <span
+                  key={t}
+                  data-testid={`roster-count-${t}`}
+                  className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    color: STAFF_COLORS[t],
+                    background: `${STAFF_COLORS[t]}14`,
+                    border: `1px solid ${STAFF_COLORS[t]}33`,
+                  }}
+                >
+                  {counts.get(t)} {STAFF_SHORT_LABELS[t]}
+                  {(counts.get(t) ?? 0) === 1 ? "" : "s"}
+                </span>
+              ))}
+          </div>
+        )}
+      </div>
+
+      {/* Zone overview */}
+      {!isLoading && mapZones.length > 0 && (
+        <div className="bg-card rounded-3xl border border-border/50 shadow-sm overflow-hidden mb-6">
           <div className="flex items-center gap-3 px-6 pt-6 pb-4">
             <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Map className="w-5 h-5" />
+              <MapIcon className="w-5 h-5" />
             </div>
             <div>
               <h2 className="font-black text-foreground text-lg leading-tight">Zone Overview</h2>
               <p className="text-muted-foreground text-sm font-medium">
-                Click a zone or officer label to edit boundaries.
+                Click a zone to open that staff member's details.
               </p>
             </div>
           </div>
           <div className="overflow-hidden" style={{ height: "360px" }}>
             <OfficerZonesMap
-              officers={officers}
-              onOfficerClick={openZoneEditor}
+              zones={mapZones}
+              panchayat={panchayatFilter === "all" ? null : panchayatFilter}
+              onZoneClick={(key) => {
+                const member = staff.find((s) => s.key === key);
+                if (member) openEdit(member);
+              }}
               height="360px"
             />
           </div>
         </div>
       )}
 
+      {/* Roster */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed shadow-sm">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-6" />
-          <p className="font-bold text-lg text-foreground">Loading officers...</p>
+          <p className="font-bold text-lg text-foreground">Loading staff…</p>
         </div>
-      ) : officers.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 bg-card rounded-[2.5rem] border border-border/50 border-dashed text-center px-4 shadow-sm">
           <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mb-6">
             <Users className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-2xl font-black text-foreground mb-3">No officers on roster</h3>
+          <h3 className="text-2xl font-black text-foreground mb-3">
+            {staff.length === 0 ? "No staff on roster" : "No staff match these filters"}
+          </h3>
           <p className="text-muted-foreground font-medium max-w-md">
-            Add your first sanitation officer to start assigning coastal cleanup reports.
+            {staff.length === 0
+              ? "Add your first staff member to start assigning cleanup work."
+              : "Try clearing the panchayat, ward or role filter."}
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {officers.map((officer, i) => {
-            const color = ZONE_COLORS[i % ZONE_COLORS.length];
-            const isExpanded = expandedOfficers.has(officer.id);
-            const hasZone = officer.centerLat != null;
-            const resolved = officer.reportCount - officer.pendingCount;
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filtered.map((member, i) => {
+            const color = STAFF_COLORS[member.staffType];
+            const isExpanded = expanded.has(member.key);
+            const resolved = (member.reportCount ?? 0) - (member.pendingCount ?? 0);
             return (
               <div
-                key={officer.id}
+                key={member.key}
+                data-testid={`staff-card-${member.key}`}
+                data-staff-type={member.staffType}
                 className="bg-card rounded-2xl shadow-sm border border-border/50 hover:border-primary/30 transition-all hover:shadow-md group relative overflow-hidden animate-in fade-in slide-in-from-bottom-4"
-                style={{ animationDelay: `${i * 50}ms` }}
+                style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
               >
-                {/* Decorative corner */}
                 <div
                   className="absolute top-0 right-0 w-14 h-14 rounded-bl-[50px] transition-transform duration-500 group-hover:scale-125 pointer-events-none"
                   style={{ background: `${color}12` }}
                 />
 
-                {/* Collapsed header — always visible, click toggles expand */}
                 <button
                   type="button"
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 relative z-10 text-left"
-                  onClick={() => toggleExpanded(officer.id)}
+                  data-testid="staff-card-toggle"
+                  className="w-full flex items-center gap-2.5 pl-3 pr-9 py-2.5 relative z-10 text-left"
+                  onClick={() => toggleExpanded(member.key)}
                 >
-                  {/* Avatar */}
                   <div
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shrink-0 text-white"
                     style={{ background: color }}
                   >
-                    {officer.name.charAt(0)}
+                    {member.name.replace(/^(Mr\.|Mrs\.|Ms\.|Dr\.)\s*/i, "").charAt(0)}
                   </div>
 
-                  {/* Name + subtitle */}
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-foreground text-sm leading-tight truncate group-hover:text-primary transition-colors">
-                      {officer.name}
+                      {member.name}
                     </p>
-                    {officer.areaName ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 bg-primary/8 px-1.5 py-0.5 rounded-md mt-0.5">
-                        <MapPin className="w-2.5 h-2.5 shrink-0" />
-                        {formatWardLabel(officer.areaName)}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md mt-0.5 border border-amber-200">
-                        No zone
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1 min-w-0">
+                      <RoleBadge staffType={member.staffType} />
+                      <WardSummary staffType={member.staffType} wardKeys={member.wardKeys} />
+                    </div>
                   </div>
 
-                  {/* Stats pills */}
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="flex flex-col items-center px-1.5 py-0.5 rounded-lg bg-muted/60 border border-border/40 min-w-[32px]">
-                      <span className="text-sm font-black text-foreground leading-none">{officer.pendingCount}</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">pend</span>
+                      <span className="text-sm font-black text-foreground leading-none">
+                        {member.pendingCount ?? 0}
+                      </span>
+                      <span className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">
+                        pend
+                      </span>
                     </span>
-                    <span className="flex flex-col items-center px-1.5 py-0.5 rounded-lg min-w-[32px]" style={{ background: `${color}12`, border: `1px solid ${color}30` }}>
-                      <span className="text-sm font-black leading-none" style={{ color }}>{resolved}</span>
-                      <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color }}>done</span>
+                    <span
+                      className="flex flex-col items-center px-1.5 py-0.5 rounded-lg min-w-[32px]"
+                      style={{ background: `${color}12`, border: `1px solid ${color}30` }}
+                    >
+                      <span className="text-sm font-black leading-none" style={{ color }}>
+                        {resolved}
+                      </span>
+                      <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color }}>
+                        done
+                      </span>
                     </span>
                   </div>
 
-                  {/* Chevron */}
                   <ChevronDown
-                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${
+                      isExpanded ? "rotate-180" : ""
+                    }`}
                   />
                 </button>
 
-                {/* Delete button — always visible */}
-                <div className="absolute top-1.5 right-8 z-20">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded-full text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10"
-                        onClick={(e) => e.stopPropagation()}
-                        title="Remove officer"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="font-black text-3xl text-foreground font-display">
-                          Remove Officer?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-lg text-muted-foreground font-medium mt-4 leading-relaxed">
-                          This will permanently delete{" "}
-                          <strong className="text-foreground">{officer.name}</strong> from the
-                          system. Any currently assigned reports will become unassigned. This action
-                          cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="mt-8 gap-3 sm:gap-0">
-                        <AlertDialogCancel className="rounded-xl font-bold h-12 px-6 border-border/50">
-                          Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 rounded-xl font-black h-12 px-6"
-                          onClick={() => handleDelete(officer.id)}
-                        >
-                          Yes, remove officer
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-
-                {/* Expandable body */}
                 <div
                   className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${
                     isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                   }`}
                 >
                   <div className="overflow-hidden">
-                    <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/30 mt-0">
+                    <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/30">
                       <div className="pt-2 space-y-1.5">
                         <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                          <Mail className="w-3 h-3 text-muted-foreground shrink-0" />
-                          <span className="truncate">{officer.email}</span>
+                          <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span>{member.panchayatName ?? "—"}</span>
                         </div>
-                        {officer.phone && (
+                        {member.email && (
                           <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
-                            <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
-                            <span>{officer.phone}</span>
+                            <Mail className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span className="truncate">{member.email}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <MapPin className="w-3 h-3 shrink-0" />
-                          {hasZone ? (
-                            <span className="font-mono text-[11px]">
-                              {officer.centerLat!.toFixed(4)}, {officer.centerLng?.toFixed(4)}
-                            </span>
-                          ) : (
-                            <span className="text-amber-600 font-medium text-[11px]">No zone set</span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/50">
-                          Joined {format(new Date(officer.createdAt), "MMM yyyy")}
-                        </p>
+                        {member.phone && (
+                          <div className="flex items-center gap-2 text-xs text-foreground/80 font-medium">
+                            <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span>{member.phone}</span>
+                          </div>
+                        )}
+                        {member.parentName && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <UserCog className="w-3 h-3 shrink-0" />
+                            <span>Reports to {member.parentName}</span>
+                          </div>
+                        )}
+                        {member.wardKeys.length > 0 && (
+                          <div className="pt-0.5">
+                            <WardChips wardKeys={member.wardKeys} limit={8} />
+                          </div>
+                        )}
+                        {!member.hasLogin && (
+                          <div className="flex items-center gap-2 text-xs text-amber-600 font-semibold">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span>No login account</span>
+                          </div>
+                        )}
+                        {member.createdAt && (
+                          <p className="text-[10px] text-muted-foreground/50">
+                            Joined {format(new Date(member.createdAt), "MMM yyyy")}
+                          </p>
+                        )}
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                      <div className="flex gap-2">
                         <Button
                           variant="outline"
-                          className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                          onClick={(e) => { e.stopPropagation(); openEditDetails(officer); }}
+                          data-testid="staff-manage"
+                          className="flex-1 rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(member);
+                          }}
                         >
                           <Pencil className="w-3 h-3 mr-1.5" />
-                          Edit Details
+                          Manage
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="rounded-xl h-8 text-xs font-bold border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                          onClick={(e) => { e.stopPropagation(); openZoneEditor(officer.id); }}
-                        >
-                          <Map className="w-3 h-3 mr-1.5" style={{ color }} />
-                          Edit Zone
-                        </Button>
+
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              data-testid="staff-remove"
+                              title="Remove staff member"
+                              className="h-8 w-8 shrink-0 rounded-xl border-border/60 text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/5"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="rounded-[2rem] p-8 border-border/50 shadow-2xl">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="font-black text-3xl text-foreground font-display">
+                                Remove {STAFF_LABELS[member.staffType]}?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription className="text-lg text-muted-foreground font-medium mt-4 leading-relaxed">
+                                This permanently removes{" "}
+                                <strong className="text-foreground">{member.name}</strong> and their
+                                login account. Reports in their ward stay in the system but will no
+                                longer be routed to them. This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="mt-8 gap-3 sm:gap-0">
+                              <AlertDialogCancel className="rounded-xl font-bold h-12 px-6 border-border/50">
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-lg shadow-destructive/20 rounded-xl font-black h-12 px-6"
+                                onClick={() => handleRemove(member)}
+                              >
+                                Yes, remove
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   </div>
@@ -835,249 +1170,227 @@ export default function AdminOfficers() {
         </div>
       )}
 
-      <Dialog open={editDetailsOpen} onOpenChange={(open) => { if (!open) { setEditDetailsOpen(false); setEditDetailsOfficer(null); } }}>
-        <DialogContent className="sm:max-w-sm rounded-[2rem] p-0 border-border/50 shadow-2xl overflow-hidden">
-          <div className="px-7 pt-7 pb-4">
+      {/* Manage staff member */}
+      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
+        <DialogContent className="sm:max-w-xl rounded-[2rem] p-0 border-border/50 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="px-7 pt-7 pb-4 shrink-0">
             <DialogHeader>
               <div className="flex items-center gap-3 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white"
+                  style={{ background: editTarget ? STAFF_COLORS[editTarget.staffType] : undefined }}
+                >
                   <Pencil className="w-4 h-4" />
                 </div>
-                <DialogTitle className="text-xl font-black tracking-tight">Edit Officer</DialogTitle>
+                <DialogTitle className="text-xl font-black tracking-tight">
+                  {editTarget ? STAFF_LABELS[editTarget.staffType] : "Staff"}
+                </DialogTitle>
               </div>
-              {editDetailsOfficer && (
-                <p className="text-sm text-muted-foreground font-medium mt-0.5 pl-12">{editDetailsOfficer.panchayatName ?? ""}</p>
+              {editTarget && (
+                <p className="text-sm text-muted-foreground font-medium mt-0.5 pl-12">
+                  {editTarget.name} · {editTarget.panchayatName}
+                </p>
               )}
             </DialogHeader>
           </div>
-          <Form {...editDetailsForm}>
-            <form onSubmit={editDetailsForm.handleSubmit(handleSaveDetails)} className="px-7 pb-7 space-y-4">
-              <FormField
-                control={editDetailsForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Officer Name" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editDetailsForm.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-bold text-foreground">
-                      Phone <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input placeholder="+91 98765 43210" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editDetailsForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="pt-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-sm font-bold text-foreground">Reset Password</span>
-                  <span className="text-xs text-muted-foreground font-medium">(leave blank for no change)</span>
-                </div>
-                <div className="space-y-3">
+
+          {editTarget && (
+            <Form {...editForm}>
+              <form onSubmit={editForm.handleSubmit(submitEdit)} className="flex flex-col flex-1 min-h-0">
+                <div className="overflow-y-auto flex-1 px-7 space-y-4">
                   <FormField
-                    control={editDetailsForm.control}
-                    name="password"
+                    control={editForm.control}
+                    name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="font-bold text-foreground text-sm">New Password</FormLabel>
+                        <FormLabel className="font-bold text-foreground">Full Name</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Min 6 characters" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                          <Input {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={editDetailsForm.control}
-                    name="confirmPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="font-bold text-foreground text-sm">Confirm Password</FormLabel>
-                        <FormControl>
-                          <Input type="password" placeholder="Re-enter new password" {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+
+                  {usesPhoneLogin(editTarget.staffType) ? (
+                    <FormField
+                      control={editForm.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Phone (Login)</FormLabel>
+                          <FormControl>
+                            <Input {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <>
+                      <FormField
+                        control={editForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground">Email (Login)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="email"
+                                {...field}
+                                className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={editForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground">
+                              Phone <span className="text-muted-foreground font-medium ml-1">(Optional)</span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {editTarget.staffType === "supervisor" && (
+                    <FormField
+                      control={editForm.control}
+                      name="healthInspectorId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">Reports To (Health Inspector)</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
+                            <FormControl>
+                              <SelectTrigger className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium">
+                                <SelectValue placeholder="Select health inspector…" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {editInspectorOptions.map((hi) => (
+                                <SelectItem key={hi.id} value={String(hi.id)}>
+                                  {hi.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {!hasDerivedWards(editTarget.staffType) && (
+                    <FormField
+                      control={editForm.control}
+                      name="wardKeys"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="font-bold text-foreground">
+                            Ward Assignment
+                            {editWardKeys.length > 0 && (
+                              <span className="text-muted-foreground font-medium ml-2">
+                                {editWardKeys.length} selected
+                              </span>
+                            )}
+                          </FormLabel>
+                          <WardPicker
+                            wards={editWards}
+                            value={field.value ?? []}
+                            onChange={field.onChange}
+                            multiple={supportsMultipleWards(editTarget.staffType)}
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {hasDerivedWards(editTarget.staffType) && (
+                    <div className="rounded-xl border border-border/50 bg-muted/30 p-4 text-sm text-muted-foreground font-medium">
+                      Ward coverage is inherited from the supervisors reporting into this{" "}
+                      {STAFF_LABELS[editTarget.staffType].toLowerCase()}.
+                    </div>
+                  )}
+
+                  <div className="pt-1 pb-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-sm font-bold text-foreground">Change Password</span>
+                      <span className="text-xs text-muted-foreground font-medium">
+                        (leave blank to keep current)
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      <FormField
+                        control={editForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground text-sm">New Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="Min 6 characters"
+                                {...field}
+                                className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={editForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="font-bold text-foreground text-sm">Confirm Password</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="password"
+                                placeholder="Re-enter new password"
+                                {...field}
+                                className="rounded-xl h-11 bg-muted/50 border-border/50 font-medium"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button type="button" variant="outline" className="flex-1 rounded-xl h-11 font-bold" onClick={() => { setEditDetailsOpen(false); setEditDetailsOfficer(null); }}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1 rounded-xl h-11 font-black" disabled={updateOfficer.isPending}>
-                  {updateOfficer.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Save Changes
-                </Button>
-              </div>
-            </form>
-          </Form>
+
+                <div className="shrink-0 flex gap-2 px-7 py-5 border-t border-border/50">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 rounded-xl h-11 font-bold"
+                    onClick={() => setEditTarget(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1 rounded-xl h-11 font-black" disabled={updateStaff.isPending}>
+                    {updateStaff.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Save Changes
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          )}
         </DialogContent>
       </Dialog>
-
-      <Sheet
-        open={!!editingZone}
-        onOpenChange={(open) => {
-          if (!open) setEditingZone(null);
-        }}
-      >
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0 overflow-y-auto">
-          {editingZone && (
-            <div className="flex flex-col min-h-full">
-              <SheetHeader className="px-6 pt-8 pb-4 border-b border-border/50">
-                <div className="flex items-center gap-4 mb-1">
-                  <div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center text-lg font-black text-white shadow-inner shrink-0"
-                    style={{ background: zoneColor }}
-                  >
-                    {editingZone.name.charAt(0)}
-                  </div>
-                  <div>
-                    <SheetTitle className="font-black text-2xl leading-tight">
-                      {editingZone.name}
-                    </SheetTitle>
-                    <p className="text-sm text-muted-foreground font-medium">{editingZone.email}</p>
-                  </div>
-                </div>
-              </SheetHeader>
-
-              <div className="px-6 py-6 space-y-6 flex-1">
-                <div>
-                  <label className="font-bold text-sm text-foreground block mb-2">
-                    Sector / Area Name
-                  </label>
-                  <Input
-                    value={editingZone.areaName}
-                    onChange={(e) =>
-                      setEditingZone((z) => (z ? { ...z, areaName: e.target.value } : z))
-                    }
-                    placeholder="e.g. Udupi Taluk North"
-                    className="bg-muted/50 rounded-xl h-11 font-medium border-border/50"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="font-bold text-sm text-foreground">Coverage Zone</label>
-                    <span className="text-xs text-muted-foreground font-medium">
-                      Drag the dot or click map to move centre
-                    </span>
-                  </div>
-                  <div
-                    className="rounded-2xl overflow-hidden border border-border/50"
-                    style={{ height: 280 }}
-                  >
-                    <OfficerAreaEditMap
-                      lat={editingZone.lat}
-                      lng={editingZone.lng}
-                      areaName={editingZone.areaName}
-                      color={zoneColor}
-                      onCenterChange={(lat, lng) =>
-                        setEditingZone((z) =>
-                          z
-                            ? {
-                                ...z,
-                                lat: parseFloat(lat.toFixed(6)),
-                                lng: parseFloat(lng.toFixed(6)),
-                              }
-                            : z
-                        )
-                      }
-                      height="280px"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-xs text-muted-foreground block mb-1.5 uppercase tracking-wide">
-                      Latitude
-                    </label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={latStr}
-                      onChange={(e) => setLatStr(e.target.value)}
-                      onBlur={() => {
-                        const v = parseFloat(latStr);
-                        if (!isNaN(v)) {
-                          setEditingZone((z) => (z ? { ...z, lat: v } : z));
-                        } else {
-                          setLatStr(editingZone.lat.toFixed(6));
-                        }
-                      }}
-                      className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="font-bold text-xs text-muted-foreground block mb-1.5 uppercase tracking-wide">
-                      Longitude
-                    </label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={lngStr}
-                      onChange={(e) => setLngStr(e.target.value)}
-                      onBlur={() => {
-                        const v = parseFloat(lngStr);
-                        if (!isNaN(v)) {
-                          setEditingZone((z) => (z ? { ...z, lng: v } : z));
-                        } else {
-                          setLngStr(editingZone.lng.toFixed(6));
-                        }
-                      }}
-                      className="bg-muted/50 rounded-xl h-10 font-mono text-sm border-border/50"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-6 border-t border-border/50 bg-muted/20">
-                <Button
-                  className="w-full h-12 rounded-2xl font-black text-base shadow-lg text-white"
-                  style={{ background: zoneColor }}
-                  onClick={handleSaveZone}
-                  disabled={updateOfficer.isPending}
-                >
-                  {updateOfficer.isPending ? (
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-5 h-5 mr-2" />
-                  )}
-                  Save Zone
-                </Button>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
