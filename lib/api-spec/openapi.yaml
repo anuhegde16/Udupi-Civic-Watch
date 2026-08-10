@@ -472,6 +472,19 @@ paths:
           in: query
           schema:
             type: integer
+        - name: panchayat
+          in: query
+          schema:
+            type: string
+          description: >
+            Restrict results to a panchayat. For Udupi Municipality, reports are matched
+            geographically against its ward polygons rather than by assigned officer.
+        - name: wardName
+          in: query
+          schema:
+            type: string
+          description: >
+            Restrict results to a single geographic ward (e.g. "Udupi Ward 5"). Requires panchayat.
         - name: limit
           in: query
           schema:

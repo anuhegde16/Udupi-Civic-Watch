@@ -599,6 +599,16 @@ export const GetOfficerReportsStatus = {
 export type AdminListReportsParams = {
   status?: AdminListReportsStatus;
   officerId?: number;
+  /**
+ * Restrict results to a panchayat. For Udupi Municipality, reports are matched geographically against its ward polygons rather than by assigned officer.
+
+ */
+  panchayat?: string;
+  /**
+ * Restrict results to a single geographic ward (e.g. "Udupi Ward 5"). Requires panchayat.
+
+ */
+  wardName?: string;
   limit?: number;
   offset?: number;
   /**

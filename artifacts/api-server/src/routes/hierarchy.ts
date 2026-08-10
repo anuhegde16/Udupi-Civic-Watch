@@ -13,6 +13,7 @@ import {
   requireEnvEngineer,
   requireCommissioner,
   requireCommunityMobiliser,
+  requireControlCenter,
   hashPassword,
   type SessionUser,
 } from "../lib/auth";
@@ -20,6 +21,128 @@ import { logger } from "../lib/logger";
 import { udupiWardRings, udupiBox, pointInPolygon as pip } from "../lib/geo";
 
 const router: IRouter = Router();
+
+// ── GET /api/control-center/udupi-operations ──────────────────────────────────
+// Udupi Municipality reports are assigned geographically to ward polygons, not
+// to rows in the legacy field-officers table.  This control-center-only view
+// returns the real EE → HI → supervisor chain alongside those PiP-scoped reports.
+router.get("/control-center/udupi-operations", requireControlCenter, async (_req, res): Promise<void> => {
+  try {
+    const [hierarchyRows, rawReports] = await Promise.all([
+      db.execute(sql`
+        SELECT
+          ee.id AS "environmentalEngineerId",
+          ee.name AS "environmentalEngineerName",
+          ee.phone AS "environmentalEngineerPhone",
+          hi.id AS "healthInspectorId",
+          hi.name AS "healthInspectorName",
+          hi.phone AS "healthInspectorPhone",
+          sv.id AS "supervisorId",
+          sv.name AS "supervisorName",
+          sv.phone AS "supervisorPhone",
+          sv.ward_names AS "wardNames"
+        FROM environmental_engineers ee
+        LEFT JOIN health_inspectors hi ON hi.environmental_engineer_id = ee.id
+        LEFT JOIN supervisors sv ON sv.health_inspector_id = hi.id
+        WHERE ee.panchayat_name = 'Udupi'
+        ORDER BY hi.name, sv.name
+      `),
+      db.execute(sql`
+        SELECT
+          id, latitude, longitude, address, status,
+          assigned_officer_id AS "assignedOfficerId",
+          image_url AS "imageUrl", image_urls AS "imageUrls",
+          cleanup_image_url AS "cleanupImageUrl", cleanup_image_urls AS "cleanupImageUrls",
+          created_at AS "createdAt"
+        FROM reports
+        WHERE deleted_at IS NULL
+          AND latitude BETWEEN ${udupiBox.minLat} AND ${udupiBox.maxLat}
+          AND longitude BETWEEN ${udupiBox.minLng} AND ${udupiBox.maxLng}
+        ORDER BY created_at DESC
+      `),
+    ]);
+
+    type Supervisor = { id: number; name: string; phone: string; wardNames: string[] };
+    type HealthInspector = { id: number; name: string; phone: string; supervisors: Supervisor[] };
+    const healthInspectors = new Map<number, HealthInspector>();
+    const supervisorByWard = new Map<string, {
+      id: number;
+      name: string;
+      healthInspectorId: number;
+      healthInspectorName: string;
+    }>();
+    let environmentalEngineer: { id: number; name: string; phone: string } | null = null;
+
+    for (const row of hierarchyRows.rows as any[]) {
+      if (!environmentalEngineer && row.environmentalEngineerId) {
+        environmentalEngineer = {
+          id: Number(row.environmentalEngineerId),
+          name: row.environmentalEngineerName,
+          phone: row.environmentalEngineerPhone,
+        };
+      }
+      if (!row.healthInspectorId) continue;
+
+      const healthInspectorId = Number(row.healthInspectorId);
+      const healthInspector = healthInspectors.get(healthInspectorId) ?? {
+        id: healthInspectorId,
+        name: row.healthInspectorName,
+        phone: row.healthInspectorPhone,
+        supervisors: [] as Supervisor[],
+      } satisfies HealthInspector;
+      healthInspectors.set(healthInspectorId, healthInspector);
+      if (!row.supervisorId) continue;
+
+      const wardNames = Array.isArray(row.wardNames)
+        ? row.wardNames
+        : JSON.parse(row.wardNames ?? "[]");
+      const supervisor = {
+        id: Number(row.supervisorId),
+        name: row.supervisorName,
+        phone: row.supervisorPhone,
+        wardNames,
+      };
+      healthInspector.supervisors.push(supervisor);
+      for (const wardName of wardNames) {
+        const match = wardName.match(/^Ward (\d+)/);
+        if (!match) continue;
+        supervisorByWard.set(`Udupi Ward ${match[1]}`, {
+          id: supervisor.id,
+          name: supervisor.name,
+          healthInspectorId,
+          healthInspectorName: healthInspector.name,
+        });
+      }
+    }
+
+    const reports = (rawReports.rows as any[]).flatMap((report) => {
+      const ward = udupiWardRings.find(({ ring }) =>
+        pip(Number(report.latitude), Number(report.longitude), ring),
+      );
+      if (!ward) return [];
+      const supervisor = supervisorByWard.get(ward.name);
+      return [{
+        ...report,
+        wardName: ward.name,
+        supervisorId: supervisor?.id ?? null,
+        supervisorName: supervisor?.name ?? null,
+        healthInspectorId: supervisor?.healthInspectorId ?? null,
+        healthInspectorName: supervisor?.healthInspectorName ?? null,
+      }];
+    });
+
+    res.json({
+      panchayatName: "Udupi",
+      environmentalEngineer,
+      healthInspectors: Array.from(healthInspectors.values()),
+      reports,
+      total: reports.length,
+    });
+  } catch (err) {
+    logger.error({ err }, "Error fetching Udupi Municipality operations for control center");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // ── GET /api/supervisor/me ─────────────────────────────────────────────────────
 router.get("/supervisor/me", requireSupervisor, async (req, res): Promise<void> => {

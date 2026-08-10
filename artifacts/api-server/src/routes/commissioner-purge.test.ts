@@ -65,11 +65,31 @@ let saligramaReportId: number;
 // Track all seeded IDs for cleanup — includes hard-deleting any soft-deleted rows
 const seededReportIds: number[] = [];
 
+/**
+ * IDs of pre-existing active is_test reports inside Udupi.
+ *
+ * The purge endpoint under test soft-deletes EVERY active is_test report in the
+ * commissioner's wards, and the seeded demo data is all is_test=true. Without
+ * snapshotting and restoring these, a single test run archives the whole Udupi
+ * dataset and the Command Center silently goes empty.
+ */
+const preExistingUdupiTestReportIds: number[] = [];
+
 beforeAll(async () => {
   const mod = await import("../app");
   app = mod.default as Express;
 
   const ts = Date.now();
+
+  // Snapshot the reports the purge will collaterally archive, so afterAll can revive them.
+  const existing = await db.execute(sql`
+    SELECT id FROM reports
+    WHERE deleted_at IS NULL
+      AND is_test = true
+      AND latitude  BETWEEN 13.2 AND 13.5
+      AND longitude BETWEEN 74.6 AND 74.9
+  `);
+  preExistingUdupiTestReportIds.push(...(existing.rows as any[]).map((r) => r.id as number));
 
   // ── Seed a test report inside Udupi Ward 1 ────────────────────────────────
   const r1 = await db.execute(sql`
@@ -108,6 +128,15 @@ afterAll(async () => {
     await db.execute(
       sql`DELETE FROM reports WHERE id IN (${sql.raw(seededReportIds.join(","))})`
     );
+  }
+
+  // Revive the pre-existing reports this test's purge archived as collateral —
+  // otherwise running the suite empties the Udupi dashboard.
+  if (preExistingUdupiTestReportIds.length) {
+    await db.execute(sql`
+      UPDATE reports SET deleted_at = NULL
+      WHERE id IN (${sql.raw(preExistingUdupiTestReportIds.join(","))})
+    `);
   }
 });
 

@@ -18,6 +18,7 @@ import {
 } from "../lib/email";
 import { sendWeeklyDigestToAll } from "../lib/scheduler";
 import { logger } from "../lib/logger";
+import { udupiWardRings, pointInPolygon } from "../lib/geo";
 
 const router: IRouter = Router();
 
@@ -46,6 +47,20 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const limit = queryParsed.success ? (queryParsed.data.limit ?? 100) : 100;
   const offset = queryParsed.success ? (queryParsed.data.offset ?? 0) : 0;
   const archived = req.query.archived === "true";
+  const panchayat = queryParsed.success ? queryParsed.data.panchayat?.trim() : undefined;
+  const wardName = queryParsed.success ? queryParsed.data.wardName?.trim() : undefined;
+
+  // Udupi Municipality assigns work geographically (ward polygons), not through the
+  // legacy officers table, so its filtering runs as point-in-polygon rather than SQL joins.
+  const geographic = !archived && panchayat?.toLowerCase() === "udupi";
+  const geoRings = geographic
+    ? (wardName ? udupiWardRings.filter((w) => w.name === wardName) : udupiWardRings)
+    : [];
+
+  if (geographic && geoRings.length === 0) {
+    res.json({ reports: [], total: 0 });
+    return;
+  }
 
   let conditions: any[] = [];
   if (archived) {
@@ -54,31 +69,77 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
     conditions.push(isNull(reportsTable.deletedAt));
     if (status) conditions.push(eq(reportsTable.status, status));
     if (officerId) conditions.push(eq(reportsTable.assignedOfficerId, officerId));
+
+    if (geographic) {
+      // Bound the scan to the selected wards before the exact polygon test.
+      const box = geoRings.reduce(
+        (b, { ring }) => {
+          for (const [lng, lat] of ring) {
+            if (lat < b.minLat) b.minLat = lat;
+            if (lat > b.maxLat) b.maxLat = lat;
+            if (lng < b.minLng) b.minLng = lng;
+            if (lng > b.maxLng) b.maxLng = lng;
+          }
+          return b;
+        },
+        { minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 },
+      );
+      conditions.push(sql`${reportsTable.latitude} BETWEEN ${box.minLat} AND ${box.maxLat}`);
+      conditions.push(sql`${reportsTable.longitude} BETWEEN ${box.minLng} AND ${box.maxLng}`);
+    } else if (panchayat) {
+      // Legacy officer-based panchayats stay filtered through their assigned officers.
+      conditions.push(
+        sql`${reportsTable.assignedOfficerId} IN (
+          SELECT id FROM ${officersTable}
+          WHERE ${officersTable.panchayatName} = ${panchayat}
+            AND ${officersTable.deletedAt} IS NULL
+            ${wardName ? sql`AND ${officersTable.areaName} = ${wardName}` : sql``}
+        )`,
+      );
+    }
   }
 
-  const reports = await db
+  const baseQuery = db
     .select({ report: reportsTable, officer: officersTable })
     .from(reportsTable)
     .leftJoin(officersTable, eq(reportsTable.assignedOfficerId, officersTable.id))
     .where(and(...conditions))
-    .orderBy(sql`${reportsTable.createdAt} DESC`)
-    .limit(limit)
-    .offset(offset);
+    .orderBy(sql`${reportsTable.createdAt} DESC`);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(reportsTable)
-    .where(and(...conditions));
+  // Geographic mode must apply the polygon test before paginating, otherwise the
+  // page window would be filled with reports that are later discarded.
+  const rows = geographic ? await baseQuery : await baseQuery.limit(limit).offset(offset);
 
-  const formatted = reports.map(({ report, officer }) => {
+  const scoped = geographic
+    ? rows.flatMap((row) => {
+        const match = geoRings.find(({ ring }) =>
+          pointInPolygon(Number(row.report.latitude), Number(row.report.longitude), ring),
+        );
+        return match ? [{ ...row, geoWardName: match.name }] : [];
+      })
+    : rows.map((row) => ({ ...row, geoWardName: null as string | null }));
+
+  const total = geographic
+    ? scoped.length
+    : (
+        await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(reportsTable)
+          .where(and(...conditions))
+      )[0].count;
+
+  const page = geographic ? scoped.slice(offset, offset + limit) : scoped;
+
+  const formatted = page.map(({ report, officer, geoWardName }) => {
     const { reporterIp: _ri, ...safeReport } = report;
     return {
       ...safeReport,
       assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
+      geoWardName,
     };
   });
 
-  res.json({ reports: formatted, total: countRow.count });
+  res.json({ reports: formatted, total });
 });
 
 router.get("/admin/reports/bulk-archive-preview", requireControlCenter, async (req, res): Promise<void> => {

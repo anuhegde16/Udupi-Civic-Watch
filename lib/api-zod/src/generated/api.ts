@@ -753,6 +753,18 @@ export const adminListReportsQueryOffsetDefault = 0;
 export const AdminListReportsQueryParams = zod.object({
   status: zod.enum(["reported", "cleaning", "cleaned"]).optional(),
   officerId: zod.coerce.number().optional(),
+  panchayat: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Restrict results to a panchayat. For Udupi Municipality, reports are matched geographically against its ward polygons rather than by assigned officer.\n",
+    ),
+  wardName: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      'Restrict results to a single geographic ward (e.g. \"Udupi Ward 5\"). Requires panchayat.\n',
+    ),
   limit: zod.coerce.number().default(adminListReportsQueryLimitDefault),
   offset: zod.coerce.number().default(adminListReportsQueryOffsetDefault),
   archived: zod.coerce

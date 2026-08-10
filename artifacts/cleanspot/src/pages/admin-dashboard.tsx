@@ -104,6 +104,7 @@ import { NotificationCTABanner } from "@/components/notification-cta-banner";
 import type { MapReport, MapOfficer } from "@/components/admin-district-map";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const panchayatAreaNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
@@ -205,6 +206,26 @@ type PanchayatSnapshot = {
   cleaning: number;
   cleaned: number;
   unassignedZones: number;
+  udupiOperations?: UdupiOperations;
+};
+
+type UdupiOperations = {
+  panchayatName: "Udupi";
+  environmentalEngineer: { id: number; name: string; phone: string } | null;
+  healthInspectors: {
+    id: number;
+    name: string;
+    phone: string;
+    supervisors: { id: number; name: string; phone: string; wardNames: string[] }[];
+  }[];
+  reports: (ReportItem & {
+    wardName: string;
+    supervisorId: number | null;
+    supervisorName: string | null;
+    healthInspectorId: number | null;
+    healthInspectorName: string | null;
+  })[];
+  total: number;
 };
 
 export default function AdminDashboard() {
@@ -212,6 +233,9 @@ export default function AdminDashboard() {
   const [selectedOfficerId, setSelectedOfficerId] = useState<number | null>(null);
   const [selectedPanchayat, setSelectedPanchayat] = useState<string | null>(null);
   const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
+  const [panchayatOverviewOpen, setPanchayatOverviewOpen] = useState(false);
+  const [performanceOpen, setPerformanceOpen] = useState(false);
+  const [adminsOpen, setAdminsOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
     const from = new Date(now);
@@ -272,6 +296,14 @@ export default function AdminDashboard() {
     },
   );
   const { data: panchayatAdminsData } = usePanchayatAdmins();
+  const { data: udupiOperations, dataUpdatedAt: udupiUpdatedAt } = useQuery<UdupiOperations>({
+    queryKey: ["control-center-udupi-operations"],
+    queryFn: () => customFetch("/api/control-center/udupi-operations"),
+    retry: false,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
+  });
 
   useEffect(() => {
     const latest = Math.max(
@@ -279,9 +311,10 @@ export default function AdminDashboard() {
       officersUpdatedAt || 0,
       analyticsUpdatedAt || 0,
       reportsUpdatedAt || 0,
+      udupiUpdatedAt || 0,
     );
     if (latest > 0) setLastRefreshed(new Date(latest));
-  }, [summaryUpdatedAt, officersUpdatedAt, analyticsUpdatedAt, reportsUpdatedAt]);
+  }, [summaryUpdatedAt, officersUpdatedAt, analyticsUpdatedAt, reportsUpdatedAt, udupiUpdatedAt]);
 
   const { data: testModeData } = useQuery<{ testMode: boolean }>({
     queryKey: ["test-mode"],
@@ -379,14 +412,16 @@ export default function AdminDashboard() {
     const fromAdmins = panchayatAdmins
       .map((admin) => admin.panchayatName)
       .filter(Boolean) as string[];
-    return Array.from(new Set([...panchayatAreaNames, ...fromOfficers, ...fromAdmins])).sort();
-  }, [officers, panchayatAdmins]);
+    return Array.from(new Set([...panchayatAreaNames, ...fromOfficers, ...fromAdmins, udupiOperations?.panchayatName ?? ""])).filter(Boolean).sort();
+  }, [officers, panchayatAdmins, udupiOperations]);
 
   const panchayatSnapshots = useMemo<PanchayatSnapshot[]>(() => {
     return panchayatOptions.map((name) => {
       const panchayatOfficers = officers.filter((officer) => officer.panchayatName === name);
       const officerIds = new Set(panchayatOfficers.map((officer) => officer.id));
-      const reports = allReports.filter((report) => officerIds.has(report.assignedOfficerId ?? -1));
+      const reports = name === "Udupi" && udupiOperations
+        ? udupiOperations.reports
+        : allReports.filter((report) => officerIds.has(report.assignedOfficerId ?? -1));
       const coveredAreas = new Set(
         panchayatOfficers.map((officer) => officer.areaName).filter(Boolean)
       );
@@ -407,9 +442,10 @@ export default function AdminDashboard() {
         cleaning: reports.filter((report) => report.status === "cleaning").length,
         cleaned: reports.filter((report) => report.status === "cleaned").length,
         unassignedZones: Math.max(0, zoneCount - coveredAreas.size),
+        udupiOperations: name === "Udupi" ? udupiOperations : undefined,
       };
     });
-  }, [allReports, officers, panchayatAdmins, panchayatOptions]);
+  }, [allReports, officers, panchayatAdmins, panchayatOptions, udupiOperations]);
 
   const selectedPanchayatSnapshot = useMemo(
     () => panchayatSnapshots.find((snapshot) => snapshot.name === selectedPanchayat) ?? null,
@@ -422,10 +458,14 @@ export default function AdminDashboard() {
     setSelectedWardName(null);
   };
 
+  // Keeps the Command Center's geographic context (panchayat + ward) attached to every
+  // drill-down, so "local reports" never silently widens to the whole district.
   const reportLink = (status?: "reported" | "cleaning" | "cleaned") => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
     if (selectedOfficerId) params.set("officerId", String(selectedOfficerId));
+    if (selectedPanchayat) params.set("panchayat", selectedPanchayat);
+    if (selectedWardName) params.set("wardName", selectedWardName);
     return `/admin/reports${params.size ? `?${params.toString()}` : ""}`;
   };
 
@@ -453,13 +493,13 @@ export default function AdminDashboard() {
     if (selectedOfficerId) {
       reports = allReports.filter((r) => r.assignedOfficerId === selectedOfficerId);
     } else if (selectedWardName) {
-      // Ward chip selected — filter by the officer assigned to that ward (empty if unassigned)
-      const wardOfficer = officers.find((o) => o.areaName === selectedWardName);
-      reports = wardOfficer
-        ? allReports.filter((r) => r.assignedOfficerId === wardOfficer.id)
-        : [];
+      reports = selectedPanchayatSnapshot?.udupiOperations?.reports.filter((r) => r.wardName === selectedWardName)
+        ?? (() => {
+          const wardOfficer = officers.find((o) => o.areaName === selectedWardName);
+          return wardOfficer ? allReports.filter((r) => r.assignedOfficerId === wardOfficer.id) : [];
+        })();
     } else if (selectedPanchayat) {
-      reports = allReports.filter(
+      reports = selectedPanchayatSnapshot?.reports ?? allReports.filter(
         (r) =>
           r.assignedOfficerId !== null &&
           r.assignedOfficerId !== undefined &&
@@ -479,7 +519,7 @@ export default function AdminDashboard() {
     }
 
     return reports;
-  }, [allReports, selectedOfficerId, selectedWardName, selectedPanchayat, officers, scopedOfficerIds, dateRange]);
+  }, [allReports, selectedOfficerId, selectedWardName, selectedPanchayat, selectedPanchayatSnapshot, officers, scopedOfficerIds, dateRange]);
 
   const isDateFiltered = !!dateRange?.from;
 
@@ -564,12 +604,12 @@ export default function AdminDashboard() {
 
   const mapReports: MapReport[] = (
     selectedPanchayat && !selectedOfficerId
-      ? allReports.filter(
+      ? (selectedPanchayatSnapshot?.reports ?? allReports.filter(
           (r) =>
             r.assignedOfficerId !== null &&
             r.assignedOfficerId !== undefined &&
             scopedOfficerIds.has(r.assignedOfficerId)
-        )
+        ))
       : allReports
   ).map((r) => ({
     id: r.id,
@@ -652,64 +692,57 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {panchayatSnapshots.map((snapshot) => {
-            const isSelected = selectedPanchayat === snapshot.name;
-            const completion = snapshot.total > 0
-              ? Math.round((snapshot.cleaned / snapshot.total) * 100)
-              : 0;
-            const needsAttention = snapshot.reported + snapshot.unassignedZones;
+        <Collapsible open={panchayatOverviewOpen} onOpenChange={setPanchayatOverviewOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="w-full mb-3 flex items-center justify-between rounded-xl bg-card border border-border/50 px-4 py-3 text-sm font-bold text-foreground hover:bg-muted/45 transition-colors"
+            >
+              <span>{panchayatSnapshots.length} panchayat{panchayatSnapshots.length !== 1 ? "s" : ""} available — select an area to focus</span>
+              <span className="flex items-center gap-1.5 text-primary">
+                {panchayatOverviewOpen ? "Hide list" : "Show list"} <ChevronDown className={`w-4 h-4 transition-transform ${panchayatOverviewOpen ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {panchayatSnapshots.map((snapshot) => {
+                const isSelected = selectedPanchayat === snapshot.name;
+                const completion = snapshot.total > 0 ? Math.round((snapshot.cleaned / snapshot.total) * 100) : 0;
+                const needsAttention = snapshot.reported + snapshot.unassignedZones;
+                const staffingLabel = snapshot.udupiOperations
+                  ? `${snapshot.udupiOperations.healthInspectors.reduce((count, hi) => count + hi.supervisors.length, 0)} supervisors · ${snapshot.udupiOperations.healthInspectors.length} inspectors`
+                  : `${snapshot.officers.length} officer${snapshot.officers.length !== 1 ? "s" : ""} · ${snapshot.admins.length} admin${snapshot.admins.length !== 1 ? "s" : ""}`;
 
-            return (
-              <button
-                type="button"
-                key={snapshot.name}
-                onClick={() => selectPanchayat(isSelected ? null : snapshot.name)}
-                className={`text-left bg-card rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                  isSelected ? "border-primary ring-1 ring-primary/20" : "border-border/50"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="min-w-0">
-                    <p className="font-black text-base text-foreground truncate">{snapshot.name}</p>
-                    <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                      {snapshot.officers.length} officer{snapshot.officers.length !== 1 ? "s" : ""} · {snapshot.admins.length} admin{snapshot.admins.length !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <span className={`shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${
-                    needsAttention > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
-                  }`}>
-                    {needsAttention > 0 ? `${needsAttention} need attention` : "On track"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <div className="rounded-xl bg-muted/55 px-2.5 py-2">
-                    <p className="text-lg font-black text-foreground leading-none">{snapshot.total}</p>
-                    <p className="text-[10px] font-bold text-muted-foreground mt-1">Reports</p>
-                  </div>
-                  <div className="rounded-xl bg-red-50 px-2.5 py-2">
-                    <p className="text-lg font-black text-red-700 leading-none">{snapshot.reported}</p>
-                    <p className="text-[10px] font-bold text-red-600 mt-1">New</p>
-                  </div>
-                  <div className="rounded-xl bg-green-50 px-2.5 py-2">
-                    <p className="text-lg font-black text-green-700 leading-none">{completion}%</p>
-                    <p className="text-[10px] font-bold text-green-600 mt-1">Completed</p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 text-xs font-semibold">
-                  <span className={snapshot.unassignedZones > 0 ? "text-amber-700" : "text-muted-foreground"}>
-                    {snapshot.unassignedZones > 0
-                      ? `${snapshot.unassignedZones} zone${snapshot.unassignedZones !== 1 ? "s" : ""} need coverage`
-                      : "Coverage assigned"}
-                  </span>
-                  <span className="text-primary flex items-center gap-1">
-                    {isSelected ? "Viewing workspace" : "Open workspace"} <ArrowRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                return (
+                  <button type="button" key={snapshot.name} onClick={() => selectPanchayat(isSelected ? null : snapshot.name)}
+                    className={`text-left bg-card rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${isSelected ? "border-primary ring-1 ring-primary/20" : "border-border/50"}`}>
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="min-w-0">
+                        <p className="font-black text-base text-foreground truncate">{snapshot.name}</p>
+                        <p className="text-xs text-muted-foreground font-medium mt-0.5">{staffingLabel}</p>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${needsAttention > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+                        {needsAttention > 0 ? `${needsAttention} need attention` : "On track"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="rounded-xl bg-muted/55 px-2.5 py-2"><p className="text-lg font-black text-foreground leading-none">{snapshot.total}</p><p className="text-[10px] font-bold text-muted-foreground mt-1">Reports</p></div>
+                      <div className="rounded-xl bg-red-50 px-2.5 py-2"><p className="text-lg font-black text-red-700 leading-none">{snapshot.reported}</p><p className="text-[10px] font-bold text-red-600 mt-1">New</p></div>
+                      <div className="rounded-xl bg-green-50 px-2.5 py-2"><p className="text-lg font-black text-green-700 leading-none">{completion}%</p><p className="text-[10px] font-bold text-green-600 mt-1">Completed</p></div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                      <span className={snapshot.unassignedZones > 0 ? "text-amber-700" : "text-muted-foreground"}>
+                        {snapshot.unassignedZones > 0 ? `${snapshot.unassignedZones} zone${snapshot.unassignedZones !== 1 ? "s" : ""} need coverage` : "Coverage assigned"}
+                      </span>
+                      <span className="text-primary flex items-center gap-1">{isSelected ? "Viewing workspace" : "Open workspace"} <ArrowRight className="w-3.5 h-3.5" /></span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </section>
 
       {/* ── Stat cards ── */}
@@ -1030,10 +1063,57 @@ export default function AdminDashboard() {
               <div className="rounded-2xl bg-white/10 border border-white/15 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Users className="w-4 h-4 text-primary-foreground" />
-                  <h3 className="font-black text-sm">Officers & zones</h3>
-                  <span className="ml-auto text-xs font-bold text-white/60">{selectedPanchayatSnapshot.officers.length} assigned</span>
+                  <h3 className="font-black text-sm">{selectedPanchayatSnapshot.udupiOperations ? "Municipal hierarchy & wards" : "Officers & zones"}</h3>
+                  <span className="ml-auto text-xs font-bold text-white/60">
+                    {selectedPanchayatSnapshot.udupiOperations
+                      ? `${selectedPanchayatSnapshot.udupiOperations.healthInspectors.reduce((count, hi) => count + hi.supervisors.length, 0)} supervisors`
+                      : `${selectedPanchayatSnapshot.officers.length} assigned`}
+                  </span>
                 </div>
-                {selectedPanchayatSnapshot.officers.length ? (
+                {selectedPanchayatSnapshot.udupiOperations ? (
+                  <div className="space-y-3">
+                    {selectedPanchayatSnapshot.udupiOperations.environmentalEngineer && (
+                      <div className="rounded-xl bg-primary/25 border border-primary/30 px-3 py-2.5">
+                        <p className="text-[10px] uppercase tracking-wider text-white/60 font-black">Environmental Engineer</p>
+                        <p className="font-black text-sm mt-0.5">{selectedPanchayatSnapshot.udupiOperations.environmentalEngineer.name}</p>
+                      </div>
+                    )}
+                    {selectedPanchayatSnapshot.udupiOperations.healthInspectors.length ? (
+                      selectedPanchayatSnapshot.udupiOperations.healthInspectors.map((healthInspector) => (
+                        <Collapsible key={healthInspector.id}>
+                          <CollapsibleTrigger asChild>
+                            <button type="button" className="w-full rounded-xl bg-white/10 hover:bg-white/15 px-3 py-2.5 text-left transition-colors">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-sm truncate">{healthInspector.name}</p>
+                                  <p className="text-xs text-white/65 mt-0.5">Health Inspector · {healthInspector.supervisors.length} supervisor{healthInspector.supervisors.length !== 1 ? "s" : ""}</p>
+                                </div>
+                                <ChevronDown className="w-4 h-4 shrink-0 text-white/70" />
+                              </div>
+                            </button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="pt-2 pl-2 space-y-2">
+                            {healthInspector.supervisors.map((supervisor) => {
+                              const supervisorReports = selectedPanchayatSnapshot.udupiOperations!.reports.filter((report) => report.supervisorId === supervisor.id);
+                              const openReports = supervisorReports.filter((report) => report.status !== "cleaned").length;
+                              return (
+                                <div key={supervisor.id} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="font-bold text-sm truncate">{supervisor.name}</p>
+                                    <span className="text-xs font-black text-amber-200">{openReports} open</span>
+                                  </div>
+                                  <p className="text-xs text-white/65 mt-1">{supervisor.wardNames.map(formatWardLabel).join(" · ") || "No wards assigned"}</p>
+                                </div>
+                              );
+                            })}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      ))
+                    ) : (
+                      <EmptyOperationsState icon={Users} message="No Health Inspectors or supervisors have been configured yet." />
+                    )}
+                  </div>
+                ) : selectedPanchayatSnapshot.officers.length ? (
                   <div className="space-y-2">
                     {selectedPanchayatSnapshot.officers.map((officer) => (
                       <button
@@ -1057,7 +1137,7 @@ export default function AdminDashboard() {
                 ) : (
                   <EmptyOperationsState icon={Users} message="No officers are assigned to this panchayat yet." />
                 )}
-                {selectedPanchayatSnapshot.unassignedZones > 0 && (
+                {selectedPanchayatSnapshot.unassignedZones > 0 && !selectedPanchayatSnapshot.udupiOperations && (
                   <p className="mt-3 text-xs font-bold text-amber-200">
                     {selectedPanchayatSnapshot.unassignedZones} mapped zone{selectedPanchayatSnapshot.unassignedZones !== 1 ? "s are" : " is"} waiting for officer coverage.
                   </p>
@@ -1193,10 +1273,26 @@ export default function AdminDashboard() {
           </Link>
         </div>
 
+        <Collapsible open={performanceOpen} onOpenChange={setPerformanceOpen}>
+          <CollapsibleTrigger asChild>
+            <button type="button" className="w-full mb-3 flex items-center justify-between rounded-xl bg-card border border-border/50 px-4 py-3 text-sm font-bold text-foreground hover:bg-muted/45 transition-colors">
+              <span>
+                {selectedPanchayatSnapshot?.udupiOperations
+                  ? "Use the municipal hierarchy above to expand supervisors and wards"
+                  : `${displayOfficers.length} officer zone${displayOfficers.length !== 1 ? "s" : ""} available`}
+              </span>
+              <span className="flex items-center gap-1.5 text-primary">
+                {performanceOpen ? "Hide cards" : "Show cards"} <ChevronDown className={`w-4 h-4 transition-transform ${performanceOpen ? "rotate-180" : ""}`} />
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
           {displayOfficers.length === 0 ? (
             <div className="col-span-full text-center text-muted-foreground font-medium py-8 bg-card rounded-xl border border-border/50">
-              {selectedPanchayat ? `No officers assigned to ${selectedPanchayat} yet.` : "No officers active in the system."}
+              {selectedPanchayatSnapshot?.udupiOperations
+                ? "Udupi Municipality is organized by supervisors and geographic wards above."
+                : selectedPanchayat ? `No officers assigned to ${selectedPanchayat} yet.` : "No officers active in the system."}
             </div>
           ) : (
             displayOfficers.map((officer, idx) => {
@@ -1273,17 +1369,26 @@ export default function AdminDashboard() {
             })
           )}
         </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* ── Officer performance bar chart ── */}
       {analytics?.officers && analytics.officers.length > 0 && (
-        <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-4 sm:p-6 mb-5 sm:mb-8">
-          <h2 className="text-base sm:text-xl font-black text-foreground mb-0.5 sm:mb-1 flex items-center gap-2">
-            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" /> Officer Performance
-          </h2>
-          <p className="text-xs sm:text-sm text-muted-foreground font-medium mb-4 sm:mb-6">
-            Pending vs resolved per officer
-          </p>
+        <Collapsible>
+          <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-4 sm:p-6 mb-5 sm:mb-8">
+          <CollapsibleTrigger asChild>
+            <button type="button" className="w-full flex items-center justify-between text-left">
+              <div>
+                <h2 className="text-base sm:text-xl font-black text-foreground mb-0.5 sm:mb-1 flex items-center gap-2">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" /> Officer Performance
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">Pending vs resolved per officer · expand to view chart</p>
+              </div>
+              <ChevronDown className="w-5 h-5 text-primary" />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-5">
           <ResponsiveContainer width="100%" height={Math.max(140, analytics.officers.length * 44)}>
             <BarChart
               data={analytics.officers}
@@ -1324,10 +1429,13 @@ export default function AdminDashboard() {
               Resolved
             </div>
           </div>
-        </div>
+          </CollapsibleContent>
+          </div>
+        </Collapsible>
       )}
 
       {/* ── Panchayat Admins ── */}
+      <Collapsible open={adminsOpen} onOpenChange={setAdminsOpen}>
       <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-5 sm:p-8">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
@@ -1341,6 +1449,12 @@ export default function AdminDashboard() {
               </p>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm" className="rounded-xl font-bold gap-1.5">
+              {adminsOpen ? "Hide" : "Show"} <ChevronDown className={`w-3.5 h-3.5 transition-transform ${adminsOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
           <Dialog open={paCreateOpen} onOpenChange={setPaCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5">
@@ -1412,8 +1526,10 @@ export default function AdminDashboard() {
               </Form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
+        <CollapsibleContent>
         {(selectedPanchayatSnapshot?.admins ?? panchayatAdmins).length === 0 ? (
           <div className="flex flex-col items-center py-10 text-center text-muted-foreground">
             <Shield className="w-10 h-10 mb-3 text-muted-foreground/40" />
@@ -1478,6 +1594,7 @@ export default function AdminDashboard() {
             ))}
           </div>
         )}
+        </CollapsibleContent>
 
         {/* ── Edit Panchayat Admin dialog ── */}
         <Dialog open={paEditOpen} onOpenChange={(o) => { setPaEditOpen(o); if (!o) setEditingPa(null); }}>
@@ -1554,6 +1671,7 @@ export default function AdminDashboard() {
           </DialogContent>
         </Dialog>
       </div>
+      </Collapsible>
 
       {/* ── Quick actions + coast status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

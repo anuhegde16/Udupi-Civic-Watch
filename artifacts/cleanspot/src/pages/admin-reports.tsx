@@ -27,7 +27,26 @@ import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
+import geofencesData from "@/data/geofences.json";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
+
+const GEOFENCE_PANCHAYATS: string[] = geofencesData.features
+  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
+  .map((f) => (f.properties as any)?.name ?? "")
+  .filter(Boolean);
+
+/** Geographic ward names belonging to a panchayat, e.g. "Udupi Ward 5". */
+function geofenceWardsFor(panchayat: string): string[] {
+  return geofencesData.features
+    .filter(
+      (f) =>
+        f.geometry.type === "Polygon" &&
+        (f.properties as any)?.type === "ward" &&
+        (f.properties as any)?.panchayat === panchayat
+    )
+    .map((f) => (f.properties as any)?.name ?? "")
+    .filter(Boolean);
+}
 
 type Report = {
   id: number;
@@ -96,11 +115,14 @@ function ArchivedBadge() {
 const BULK_ARCHIVE_DAY_OPTIONS = [7, 30, 60, 90, 180];
 
 export default function AdminReports() {
-  const initialStatus = (new URLSearchParams(window.location.search).get("status") as AdminListReportsStatus | null) ?? "all";
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialStatus = (initialParams.get("status") as AdminListReportsStatus | null) ?? "all";
   const [statusFilter, setStatusFilter] = useState<AdminListReportsStatus | "all">(initialStatus as AdminListReportsStatus | "all");
-  const [panchayatFilter, setPanchayatFilter] = useState<string>("all");
-  const [officerFilter, setOfficerFilter] = useState<string>("all");
-  const [zoneFilter, setZoneFilter] = useState<string>("all");
+  // Command Center drill-downs arrive with geographic context; honour it on first load
+  // so "local reports" opens scoped to that panchayat/ward instead of the whole district.
+  const [panchayatFilter, setPanchayatFilter] = useState<string>(initialParams.get("panchayat") ?? "all");
+  const [officerFilter, setOfficerFilter] = useState<string>(initialParams.get("officerId") ?? "all");
+  const [zoneFilter, setZoneFilter] = useState<string>(initialParams.get("wardName") ?? "all");
   const [showArchived, setShowArchived] = useState(false);
 
   const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
@@ -111,6 +133,8 @@ export default function AdminReports() {
   const { data: reportsData, isLoading: isLoadingReports } = useAdminListReports({
     status: showArchived ? undefined : (statusFilter === "all" ? undefined : statusFilter as AdminListReportsStatus),
     officerId: showArchived ? undefined : (officerFilter === "all" ? undefined : parseInt(officerFilter, 10)),
+    panchayat: showArchived || panchayatFilter === "all" ? undefined : panchayatFilter,
+    wardName: showArchived || zoneFilter === "all" ? undefined : zoneFilter,
     limit: 200,
     archived: showArchived ? true : undefined,
   });
@@ -232,17 +256,23 @@ export default function AdminReports() {
     pendingCount: number;
   }>;
 
+  // Panchayats and wards come from the geofence map as well as the legacy officers
+  // table, so geographically-managed areas (Udupi) remain selectable even though no
+  // field officer rows are attached to them.
   const panchayatOptions = Array.from(
-    new Set(officers.map((o) => o.panchayatName).filter(Boolean))
-  ) as string[];
+    new Set([...GEOFENCE_PANCHAYATS, ...officers.map((o) => o.panchayatName).filter(Boolean)] as string[])
+  ).sort();
 
   const scopedOfficers = panchayatFilter === "all"
     ? officers
     : officers.filter((o) => o.panchayatName === panchayatFilter);
 
   const zones = Array.from(
-    new Set(scopedOfficers.map((o) => o.areaName).filter(Boolean))
-  ) as string[];
+    new Set([
+      ...(panchayatFilter === "all" ? [] : geofenceWardsFor(panchayatFilter)),
+      ...scopedOfficers.map((o) => o.areaName).filter(Boolean),
+    ] as string[])
+  );
 
   const sortedWards = [...scopedOfficers].sort((a, b) => {
     const rA = a.reportCount > 0 ? (a.reportCount - a.pendingCount) / a.reportCount : 0;
@@ -254,12 +284,12 @@ export default function AdminReports() {
 
   const reports = (() => {
     if (showArchived) return allReports;
+    // When a panchayat is selected the server has already scoped the result set
+    // (geographically for Udupi, by assigned officer otherwise) — re-filtering here
+    // by officer ward would wrongly discard geographically-assigned reports.
+    if (panchayatFilter !== "all") return allReports;
     let r = allReports;
     if (zoneFilter !== "all") r = r.filter((x) => x.assignedOfficer?.areaName === zoneFilter);
-    else if (officerFilter === "all" && panchayatFilter !== "all") {
-      const ids = new Set(scopedOfficers.map((o) => o.id));
-      r = r.filter((x) => x.assignedOfficerId !== null && x.assignedOfficerId !== undefined && ids.has(x.assignedOfficerId));
-    }
     return r;
   })();
 
