@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, real, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, real, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { officersTable } from "./officers";
@@ -32,6 +32,8 @@ export const reportsTable = pgTable("reports", {
   brandNames: jsonb("brand_names").$type<string[]>(),
   wasteSeverity: text("waste_severity"),
   photoAiAnalysedAt: timestamp("photo_ai_analysed_at", { withTimezone: true }),
+  /** True for reports created while the admin test-mode toggle was on, or backfilled from pre-launch data. */
+  isTest: boolean("is_test").notNull().default(false),
 });
 
 export const insertReportSchema = createInsertSchema(reportsTable).omit({

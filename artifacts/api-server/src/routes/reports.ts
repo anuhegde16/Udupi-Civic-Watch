@@ -15,6 +15,7 @@ import { requireAuth, getSessionUser } from "../lib/auth";
 import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
 import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
 import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
+import { getTestMode } from "../lib/test-mode";
 
 const router: IRouter = Router();
 
@@ -232,6 +233,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       reporterIp,
       reporterEmail: reporterEmail ?? null,
       assignedOfficerId: officer?.id ?? null,
+      isTest: getTestMode(),
     })
     .returning();
 

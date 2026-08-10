@@ -626,11 +626,15 @@ async function ensureReportsColumns() {
       SET cleaned_at = updated_at
       WHERE cleaned_at IS NULL AND status = 'cleaned'
     `);
+    await db.execute(sql`
+      ALTER TABLE reports ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false
+    `);
     logger.info("reports schema columns verified");
   } catch (err) {
     logger.warn({ err }, "Could not ensure reports columns");
   }
 }
+
 
 async function ensurePushSubscriptionsColumns() {
   try {

@@ -1907,6 +1907,100 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
   }
 });
 
+// ── Commissioner purge-test helpers & endpoints ───────────────────────────────
+
+/**
+ * Resolves all Udupi ward polygon rings reachable from the given panchayat's
+ * EE → HI → supervisor hierarchy. Returns an empty array if any step is missing
+ * (e.g. Saligrama, which has no Udupi ward rings).
+ */
+async function resolveCommissionerWardRings(panchayat: string): Promise<{ ring: [number, number][] }[]> {
+  const eeRow = await db.execute(sql`
+    SELECT id FROM environmental_engineers WHERE panchayat_name = ${panchayat} LIMIT 1
+  `);
+  if (!eeRow.rows.length) return [];
+  const eeId = (eeRow.rows[0] as any).id as number;
+
+  const hiRows = await db.execute(sql`
+    SELECT id FROM health_inspectors WHERE environmental_engineer_id = ${eeId}
+  `);
+  const hiIds = (hiRows.rows as any[]).map(r => r.id as number);
+  if (!hiIds.length) return [];
+
+  const svRows = await db.execute(sql`
+    SELECT ward_names FROM supervisors
+    WHERE health_inspector_id IN (${sql.raw(hiIds.join(","))})
+  `);
+  const allWardNames = (svRows.rows as any[]).flatMap(r => (r.ward_names ?? []) as string[]);
+
+  return allWardNames.flatMap(wn => {
+    const m = wn.match(/^Ward (\d+)/);
+    if (!m) return [];
+    const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+    return entry ? [{ ring: entry.ring }] : [];
+  });
+}
+
+// ── GET /api/commissioner/reports/purge-test/count ────────────────────────────
+// Returns the count of non-archived reports currently in the commissioner's
+// panchayat ward area. Used to populate the confirmation dialog before purging.
+router.get("/commissioner/reports/purge-test/count", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+  try {
+    const rings = await resolveCommissionerWardRings(panchayat);
+    if (!rings.length) { res.json({ count: 0 }); return; }
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    const rawRows = await db.execute(sql`
+      SELECT latitude, longitude FROM reports
+      WHERE deleted_at IS NULL
+        AND is_test = true
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+    `);
+    const count = (rawRows.rows as any[]).filter(r =>
+      rings.some(e => pip(Number(r.latitude), Number(r.longitude), e.ring))
+    ).length;
+    res.json({ count });
+  } catch (err) {
+    logger.error({ err }, "Error counting purgeable reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── DELETE /api/commissioner/reports/purge-test ───────────────────────────────
+// Soft-deletes (archived) all non-archived reports in the commissioner's panchayat
+// ward area. Returns the number of reports soft-deleted.
+router.delete("/commissioner/reports/purge-test", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+  try {
+    const rings = await resolveCommissionerWardRings(panchayat);
+    if (!rings.length) { res.json({ deletedCount: 0 }); return; }
+    const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    const rawRows = await db.execute(sql`
+      SELECT id, latitude, longitude FROM reports
+      WHERE deleted_at IS NULL
+        AND is_test = true
+        AND latitude  BETWEEN ${minLat} AND ${maxLat}
+        AND longitude BETWEEN ${minLng} AND ${maxLng}
+    `);
+    const ids = (rawRows.rows as any[])
+      .filter(r => rings.some(e => pip(Number(r.latitude), Number(r.longitude), e.ring)))
+      .map(r => r.id as number);
+    if (!ids.length) { res.json({ deletedCount: 0 }); return; }
+    await db.execute(sql`
+      UPDATE reports SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id IN (${sql.raw(ids.join(","))})
+    `);
+    logger.info({ count: ids.length, panchayat }, "Commissioner purged test reports");
+    res.json({ deletedCount: ids.length });
+  } catch (err) {
+    logger.error({ err }, "Error purging test reports");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // ── Shared analytics helpers ───────────────────────────────────────────────────
 
 function buildDailyTrend(reports: any[], days = 30) {

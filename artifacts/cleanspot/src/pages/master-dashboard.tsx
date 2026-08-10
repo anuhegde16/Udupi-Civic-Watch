@@ -374,6 +374,30 @@ export default function MasterDashboard() {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const { data: archivedReportsData, isLoading: isLoadingArchived } = usePanchayatArchivedReports(archivedOpen);
 
+  // ── Commissioner: purge test reports ────────────────────────────────────────
+  const { data: purgeCountData, isLoading: isPurgeCountLoading } = useQuery<{ count: number }>({
+    queryKey: ["commissioner-purge-count"],
+    queryFn: () => customFetch("/api/commissioner/reports/purge-test/count"),
+    enabled: isCommissioner && isUdupi,
+    staleTime: 30_000,
+  });
+  const purgeTestMutation = useMutation({
+    mutationFn: () => customFetch("/api/commissioner/reports/purge-test", { method: "DELETE" }),
+    onSuccess: (data: any) => {
+      const n = data?.deletedCount ?? 0;
+      toast({
+        title: `${n} report${n !== 1 ? "s" : ""} archived`,
+        description: "All test complaints have been removed from active views.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-reports-map"] });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["panchayat-reports-archived"] });
+      queryClient.invalidateQueries({ queryKey: ["commissioner-purge-count"] });
+    },
+    onError: (err: any) =>
+      toast({ title: "Purge failed", description: err.message, variant: "destructive" }),
+  });
+
   const archiveReportMutation = useMutation({
     mutationFn: (id: number) =>
       customFetch(`/api/panchayat/reports/${id}`, { method: "DELETE" }),
@@ -1615,6 +1639,68 @@ export default function MasterDashboard() {
           </>
         )}
       </div>
+
+      {/* Commissioner danger zone — delete all test reports */}
+      {isCommissioner && isUdupi && (
+        <div className="mt-8 px-1 pb-6">
+          <div className="border border-destructive/30 rounded-2xl p-5 bg-destructive/5">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0" />
+              <h3 className="font-black text-destructive text-base">Danger Zone</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Archive all test complaints in the Udupi municipality area. Only reports
+              created while test mode was active are included — real citizen reports are never affected.
+            </p>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <span className="text-sm font-bold text-foreground">
+                {isPurgeCountLoading
+                  ? "Counting test reports…"
+                  : `${purgeCountData?.count ?? 0} test report${(purgeCountData?.count ?? 0) !== 1 ? "s" : ""} in Udupi area`}
+              </span>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={isPurgeCountLoading || (purgeCountData?.count ?? 0) === 0 || purgeTestMutation.isPending}
+                    className="shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
+                    {purgeTestMutation.isPending
+                      ? "Deleting…"
+                      : (purgeCountData?.count ?? 0) === 0
+                        ? "No reports to delete"
+                        : "Delete all test reports"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all test reports?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will archive{" "}
+                      <strong>
+                        {purgeCountData?.count ?? 0} test report{(purgeCountData?.count ?? 0) !== 1 ? "s" : ""}
+                      </strong>{" "}
+                      from the Udupi municipality area. Only reports marked as test data are included —
+                      real citizen reports will not be touched. Archived reports are kept for audit purposes.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => purgeTestMutation.mutate()}
+                    >
+                      Yes, archive all {purgeCountData?.count ?? 0} reports
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile officer detail sheet */}
       <Sheet open={mobileOfficerDetail !== null} onOpenChange={(open) => !open && setMobileOfficerDetail(null)}>

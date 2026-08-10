@@ -22,10 +22,10 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 // ── Test mode (in-memory, resets on restart) ────────────────────────────────
-let testMode = false;
+import { getTestMode, setTestMode } from "../lib/test-mode";
 
 router.get("/admin/test-mode", (req, res): void => {
-  res.json({ testMode });
+  res.json({ testMode: getTestMode() });
 });
 
 router.post("/admin/test-mode", requireControlCenter, (req, res): void => {
@@ -34,9 +34,9 @@ router.post("/admin/test-mode", requireControlCenter, (req, res): void => {
     res.status(400).json({ error: "testMode must be a boolean" });
     return;
   }
-  testMode = parsed.data.testMode;
-  logger.info({ testMode }, "Test mode updated by control center");
-  res.json({ testMode });
+  setTestMode(parsed.data.testMode);
+  logger.info({ testMode: getTestMode() }, "Test mode updated by control center");
+  res.json({ testMode: getTestMode() });
 });
 
 router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
