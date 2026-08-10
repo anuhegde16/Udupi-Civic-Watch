@@ -25,7 +25,7 @@ const schema = z.object({
 });
 
 interface LoginProps {
-  portalType?: "staff" | "admin" | "master" | "supervisory" | "commissioner"
+  portalType?: "staff" | "admin" | "master" | "supervisory"
     | "community-mobiliser" | "supervisor" | "health-inspector" | "env-engineer";
 }
 
@@ -38,7 +38,6 @@ export default function LoginPage({ portalType }: LoginProps) {
   const isAdmin = portalType === "admin";
   const isMaster = portalType === "master";
   const isSupervisory = portalType === "supervisory";
-  const isCommissioner = portalType === "commissioner";
   const isCommunityMobiliser = portalType === "community-mobiliser";
   const isSupervisor = portalType === "supervisor";
   const isHealthInspector = portalType === "health-inspector";
@@ -118,7 +117,6 @@ export default function LoginPage({ portalType }: LoginProps) {
   const headerBg = isAdmin ? "bg-slate-800"
     : isMaster ? "bg-indigo-700"
     : isSupervisory ? "bg-violet-700"
-    : isCommissioner ? "bg-teal-800"
     : isCommunityMobiliser ? "bg-emerald-700"
     : isSupervisor ? "bg-blue-700"
     : isHealthInspector ? "bg-violet-700"
@@ -127,7 +125,6 @@ export default function LoginPage({ portalType }: LoginProps) {
   const btnClass = isAdmin ? "bg-slate-800 hover:bg-slate-700"
     : isMaster ? "bg-indigo-700 hover:bg-indigo-600"
     : isSupervisory ? "bg-violet-700 hover:bg-violet-600"
-    : isCommissioner ? "bg-teal-800 hover:bg-teal-700"
     : isCommunityMobiliser ? "bg-emerald-700 hover:bg-emerald-600"
     : isSupervisor ? "bg-blue-700 hover:bg-blue-600"
     : isHealthInspector ? "bg-violet-700 hover:bg-violet-600"
@@ -136,7 +133,6 @@ export default function LoginPage({ portalType }: LoginProps) {
   const portalLabel = isAdmin ? "Control Center"
     : isMaster ? "Panchayat Admin Portal"
     : isSupervisory ? "Supervisory Staff Portal"
-    : isCommissioner ? "Municipality Commissioner"
     : isCommunityMobiliser ? "Community Mobiliser Portal"
     : isSupervisor ? "Supervisor Portal"
     : isHealthInspector ? "Health Inspector Portal"
@@ -145,7 +141,6 @@ export default function LoginPage({ portalType }: LoginProps) {
   const portalDesc = isAdmin ? "District Administration Login"
     : isMaster ? "Panchayat Administration Login"
     : isSupervisory ? "Health Inspectors & Environmental Engineers"
-    : isCommissioner ? "Commissioner Administration Login"
     : isCommunityMobiliser ? "Community Mobiliser Login"
     : isSupervisor ? "Supervisor Login"
     : isHealthInspector ? "Health Inspector Login"
@@ -160,7 +155,6 @@ export default function LoginPage({ portalType }: LoginProps) {
       isAdmin ? "from-slate-100 to-slate-200"
       : isMaster ? "from-indigo-50 to-indigo-100"
       : isSupervisory ? "from-violet-50 to-purple-100"
-      : isCommissioner ? "from-teal-50 to-cyan-100"
       : isCommunityMobiliser ? "from-emerald-50 to-green-100"
       : isSupervisor ? "from-blue-50 to-blue-100"
       : isHealthInspector ? "from-violet-50 to-purple-100"
