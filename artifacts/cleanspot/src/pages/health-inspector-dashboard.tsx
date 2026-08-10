@@ -38,9 +38,9 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import {
-  LineChart, Line, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  ResponsiveContainer, Legend,
 } from "recharts";
 
 type HiProfile = {
@@ -512,14 +512,23 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
 
 // ── Analytics ──────────────────────────────────────────────────────────────────
 
-type PerfRow = { name: string; open: number; cleaning: number; cleaned: number; total: number; rate: number; avgCleanupHours: number };
-type TrendRow = { date: string; reported: number; cleaned: number };
-type BacklogRow = { wardName: string; open: number };
-type HIAnalytics = {
-  kpis: { open: number; cleaning: number; resolvedThisMonth: number; totalCleaned: number; total: number; avgCleanupHours: number; resolutionRate: number };
-  dailyTrend: TrendRow[];
+type SvPerfRow = {
+  svId: number; name: string; wards: string;
+  open: number; cleaning: number; cleaned: number; total: number;
+  rate: number; avgResHrs: number; lastResolvedAt: string | null;
+  noActivityIn7d: boolean;
+};
+type WeekTrendRow = { weekStart: string; reported: number; cleaned: number };
+type BacklogRow   = { wardName: string; open: number };
+type HIAnalytics  = {
+  kpis: {
+    open: number; cleaning: number; resolvedThisMonth: number; totalCleaned: number;
+    total: number; avgCleanupHours: number; resolutionRate: number;
+    openThisWeek: number; resolvedPriorMonth: number;
+  };
+  supervisorPerformance: SvPerfRow[];
   wardBacklog: BacklogRow[];
-  supervisorPerformance: PerfRow[];
+  weeklyTrend: WeekTrendRow[];
 };
 
 function useHIAnalytics() {
@@ -542,37 +551,32 @@ function fmtHrs(h: number) {
   return `${Math.round(h / 24)}d`;
 }
 
-function PerfBars({ rows, label }: { rows: PerfRow[]; label: string }) {
-  if (!rows.length) return null;
-  return (
-    <div className="bg-card border border-border/50 rounded-3xl p-5">
-      <h3 className="text-sm font-black text-foreground mb-0.5">{label}</h3>
-      <p className="text-xs text-muted-foreground mb-4">Resolution rate · open count</p>
-      <div className="space-y-3">
-        {rows.map(row => (
-          <div key={row.name}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-bold text-foreground truncate max-w-[55%]">{row.name}</span>
-              <div className="flex items-center gap-2 text-xs shrink-0 ml-2">
-                <span className="text-destructive font-semibold">{row.open} open</span>
-                <span className="font-black text-foreground">{row.rate}%</span>
-              </div>
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${row.rate >= 60 ? "bg-primary" : row.rate >= 30 ? "bg-amber-500" : "bg-destructive"}`}
-                style={{ width: `${row.rate}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function fmtRelTime(iso: string | null) {
+  if (!iso) return "–";
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7)  return `${days}d ago`;
+  const d = new Date(iso);
+  return `${d.toLocaleString("default", { month: "short" })} ${d.getDate()}`;
 }
 
-function HIAnalyticsPanel() {
+const svBarColor = (rate: number) =>
+  rate >= 75 ? "#22c55e" : rate >= 40 ? "#f59e0b" : "#ef4444";
+
+type SvSortCol = "name" | "wards" | "open" | "cleaned" | "rate" | "avgResHrs" | "lastResolvedAt";
+
+function HIAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string) => void }) {
   const { data, isLoading } = useHIAnalytics();
+  const [selectedSV, setSelectedSV]   = useState<string | null>(null);
+  const [svSortCol, setSvSortCol]     = useState<SvSortCol>("rate");
+  const [svSortDir, setSvSortDir]     = useState<"asc" | "desc">("desc");
+
+  function toggleSvSort(col: SvSortCol) {
+    if (svSortCol === col) setSvSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSvSortCol(col); setSvSortDir("desc"); }
+  }
+
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
       <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
@@ -580,69 +584,202 @@ function HIAnalyticsPanel() {
     </div>
   );
   if (!data) return null;
-  const { kpis, dailyTrend, wardBacklog, supervisorPerformance } = data;
+
+  const { kpis, supervisorPerformance, wardBacklog, weeklyTrend } = data;
+
+  const filteredSvTable = selectedSV
+    ? (supervisorPerformance ?? []).filter(r => r.name === selectedSV)
+    : (supervisorPerformance ?? []);
+
+  const sortedSvTable = [...filteredSvTable].sort((a, b) => {
+    if (svSortCol === "lastResolvedAt") {
+      const at = a.lastResolvedAt ?? "";
+      const bt = b.lastResolvedAt ?? "";
+      return svSortDir === "asc" ? at.localeCompare(bt) : bt.localeCompare(at);
+    }
+    const av = (a as unknown as Record<string, string | number>)[svSortCol] ?? 0;
+    const bv = (b as unknown as Record<string, string | number>)[svSortCol] ?? 0;
+    if (typeof av === "string") return svSortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+    return svSortDir === "asc" ? (av as number) - (bv as number) : (bv as number) - (av as number);
+  });
+
+  const SvSortBtn = ({ col, label }: { col: SvSortCol; label: string }) => (
+    <button type="button" onClick={() => toggleSvSort(col)}
+      className="flex items-center gap-0.5 font-black text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
+      {label}{svSortCol === col && <span className="text-primary ml-0.5">{svSortDir === "asc" ? "↑" : "↓"}</span>}
+    </button>
+  );
+
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
+      {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "Open Reports",      value: kpis.open,              color: "text-destructive", bg: "bg-destructive/8" },
-          { label: "In Progress",       value: kpis.cleaning,          color: "text-blue-500",    bg: "bg-blue-50"       },
-          { label: "Cleaned (30d)",     value: kpis.resolvedThisMonth, color: "text-primary",     bg: "bg-primary/8"     },
-          { label: "Avg. Cleanup Time", value: fmtHrs(kpis.avgCleanupHours), color: "text-amber-600", bg: "bg-amber-50" },
-        ].map(k => (
-          <div key={k.label} className={`${k.bg} rounded-2xl px-4 py-3`}>
-            <div className={`text-2xl font-black ${k.color}`}>{k.value}</div>
-            <div className="text-xs text-muted-foreground font-semibold mt-0.5">{k.label}</div>
-          </div>
-        ))}
+        <div className="bg-destructive/8 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-destructive">{kpis.open}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Open in My Zone</div>
+          {(kpis.openThisWeek ?? 0) > 0 && (
+            <div className="text-xs text-destructive font-bold mt-1">+{kpis.openThisWeek} this week</div>
+          )}
+        </div>
+        <div className="bg-blue-50 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-blue-500">{kpis.cleaning}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Cleaning Now</div>
+        </div>
+        <div className="bg-primary/8 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-primary">{kpis.resolvedThisMonth}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Resolved (30d)</div>
+          {(kpis.resolvedPriorMonth ?? 0) > 0 && (
+            <div className={`text-xs font-bold mt-1 ${kpis.resolvedThisMonth >= kpis.resolvedPriorMonth ? "text-primary" : "text-destructive"}`}>
+              {kpis.resolvedThisMonth >= kpis.resolvedPriorMonth ? "▲" : "▼"} vs prior 30d ({kpis.resolvedPriorMonth})
+            </div>
+          )}
+        </div>
+        <div className="bg-amber-50 rounded-2xl px-4 py-3">
+          <div className="text-2xl font-black text-amber-600">{fmtHrs(kpis.avgCleanupHours)}</div>
+          <div className="text-xs text-muted-foreground font-semibold mt-0.5">Avg Resolution</div>
+        </div>
       </div>
 
-      {dailyTrend.length > 0 && (
+      {/* Supervisor performance bar chart — clickable */}
+      {(supervisorPerformance ?? []).length > 0 && (
         <div className="bg-card border border-border/50 rounded-3xl p-5">
-          <h3 className="text-sm font-black text-foreground mb-0.5">30-Day Activity</h3>
-          <p className="text-xs text-muted-foreground mb-4">Reports received vs cleaned per day</p>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={dailyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="date" tickFormatter={fmtDateShort} tick={{ fontSize: 10 }} interval={6} />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-              <Tooltip labelFormatter={(l: string) => fmtDateShort(l)} />
-              <Line type="monotone" dataKey="reported" stroke="#ef4444" strokeWidth={2} dot={false} name="New Reports" />
-              <Line type="monotone" dataKey="cleaned"  stroke="#22c55e" strokeWidth={2} dot={false} name="Cleaned" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <PerfBars rows={supervisorPerformance ?? []} label="Field Officer Performance" />
-
-      {wardBacklog.length > 0 && (
-        <div className="bg-card border border-border/50 rounded-3xl p-5">
-          <h3 className="text-sm font-black text-foreground mb-0.5">Ward Backlog</h3>
-          <p className="text-xs text-muted-foreground mb-4">Open reports per ward</p>
-          <ResponsiveContainer width="100%" height={Math.max(140, wardBacklog.length * 26)}>
-            <BarChart layout="vertical" data={wardBacklog} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
-              <Tooltip />
-              <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} />
+          <div className="flex items-start justify-between mb-0.5">
+            <h3 className="text-sm font-black text-foreground">Field Officer Performance</h3>
+            {selectedSV && (
+              <button type="button" onClick={() => setSelectedSV(null)}
+                className="text-xs text-primary font-bold hover:underline shrink-0 ml-2">Clear filter</button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">Resolution rate % · tap a bar to filter detail table below</p>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart
+              data={supervisorPerformance ?? []}
+              margin={{ top: 5, right: 10, left: -20, bottom: 35 }}
+              onClick={(chartData) => {
+                const name = (chartData?.activePayload?.[0]?.payload as SvPerfRow | undefined)?.name;
+                if (name) setSelectedSV(prev => prev === name ? null : name);
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" interval={0} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+              <Tooltip formatter={(v: number) => [`${v}%`, "Resolution Rate"]} />
+              <Bar dataKey="rate" name="Resolution Rate" radius={[4, 4, 0, 0]} cursor="pointer" isAnimationActive={false}>
+                {(supervisorPerformance ?? []).map((sv, i) => (
+                  <Cell key={i} fill={svBarColor(sv.rate)}
+                    opacity={selectedSV && selectedSV !== sv.name ? 0.3 : 1} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {(supervisorPerformance ?? []).filter(e => e.avgCleanupHours > 0).length > 0 && (
+      {/* Ward backlog — clickable */}
+      {wardBacklog.length > 0 && (
         <div className="bg-card border border-border/50 rounded-3xl p-5">
-          <h3 className="text-sm font-black text-foreground mb-0.5">Avg. Cleanup Time by Field Officer</h3>
-          <p className="text-xs text-muted-foreground mb-4">Time from report received to cleaned</p>
-          <div className="divide-y divide-border/30">
-            {(supervisorPerformance ?? []).filter(e => e.avgCleanupHours > 0).map(sv => (
-              <div key={sv.name} className="flex items-center justify-between py-2.5">
-                <span className="text-xs font-bold text-foreground truncate">{sv.name}</span>
-                <span className="text-sm font-black text-amber-600 shrink-0 ml-3">{fmtHrs(sv.avgCleanupHours)}</span>
-              </div>
-            ))}
+          <h3 className="text-sm font-black text-foreground mb-0.5">Ward Backlog</h3>
+          <p className="text-xs text-muted-foreground mb-4">Open reports per ward · tap a bar to view them</p>
+          <ResponsiveContainer width="100%" height={Math.max(140, wardBacklog.length * 26)}>
+            <BarChart
+              layout="vertical"
+              data={wardBacklog}
+              margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
+              onClick={(chartData) => {
+                const payload = chartData?.activePayload?.[0]?.payload as BacklogRow | undefined;
+                if (payload?.wardName) onWardClick?.(payload.wardName.replace("W", "Udupi Ward "));
+              }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
+              <Tooltip />
+              <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* 4-week area trend */}
+      {weeklyTrend.length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <h3 className="text-sm font-black text-foreground mb-0.5">4-Week Trend</h3>
+          <p className="text-xs text-muted-foreground mb-3">Weekly new reports vs cleaned — is the backlog growing or shrinking?</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={weeklyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <defs>
+                <linearGradient id="hiGradRep" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="hiGradCln" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="weekStart" tickFormatter={fmtDateShort} tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip labelFormatter={(l: string) => `Week of ${fmtDateShort(l)}`} />
+              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+              <Area type="monotone" dataKey="reported" stroke="#ef4444" strokeWidth={2} fill="url(#hiGradRep)" name="New Reports"  dot={{ r: 3, fill: "#ef4444" }} />
+              <Area type="monotone" dataKey="cleaned"  stroke="#22c55e" strokeWidth={2} fill="url(#hiGradCln)" name="Cleaned"      dot={{ r: 3, fill: "#22c55e" }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Supervisor detail table — sortable */}
+      {sortedSvTable.length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <div className="flex items-start justify-between mb-0.5">
+            <h3 className="text-sm font-black text-foreground">
+              Field Officer Detail{selectedSV ? ` · ${selectedSV}` : ""}
+            </h3>
+            {selectedSV && (
+              <button type="button" onClick={() => setSelectedSV(null)}
+                className="text-xs text-primary font-bold hover:underline shrink-0 ml-2">Show all</button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Tap headers to sort · <span className="text-amber-600 font-semibold">amber row</span> = no resolutions in last 7 days
+          </p>
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-xs min-w-[540px]">
+              <thead>
+                <tr className="border-b border-border/50">
+                  <th className="text-left pb-2 pr-2"><SvSortBtn col="name"          label="Officer"       /></th>
+                  <th className="text-left pb-2 pr-2 font-black text-muted-foreground">Wards</th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="open"         label="Open"          /></th>
+                  <th className="text-right pb-2 px-2 font-black text-muted-foreground">Cleaning</th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="cleaned"      label="Cleaned"       /></th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="lastResolvedAt" label="Last Resolved" /></th>
+                  <th className="text-right pb-2 px-2"><SvSortBtn col="avgResHrs"    label="Avg Time"      /></th>
+                  <th className="text-right pb-2 pl-2"><SvSortBtn col="rate"         label="Rate"          /></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedSvTable.map(sv => (
+                  <tr key={sv.svId}
+                    className={`border-b border-border/20 last:border-0 transition-colors ${sv.noActivityIn7d ? "bg-amber-50" : "hover:bg-muted/30"}`}>
+                    <td className="py-2 pr-2 font-bold text-foreground max-w-[110px]">
+                      <span className="block truncate" title={sv.name}>{sv.name}</span>
+                    </td>
+                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards}</td>
+                    <td className="py-2 px-2 text-right text-destructive font-semibold">{sv.open}</td>
+                    <td className="py-2 px-2 text-right text-blue-500 font-semibold">{sv.cleaning}</td>
+                    <td className="py-2 px-2 text-right text-primary font-semibold">{sv.cleaned}</td>
+                    <td className="py-2 px-2 text-right text-muted-foreground">{fmtRelTime(sv.lastResolvedAt)}</td>
+                    <td className="py-2 px-2 text-right text-amber-600 font-semibold">{fmtHrs(sv.avgResHrs)}</td>
+                    <td className="py-2 pl-2 text-right">
+                      <span className={`font-black text-sm ${sv.rate >= 75 ? "text-primary" : sv.rate >= 40 ? "text-amber-600" : "text-destructive"}`}>
+                        {sv.rate}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -830,7 +967,9 @@ export default function HealthInspectorDashboard() {
         </>
       )}
 
-      {tab === "analytics" && <HIAnalyticsPanel />}
+      {tab === "analytics" && (
+        <HIAnalyticsPanel onWardClick={(wardGeoName) => setDrillWard(wardGeoName)} />
+      )}
     </div>
   );
 }

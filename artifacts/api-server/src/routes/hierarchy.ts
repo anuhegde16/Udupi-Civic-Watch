@@ -1825,6 +1825,18 @@ function toPerf(map: Record<string, PerfEntry>) {
   })).sort((a, b) => b.total - a.total);
 }
 
+function buildWeeklyTrend(reports: any[]) {
+  const now = Date.now();
+  return [3, 2, 1, 0].map(i => {
+    const startMs   = now - (i + 1) * 7 * 24 * 3_600_000;
+    const endMs     = now - i       * 7 * 24 * 3_600_000;
+    const weekStart = new Date(startMs).toISOString().split("T")[0];
+    const reported  = reports.filter(r => r.createdAt && new Date(r.createdAt).getTime() >= startMs && new Date(r.createdAt).getTime() < endMs).length;
+    const cleaned   = reports.filter(r => r.cleanedAt  && new Date(r.cleanedAt).getTime()  >= startMs && new Date(r.cleanedAt).getTime()  < endMs).length;
+    return { weekStart, reported, cleaned };
+  });
+}
+
 // ── GET /api/health-inspector/analytics ───────────────────────────────────────
 router.get("/health-inspector/analytics", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
@@ -1835,10 +1847,8 @@ router.get("/health-inspector/analytics", requireHealthInspector, async (req, re
       FROM supervisors WHERE health_inspector_id = ${Number(user.officerId)}
     `);
     const svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
-    if (!svList.length) {
-      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], supervisorPerformance: [] });
-      return;
-    }
+    const emptyHIAnalytics = { kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0, openThisWeek: 0, resolvedPriorMonth: 0 }, supervisorPerformance: [], wardBacklog: [], weeklyTrend: buildWeeklyTrend([]) };
+    if (!svList.length) { res.json(emptyHIAnalytics); return; }
     const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
     for (const sv of svList) {
       for (const wn of (sv.wardNames ?? [])) {
@@ -1848,24 +1858,52 @@ router.get("/health-inspector/analytics", requireHealthInspector, async (req, re
         if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name });
       }
     }
-    if (!wardEntries.length) {
-      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], supervisorPerformance: [] });
-      return;
-    }
+    if (!wardEntries.length) { res.json(emptyHIAnalytics); return; }
     const allReports = await fetchReportsInWardEntries(wardEntries, {});
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const now = Date.now();
+    const thirtyDaysAgo  = now - 30 * 24 * 3_600_000;
+    const sixtyDaysAgo   = now - 60 * 24 * 3_600_000;
+    const sevenDaysAgo   = now -  7 * 24 * 3_600_000;
+
     const open = allReports.filter(r => r.status === "reported").length;
     const cleaning = allReports.filter(r => r.status === "cleaning").length;
-    const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const resolvedThisMonth  = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const resolvedPriorMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= sixtyDaysAgo && new Date(r.cleanedAt).getTime() < thirtyDaysAgo).length;
+    const openThisWeek = allReports.filter(r => r.createdAt && new Date(r.createdAt).getTime() >= sevenDaysAgo && r.status === "reported").length;
     const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
     const total = allReports.length;
+
+    // Rich supervisor performance with lastResolvedAt + 7-day activity flag
+    const supervisorPerformance = svList.map(sv => {
+      const svReports  = allReports.filter(r => r.supervisorName === sv.name);
+      const svOpen     = svReports.filter(r => r.status === "reported").length;
+      const svCleaning = svReports.filter(r => r.status === "cleaning").length;
+      const svCleaned  = svReports.filter(r => r.status === "cleaned").length;
+      const svTotal    = svReports.length;
+      const cleanedRs  = svReports.filter(r => r.cleanedAt);
+      const lastResolvedAt = cleanedRs.length > 0
+        ? new Date(Math.max(...cleanedRs.map((r: any) => new Date(r.cleanedAt).getTime()))).toISOString()
+        : null;
+      const resolvedIn7d  = svReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= sevenDaysAgo).length;
+      const avgResHrs  = computeAvgCleanupHrs(svReports);
+      const rate       = svTotal > 0 ? Math.round((svCleaned / svTotal) * 100) : 0;
+      const wardShort  = (sv.wardNames ?? []).map((w: string) => w.replace("Ward ", "W")).join(", ");
+      return {
+        svId: sv.id, name: sv.name, wards: wardShort,
+        open: svOpen, cleaning: svCleaning, cleaned: svCleaned, total: svTotal,
+        avgResHrs, rate, lastResolvedAt,
+        noActivityIn7d: svTotal > 0 && resolvedIn7d === 0,
+      };
+    });
+
     res.json({
       kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
               avgCleanupHours: computeAvgCleanupHrs(allReports),
-              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
-      dailyTrend: buildDailyTrend(allReports),
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0,
+              openThisWeek, resolvedPriorMonth },
+      supervisorPerformance,
       wardBacklog: buildWardBacklog(allReports),
-      supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
+      weeklyTrend: buildWeeklyTrend(allReports),
     });
   } catch (err) {
     logger.error({ err }, "Error computing HI analytics");
