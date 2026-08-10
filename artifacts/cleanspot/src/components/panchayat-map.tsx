@@ -103,29 +103,41 @@ interface PanchayatMapProps {
   onReportClick?: (report: PanchayatMapReport) => void;
   /** When set, only wards and the district outline for this panchayat are drawn. */
   panchayatName?: string | null;
+  /**
+   * When true, a missing/null panchayatName renders an empty map rather than
+   * the full all-municipality fallback. Use this in authenticated admin views to
+   * prevent another panchayat's wards leaking when the prop is accidentally omitted.
+   */
+  requirePanchayat?: boolean;
 }
 
-export function PanchayatMap({ officers, reports, highlightedWard, onReportClick, panchayatName }: PanchayatMapProps) {
+export function PanchayatMap({ officers, reports, highlightedWard, onReportClick, panchayatName, requirePanchayat }: PanchayatMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const hasZoomedRef = useRef(false);
 
-  // Filter wards and district to the relevant municipality when panchayatName is set
+  // Filter wards and district to the relevant municipality when panchayatName is set.
+  // When requirePanchayat is true and panchayatName is falsy, return empty rather
+  // than falling back to all municipalities — prevents cross-panchayat data leaks
+  // in authenticated admin contexts.
   const wardFeatures = useMemo(
     () =>
       panchayatName
         ? allWardFeatures.filter((w) => w.panchayat === panchayatName)
-        : allWardFeatures,
-    [panchayatName]
+        : requirePanchayat
+          ? []
+          : allWardFeatures,
+    [panchayatName, requirePanchayat]
   );
 
   const districtFeature = useMemo(() => {
+    if (!panchayatName && requirePanchayat) return null;
     const match = panchayatName
       ? allDistrictFeatures.find((d) => d.panchayat === panchayatName)
       : allDistrictFeatures[0];
     return match?.latlngs ?? null;
-  }, [panchayatName]);
+  }, [panchayatName, requirePanchayat]);
 
   // Init effect: create map + tiles only; all layer drawing is in the redraw effect
   useEffect(() => {

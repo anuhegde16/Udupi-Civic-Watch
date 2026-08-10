@@ -207,6 +207,13 @@ const allWardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
   .map((f) => (f.properties as any)?.name ?? "");
 
+/** Maps ward name → panchayat name from geofences.json; used for exact-match scoping. */
+const wardPanchayatMap: Record<string, string> = Object.fromEntries(
+  geofencesData.features
+    .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
+    .map((f) => [(f.properties as any)?.name ?? "", (f.properties as any)?.panchayat ?? ""])
+);
+
 const ZONE_COLORS = ["#f97316", "#8b5cf6", "#f43f5e", "#3b82f6", "#10b981", "#ec4899", "#0ea5e9", "#eab308"];
 
 type PanchayatOfficer = {
@@ -312,13 +319,11 @@ export default function MasterDashboard() {
   const isCommissioner = user?.role === "commissioner";
   const isUdupi = user?.panchayatName === "Udupi";
   // Show only the wards that belong to the logged-in admin's panchayat.
-  // Udupi ward geofence names are prefixed "Udupi Ward N"; Saligrama ones are plain "Ward N".
+  // Use the geofences panchayat property for exact-match scoping rather than a
+  // name-prefix heuristic — this stays correct regardless of future naming changes.
   const wardNames = useMemo(
-    () =>
-      isUdupi
-        ? allWardNames.filter((n) => n.startsWith("Udupi Ward"))
-        : allWardNames.filter((n) => !n.startsWith("Udupi Ward")),
-    [isUdupi],
+    () => allWardNames.filter((n) => wardPanchayatMap[n] === user?.panchayatName),
+    [user?.panchayatName],
   );
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -597,6 +602,20 @@ export default function MasterDashboard() {
     }
     return Array.from(map.values());
   }, [isUdupi, officers]);
+
+  // Guard: a missing panchayatName would silently show all wards and wrong data.
+  // Render a clear error rather than a broken dashboard.
+  if (user && !user.panchayatName) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive mb-4 opacity-70" />
+        <h2 className="text-xl font-black text-foreground mb-2">Panchayat not assigned</h2>
+        <p className="text-muted-foreground max-w-sm text-sm">
+          Your account is missing a panchayat assignment. Please contact your administrator to resolve this before accessing the dashboard.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-12 animate-in fade-in duration-500 space-y-6">
@@ -883,6 +902,7 @@ export default function MasterDashboard() {
           highlightedWard={selectedWard}
           onReportClick={(r) => openReport(r)}
           panchayatName={user?.panchayatName}
+          requirePanchayat
         />
       </div>
 
