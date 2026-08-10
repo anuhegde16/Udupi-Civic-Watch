@@ -330,6 +330,8 @@ export default function MasterDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"dashboard" | "team">("dashboard");
+  const [rosterPanchayat, setRosterPanchayat] = useState("all");
+  const [rosterWard, setRosterWard] = useState("all");
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
   const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -589,27 +591,75 @@ export default function MasterDashboard() {
     return hierarchyData.environmentalEngineer.healthInspectors.flatMap((hi) => hi.supervisors);
   }, [isCommissioner, hierarchyData]);
 
+  // The commissioner receives legacy officers from /all-officers and Udupi's
+  // multi-ward supervisors from the hierarchy endpoint. Keep those models separate,
+  // then apply the same roster filters to both presentation branches.
+  const rosterPanchayats = useMemo(() => {
+    const names = new Set(officers.map((officer) => officer.panchayatName).filter((name): name is string => Boolean(name)));
+    if (udupiSupervisors.length) names.add("Udupi");
+    if (!isCommissioner && user?.panchayatName) return [user.panchayatName];
+    return Array.from(names).sort();
+  }, [isCommissioner, officers, udupiSupervisors.length, user?.panchayatName]);
+
+  const effectiveRosterPanchayat = isCommissioner ? rosterPanchayat : (user?.panchayatName ?? "all");
+  const rosterWards = useMemo(
+    () => effectiveRosterPanchayat === "all"
+      ? allWardNames.filter((ward) => rosterPanchayats.includes(wardPanchayatMap[ward]))
+      : allWardNames.filter((ward) => wardPanchayatMap[ward] === effectiveRosterPanchayat),
+    [effectiveRosterPanchayat, rosterPanchayats],
+  );
+
+  useEffect(() => {
+    if (!isCommissioner) setRosterPanchayat(user?.panchayatName ?? "all");
+  }, [isCommissioner, user?.panchayatName]);
+
+  useEffect(() => {
+    if (rosterWard !== "all" && !rosterWards.includes(rosterWard)) setRosterWard("all");
+  }, [rosterWard, rosterWards]);
+
+  const filteredOfficers = useMemo(
+    () => officers.filter((officer) =>
+      (effectiveRosterPanchayat === "all" || officer.panchayatName === effectiveRosterPanchayat) &&
+      (rosterWard === "all" || officer.areaName === rosterWard),
+    ),
+    [effectiveRosterPanchayat, officers, rosterWard],
+  );
+
+  const filteredUdupiSupervisors = useMemo(
+    () => udupiSupervisors
+      .filter((supervisor) => effectiveRosterPanchayat === "all" || effectiveRosterPanchayat === "Udupi")
+      .map((supervisor) => ({
+        ...supervisor,
+        wardNames: (supervisor.wardNames ?? [])
+          .map((ward) => `Udupi Ward ${ward.match(/^Ward (\d+)/)?.[1] ?? ""}`)
+          .filter((ward) => ward !== "Udupi Ward " && (rosterWard === "all" || ward === rosterWard)),
+      }))
+      .filter((supervisor) => supervisor.wardNames.length > 0),
+    [effectiveRosterPanchayat, rosterWard, udupiSupervisors],
+  );
+
   // Officers grouped by panchayatName; Udupi group also carries supervisors
   const panchayatGroups = useMemo(() => {
     const map = new Map<string, PanchayatOfficer[]>();
-    for (const o of officers) {
+    for (const o of filteredOfficers) {
       const key = o.panchayatName ?? "Other";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(o);
     }
+    if (filteredUdupiSupervisors.length && !map.has("Udupi")) map.set("Udupi", []);
     return Array.from(map.entries()).map(([panchayat, groupOfficers]) => ({
       panchayat,
       officers: groupOfficers,
-      supervisors: panchayat === "Udupi" ? udupiSupervisors : ([] as typeof udupiSupervisors),
+      supervisors: panchayat === "Udupi" ? filteredUdupiSupervisors : ([] as typeof filteredUdupiSupervisors),
     }));
-  }, [officers, udupiSupervisors]);
+  }, [filteredOfficers, filteredUdupiSupervisors]);
 
   // For Udupi panchayat admin: collapse the one-entry-per-ward officers array into
   // unique supervisors, each carrying all their ward names and summed counts.
   const udupiGroupedOfficers = useMemo(() => {
     if (!isUdupi) return [];
     const map = new Map<number, { id: number; name: string; phone: string; areaNames: string[]; reportCount: number; pendingCount: number }>();
-    for (const o of officers) {
+    for (const o of filteredOfficers) {
       if (!map.has(o.id)) {
         map.set(o.id, { id: o.id, name: o.name, phone: o.phone ?? "", areaNames: [], reportCount: 0, pendingCount: 0 });
       }
@@ -627,7 +677,7 @@ export default function MasterDashboard() {
       });
     }
     return Array.from(map.values());
-  }, [isUdupi, officers]);
+   }, [filteredOfficers, isUdupi]);
 
   // Guard: a missing panchayatName would silently show all wards and wrong data.
   // Render a clear error rather than a broken dashboard.
@@ -1276,13 +1326,46 @@ export default function MasterDashboard() {
 
       {/* Officer Zones — grouped by panchayat for commissioner, flat list for panchayat admin */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-xl font-black text-foreground flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-500" /> Officer Zones
             <span className="text-sm font-bold text-muted-foreground ml-1">
-              ({isUdupi ? udupiGroupedOfficers.length : officers.length + (isCommissioner ? udupiSupervisors.length : 0)})
+              ({isCommissioner
+                ? filteredOfficers.length + filteredUdupiSupervisors.length
+                : isUdupi ? udupiGroupedOfficers.length : filteredOfficers.length})
             </span>
           </h2>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <Select
+              value={effectiveRosterPanchayat}
+              onValueChange={(value) => {
+                if (!isCommissioner) return;
+                setRosterPanchayat(value);
+                setRosterWard("all");
+              }}
+            >
+              <SelectTrigger className="h-10 rounded-xl font-bold text-xs sm:w-48" aria-label="Filter staff by panchayat">
+                <SelectValue placeholder="Panchayat" />
+              </SelectTrigger>
+              <SelectContent>
+                {isCommissioner && <SelectItem value="all">All panchayats</SelectItem>}
+                {rosterPanchayats.map((panchayat) => (
+                  <SelectItem key={panchayat} value={panchayat}>{panchayat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={rosterWard} onValueChange={setRosterWard}>
+              <SelectTrigger className="h-10 rounded-xl font-bold text-xs sm:w-48" aria-label="Filter staff by ward">
+                <SelectValue placeholder="Ward" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All wards</SelectItem>
+                {rosterWards.map((ward) => (
+                  <SelectItem key={ward} value={ward}>{formatWardLabel(ward)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {isLoadingOfficers ? (
@@ -1290,19 +1373,21 @@ export default function MasterDashboard() {
             <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
             <p className="font-bold">Loading officers…</p>
           </div>
-        ) : officers.length === 0 && udupiSupervisors.length === 0 ? (
+        ) : filteredOfficers.length === 0 && filteredUdupiSupervisors.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-3xl flex flex-col items-center py-20 text-center">
             <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4">
               <Users className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-xl font-black text-foreground mb-1">No field officers yet</h3>
-            <p className="text-muted-foreground font-medium mb-6">Add your first field officer to start managing ward cleanup.</p>
-            <Button
-              onClick={() => setCreateOpen(true)}
-              className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black"
-            >
-              <Plus className="w-4 h-4 mr-2" /> Add Field Officer
-            </Button>
+            <h3 className="text-xl font-black text-foreground mb-1">No staff match this area</h3>
+            <p className="text-muted-foreground font-medium mb-6">Choose another panchayat or ward to view the responsible staff.</p>
+            {!isUdupi && !isCommissioner && (
+              <Button
+                onClick={() => setCreateOpen(true)}
+                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black"
+              >
+                <Plus className="w-4 h-4 mr-2" /> Add Field Officer
+              </Button>
+            )}
           </div>
         ) : isCommissioner ? (
           /* ── Grouped view for commissioner ─────────────────────────────────── */
@@ -1542,7 +1627,7 @@ export default function MasterDashboard() {
           <>
             {/* Mobile: compact tappable list (name + ward only) */}
             <div className="sm:hidden border border-border/50 rounded-2xl overflow-hidden bg-card divide-y divide-border/50">
-              {officers.map((officer, i) => {
+              {filteredOfficers.map((officer, i) => {
                 const color = ZONE_COLORS[i % ZONE_COLORS.length];
                 return (
                   <button
@@ -1572,7 +1657,7 @@ export default function MasterDashboard() {
 
             {/* Desktop/tablet: full detail cards */}
             <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {officers.map((officer, i) => {
+              {filteredOfficers.map((officer, i) => {
                 const color = ZONE_COLORS[i % ZONE_COLORS.length];
                 const resolvedCount = officer.reportCount - officer.pendingCount;
                 return (
