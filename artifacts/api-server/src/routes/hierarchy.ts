@@ -1570,6 +1570,7 @@ router.get("/commissioner/map-reports", requireCommissioner, async (req, res): P
 // Flat list of all reports under this HI's supervisor wards.
 // Optional ?status=reported|cleaning|cleaned filter.
 // Optional ?wardName=<geo-name> filter (e.g. "Udupi Ward 5").
+// Optional ?supervisorName=<string> filter — restrict to a single supervisor by name.
 router.get("/health-inspector/reports", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
@@ -1578,13 +1579,21 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
     res.status(400).json({ error: "Invalid status" }); return;
   }
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
+  const supervisorNameFilter = typeof req.query.supervisorName === "string" ? req.query.supervisorName.trim() : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT id, name, ward_names AS "wardNames"
       FROM supervisors WHERE health_inspector_id = ${Number(user.officerId)}
     `);
-    const svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
+    let svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
     if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+
+    // Apply supervisor name filter if provided (case-insensitive match)
+    if (supervisorNameFilter) {
+      const lower = supervisorNameFilter.toLowerCase();
+      svList = svList.filter(sv => sv.name.toLowerCase() === lower);
+      if (!svList.length) { res.json({ reports: [], total: 0 }); return; }
+    }
 
     const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
     for (const sv of svList) {

@@ -566,7 +566,13 @@ const svBarColor = (rate: number) =>
 
 type SvSortCol = "name" | "wards" | "open" | "cleaned" | "rate" | "avgResHrs" | "lastResolvedAt";
 
-function HIAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string) => void }) {
+function HIAnalyticsPanel({
+  onWardClick,
+  onSupervisorClick,
+}: {
+  onWardClick?: (wardGeoName: string) => void;
+  onSupervisorClick?: (supervisorName: string) => void;
+}) {
   const { data, isLoading } = useHIAnalytics();
   const [selectedSV, setSelectedSV]   = useState<string | null>(null);
   const [svSortCol, setSvSortCol]     = useState<SvSortCol>("rate");
@@ -657,7 +663,10 @@ function HIAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string)
               margin={{ top: 5, right: 10, left: -20, bottom: 35 }}
               onClick={(chartData) => {
                 const name = (chartData?.activePayload?.[0]?.payload as SvPerfRow | undefined)?.name;
-                if (name) setSelectedSV(prev => prev === name ? null : name);
+                if (name) {
+                  setSelectedSV(prev => prev === name ? null : name);
+                  onSupervisorClick?.(name);
+                }
               }}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -814,16 +823,18 @@ export default function HealthInspectorDashboard() {
   const [tab, setTab] = useState<"overview" | "analytics">("overview");
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
   const [drillWard, setDrillWard] = useState<string | null>(null);
+  const [drillSupervisor, setDrillSupervisor] = useState<string | null>(null);
 
-  const drillOpen = drillStatus !== null || drillWard !== null;
+  const drillOpen = drillStatus !== null || drillWard !== null || drillSupervisor !== null;
 
   const drillParams = new URLSearchParams();
-  if (drillStatus) drillParams.set("status", drillStatus);
-  if (drillWard)   drillParams.set("wardName", drillWard);
+  if (drillStatus)     drillParams.set("status", drillStatus);
+  if (drillWard)       drillParams.set("wardName", drillWard);
+  if (drillSupervisor) drillParams.set("supervisorName", drillSupervisor);
   const drillQs = drillParams.toString();
 
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["hi-drill", drillStatus, drillWard],
+    queryKey: ["hi-drill", drillStatus, drillWard, drillSupervisor],
     queryFn: () => customFetch(`/api/health-inspector/reports${drillQs ? `?${drillQs}` : ""}`),
     enabled: drillOpen,
     staleTime: 60_000,
@@ -833,8 +844,10 @@ export default function HealthInspectorDashboard() {
   const statusLabel =
     drillStatus === "reported" ? "New Reports" :
     drillStatus === "cleaning" ? "In Progress" :
-    drillStatus === "cleaned"  ? "Cleaned" : "All Reports";
-  const drillTitle = `${statusLabel}${drillWard ? ` · ${drillWard}` : " · Health Inspector"}`;
+    drillStatus === "cleaned"  ? "Cleaned" : "Open";
+  const drillTitle = drillSupervisor
+    ? `Open · ${drillSupervisor}`
+    : `${statusLabel}${drillWard ? ` · ${drillWard}` : " · Health Inspector"}`;
 
   const availableWards = useMemo(() => {
     const seen = new Set<string>();
@@ -864,7 +877,7 @@ export default function HealthInspectorDashboard() {
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       <StatusDrilldownSheet
         open={drillOpen}
-        onClose={() => { setDrillStatus(null); setDrillWard(null); }}
+        onClose={() => { setDrillStatus(null); setDrillWard(null); setDrillSupervisor(null); }}
         title={drillTitle}
         reports={drillReports}
         isLoading={drillLoading}
@@ -968,7 +981,10 @@ export default function HealthInspectorDashboard() {
       )}
 
       {tab === "analytics" && (
-        <HIAnalyticsPanel onWardClick={(wardGeoName) => setDrillWard(wardGeoName)} />
+        <HIAnalyticsPanel
+          onWardClick={(wardGeoName) => setDrillWard(wardGeoName)}
+          onSupervisorClick={(name) => { setDrillWard(null); setDrillStatus(null); setDrillSupervisor(name); }}
+        />
       )}
     </div>
   );
