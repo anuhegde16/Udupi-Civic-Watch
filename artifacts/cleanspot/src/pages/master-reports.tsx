@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useImageLightbox } from "@/components/image-lightbox";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
+import { ReportNumberSearch } from "@/components/report-number-search";
 
 type PanchayatReportStatus = "reported" | "cleaning" | "cleaned";
 
@@ -248,6 +249,9 @@ export default function MasterReports() {
           <div className="sm:self-end bg-indigo-500/5 px-5 py-2.5 rounded-2xl border border-indigo-500/10 flex items-center gap-2">
             <span className="text-2xl sm:text-3xl font-black text-indigo-600">{reports.length}</span>
             <span className="text-indigo-600/70 font-bold uppercase text-xs tracking-wider">Found</span>
+          </div>
+          <div className="sm:self-end">
+            <ReportNumberSearch onFound={setSelectedReport} />
           </div>
         </div>
       </div>

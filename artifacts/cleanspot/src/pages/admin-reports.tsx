@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
+import { ReportNumberSearch } from "@/components/report-number-search";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
 type Report = {
@@ -126,6 +128,7 @@ export default function AdminReports() {
 
   const [mapReport, setMapReport] = useState<Report | null>(null);
   const [deleteReportId, setDeleteReportId] = useState<number | null>(null);
+  const [searchFoundReport, setSearchFoundReport] = useState<ReportDetail | null>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   const [deepLinkedReportId] = useState<number | null>(() => {
@@ -396,6 +399,9 @@ export default function AdminReports() {
             <div className="sm:self-end bg-primary/5 px-5 py-2.5 rounded-2xl border border-primary/10 flex items-center gap-2">
               <span className="text-2xl sm:text-3xl font-black text-primary">{reports.length}</span>
               <span className="text-primary/70 font-bold uppercase text-xs tracking-wider">Found</span>
+            </div>
+            <div className="sm:self-end">
+              <ReportNumberSearch onFound={setSearchFoundReport} />
             </div>
           </div>
         </div>
@@ -1033,6 +1039,13 @@ export default function AdminReports() {
         </DialogContent>
       </Dialog>
       {lightbox}
+
+      {/* Report Number Search result sheet */}
+      <ReportDetailSheet
+        report={searchFoundReport}
+        open={searchFoundReport !== null}
+        onClose={() => setSearchFoundReport(null)}
+      />
     </div>
   );
 }
