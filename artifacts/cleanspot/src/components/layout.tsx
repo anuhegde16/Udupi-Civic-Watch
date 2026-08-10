@@ -335,10 +335,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Community Mobiliser Login
                     </Link>
-                    <Link href="/supervisor/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Supervisor Login
-                    </Link>
                     <Link href="/health-inspector/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Health Inspector Login

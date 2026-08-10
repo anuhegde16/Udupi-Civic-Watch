@@ -45,7 +45,7 @@ function Router() {
         <Route path="/master/login">{() => <Login portalType="master" />}</Route>
         <Route path="/supervisory/login">{() => <Login portalType="supervisory" />}</Route>
         <Route path="/community-mobiliser/login">{() => <Login portalType="community-mobiliser" />}</Route>
-        <Route path="/supervisor/login">{() => <Login portalType="supervisor" />}</Route>
+        <Route path="/supervisor/login">{() => { window.location.replace("/staff/login"); return null; }}</Route>
         <Route path="/health-inspector/login">{() => <Login portalType="health-inspector" />}</Route>
         <Route path="/env-engineer/login">{() => <Login portalType="env-engineer" />}</Route>
         <Route path="/commissioner/login">{() => <Login portalType="commissioner" />}</Route>
