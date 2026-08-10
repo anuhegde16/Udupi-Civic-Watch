@@ -34,7 +34,14 @@ import {
   Pencil,
   ArrowRightLeft,
   TrendingUp,
+  BarChart2,
+  LayoutDashboard,
 } from "lucide-react";
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 type HiProfile = {
   id: number;
@@ -503,6 +510,154 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
   );
 }
 
+// ── Analytics ──────────────────────────────────────────────────────────────────
+
+type PerfRow = { name: string; open: number; cleaning: number; cleaned: number; total: number; rate: number; avgCleanupHours: number };
+type TrendRow = { date: string; reported: number; cleaned: number };
+type BacklogRow = { wardName: string; open: number };
+type HIAnalytics = {
+  kpis: { open: number; cleaning: number; resolvedThisMonth: number; totalCleaned: number; total: number; avgCleanupHours: number; resolutionRate: number };
+  dailyTrend: TrendRow[];
+  wardBacklog: BacklogRow[];
+  supervisorPerformance: PerfRow[];
+};
+
+function useHIAnalytics() {
+  return useQuery<HIAnalytics>({
+    queryKey: ["hi-analytics"],
+    queryFn: () => customFetch("/api/health-inspector/analytics"),
+    staleTime: 3 * 60_000,
+  });
+}
+
+function fmtDateShort(iso: string) {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function fmtHrs(h: number) {
+  if (!h) return "–";
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  if (h < 24) return `${Math.round(h * 10) / 10}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
+function PerfBars({ rows, label }: { rows: PerfRow[]; label: string }) {
+  if (!rows.length) return null;
+  return (
+    <div className="bg-card border border-border/50 rounded-3xl p-5">
+      <h3 className="text-sm font-black text-foreground mb-0.5">{label}</h3>
+      <p className="text-xs text-muted-foreground mb-4">Resolution rate · open count</p>
+      <div className="space-y-3">
+        {rows.map(row => (
+          <div key={row.name}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-bold text-foreground truncate max-w-[55%]">{row.name}</span>
+              <div className="flex items-center gap-2 text-xs shrink-0 ml-2">
+                <span className="text-destructive font-semibold">{row.open} open</span>
+                <span className="font-black text-foreground">{row.rate}%</span>
+              </div>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${row.rate >= 60 ? "bg-primary" : row.rate >= 30 ? "bg-amber-500" : "bg-destructive"}`}
+                style={{ width: `${row.rate}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HIAnalyticsPanel() {
+  const { data, isLoading } = useHIAnalytics();
+  if (isLoading) return (
+    <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+      <Loader2 className="w-10 h-10 animate-spin text-primary mb-3" />
+      <p className="font-bold">Loading analytics…</p>
+    </div>
+  );
+  if (!data) return null;
+  const { kpis, dailyTrend, wardBacklog, supervisorPerformance } = data;
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "Open Reports",      value: kpis.open,              color: "text-destructive", bg: "bg-destructive/8" },
+          { label: "In Progress",       value: kpis.cleaning,          color: "text-blue-500",    bg: "bg-blue-50"       },
+          { label: "Cleaned (30d)",     value: kpis.resolvedThisMonth, color: "text-primary",     bg: "bg-primary/8"     },
+          { label: "Avg. Cleanup Time", value: fmtHrs(kpis.avgCleanupHours), color: "text-amber-600", bg: "bg-amber-50" },
+        ].map(k => (
+          <div key={k.label} className={`${k.bg} rounded-2xl px-4 py-3`}>
+            <div className={`text-2xl font-black ${k.color}`}>{k.value}</div>
+            <div className="text-xs text-muted-foreground font-semibold mt-0.5">{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {dailyTrend.length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <h3 className="text-sm font-black text-foreground mb-0.5">30-Day Activity</h3>
+          <p className="text-xs text-muted-foreground mb-4">Reports received vs cleaned per day</p>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={dailyTrend} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="date" tickFormatter={fmtDateShort} tick={{ fontSize: 10 }} interval={6} />
+              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <Tooltip labelFormatter={(l: string) => fmtDateShort(l)} />
+              <Line type="monotone" dataKey="reported" stroke="#ef4444" strokeWidth={2} dot={false} name="New Reports" />
+              <Line type="monotone" dataKey="cleaned"  stroke="#22c55e" strokeWidth={2} dot={false} name="Cleaned" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <PerfBars rows={supervisorPerformance ?? []} label="Field Officer Performance" />
+
+      {wardBacklog.length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <h3 className="text-sm font-black text-foreground mb-0.5">Ward Backlog</h3>
+          <p className="text-xs text-muted-foreground mb-4">Open reports per ward</p>
+          <ResponsiveContainer width="100%" height={Math.max(140, wardBacklog.length * 26)}>
+            <BarChart layout="vertical" data={wardBacklog} margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
+              <Tooltip />
+              <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {(supervisorPerformance ?? []).filter(e => e.avgCleanupHours > 0).length > 0 && (
+        <div className="bg-card border border-border/50 rounded-3xl p-5">
+          <h3 className="text-sm font-black text-foreground mb-0.5">Avg. Cleanup Time by Field Officer</h3>
+          <p className="text-xs text-muted-foreground mb-4">Time from report received to cleaned</p>
+          <div className="divide-y divide-border/30">
+            {(supervisorPerformance ?? []).filter(e => e.avgCleanupHours > 0).map(sv => (
+              <div key={sv.name} className="flex items-center justify-between py-2.5">
+                <span className="text-xs font-bold text-foreground truncate">{sv.name}</span>
+                <span className="text-sm font-black text-amber-600 shrink-0 ml-3">{fmtHrs(sv.avgCleanupHours)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {kpis.total === 0 && (
+        <div className="bg-card border border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center py-16 px-4 text-center">
+          <BarChart2 className="w-10 h-10 text-muted-foreground opacity-40 mb-3" />
+          <h3 className="text-base font-black text-foreground mb-1">No data yet</h3>
+          <p className="text-sm text-muted-foreground">Analytics will appear once reports are submitted.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function HealthInspectorDashboard() {
   const { user } = useAuth();
@@ -519,6 +674,7 @@ export default function HealthInspectorDashboard() {
 
   const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
+  const [tab, setTab] = useState<"overview" | "analytics">("overview");
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
   const [drillWard, setDrillWard] = useState<string | null>(null);
 
@@ -625,38 +781,56 @@ export default function HealthInspectorDashboard() {
         </div>
       </div>
 
-      {/* Coverage map — coloured by field officer */}
-      {wardGeoNames.length > 0 && (
-        <RoleMap
-          reports={mapReports}
-          wardGeoNames={wardGeoNames}
-          wardGroups={wardGroups}
-          title="Coverage Overview"
-          subtitle="Wards coloured by field officer · tap a ward to filter complaints"
-          height="340px"
-          onWardTap={(geoName) => { setDrillWard(geoName); }}
-        />
+      {/* Tab switcher */}
+      <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl w-fit">
+        <button type="button" onClick={() => setTab("overview")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+          <LayoutDashboard className="w-4 h-4" /> Overview
+        </button>
+        <button type="button" onClick={() => setTab("analytics")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+          <BarChart2 className="w-4 h-4" /> Analytics
+        </button>
+      </div>
+
+      {tab === "overview" && (
+        <>
+          {/* Coverage map — coloured by field officer */}
+          {wardGeoNames.length > 0 && (
+            <RoleMap
+              reports={mapReports}
+              wardGeoNames={wardGeoNames}
+              wardGroups={wardGroups}
+              title="Coverage Overview"
+              subtitle="Wards coloured by field officer · tap a ward to filter complaints"
+              height="340px"
+              onWardTap={(geoName) => { setDrillWard(geoName); }}
+            />
+          )}
+
+          {/* Field Officer cards */}
+          {statsLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+              <p className="font-bold text-lg">Loading field officers…</p>
+            </div>
+          ) : supervisors.length === 0 ? (
+            <div className="bg-card border border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center py-20 px-4 text-center">
+              <Users className="w-12 h-12 text-muted-foreground opacity-50 mb-4" />
+              <h3 className="text-xl font-black text-foreground mb-1">No field officers assigned</h3>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h2 className="text-lg font-black text-foreground">Your Field Officers</h2>
+              {supervisors.map((sv) => (
+                <SupervisorCard key={sv.id} sv={sv} allSupervisors={supervisors} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Field Officer cards */}
-      {statsLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-          <p className="font-bold text-lg">Loading field officers…</p>
-        </div>
-      ) : supervisors.length === 0 ? (
-        <div className="bg-card border border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center py-20 px-4 text-center">
-          <Users className="w-12 h-12 text-muted-foreground opacity-50 mb-4" />
-          <h3 className="text-xl font-black text-foreground mb-1">No field officers assigned</h3>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <h2 className="text-lg font-black text-foreground">Your Field Officers</h2>
-          {supervisors.map((sv) => (
-            <SupervisorCard key={sv.id} sv={sv} allSupervisors={supervisors} />
-          ))}
-        </div>
-      )}
+      {tab === "analytics" && <HIAnalyticsPanel />}
     </div>
   );
 }

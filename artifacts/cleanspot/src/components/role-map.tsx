@@ -96,6 +96,7 @@ export function RoleMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef       = useRef<any>(null);
   const fittedRef    = useRef(false);
+  const timersRef    = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [activeLayer, setActiveLayer] = useState<LayerKey>("all");
 
@@ -165,13 +166,16 @@ export function RoleMap({
 
       // Default to a wide Udupi view; fitBounds effect will zoom to wards
       map.setView([13.34, 74.75], 13);
-      setTimeout(() => map.invalidateSize(), 0);
-      setTimeout(() => map.invalidateSize(), 300);
+      const t0 = setTimeout(() => { if (mapRef.current) map.invalidateSize(); }, 0);
+      const t1 = setTimeout(() => { if (mapRef.current) map.invalidateSize(); }, 300);
+      timersRef.current = [t0, t1];
       setMapReady(true);
     })();
 
     return () => {
       cancelled = true;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, []);

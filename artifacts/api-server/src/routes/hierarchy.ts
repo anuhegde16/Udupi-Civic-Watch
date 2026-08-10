@@ -1729,5 +1729,251 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
   }
 });
 
+// ── Shared analytics helpers ───────────────────────────────────────────────────
+
+function buildDailyTrend(reports: any[], days = 30) {
+  const trend: Record<string, { date: string; reported: number; cleaned: number }> = {};
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    const key = d.toISOString().split("T")[0];
+    trend[key] = { date: key, reported: 0, cleaned: 0 };
+  }
+  for (const r of reports) {
+    if (r.createdAt) {
+      const k = new Date(r.createdAt).toISOString().split("T")[0];
+      if (trend[k]) trend[k].reported++;
+    }
+    if (r.cleanedAt) {
+      const k = new Date(r.cleanedAt).toISOString().split("T")[0];
+      if (trend[k]) trend[k].cleaned++;
+    }
+  }
+  return Object.values(trend);
+}
+
+function buildWardBacklog(reports: any[]) {
+  const map: Record<string, number> = {};
+  for (const r of reports) {
+    if (r.status === "reported" && r.wardName) {
+      map[r.wardName] = (map[r.wardName] ?? 0) + 1;
+    }
+  }
+  return Object.entries(map)
+    .map(([wardName, open]) => ({ wardName: wardName.replace("Udupi Ward ", "W"), open }))
+    .sort((a, b) => b.open - a.open)
+    .slice(0, 15);
+}
+
+function computeAvgCleanupHrs(reports: any[]) {
+  const cleaned = reports.filter(r => r.cleanedAt && r.createdAt);
+  if (!cleaned.length) return 0;
+  const sum = cleaned.reduce((s, r) =>
+    s + (new Date(r.cleanedAt).getTime() - new Date(r.createdAt).getTime()) / 3_600_000, 0);
+  return Math.round((sum / cleaned.length) * 10) / 10;
+}
+
+type PerfEntry = { name: string; open: number; cleaning: number; cleaned: number; total: number; cleanedHrs: number };
+
+function groupByKey(reports: any[], key: string): Record<string, PerfEntry> {
+  const map: Record<string, PerfEntry> = {};
+  for (const r of reports) {
+    const name = (r[key] as string | undefined) ?? "Unknown";
+    if (!map[name]) map[name] = { name, open: 0, cleaning: 0, cleaned: 0, total: 0, cleanedHrs: 0 };
+    map[name].total++;
+    if (r.status === "reported") map[name].open++;
+    else if (r.status === "cleaning") map[name].cleaning++;
+    else if (r.status === "cleaned") {
+      map[name].cleaned++;
+      if (r.cleanedAt && r.createdAt)
+        map[name].cleanedHrs += (new Date(r.cleanedAt).getTime() - new Date(r.createdAt).getTime()) / 3_600_000;
+    }
+  }
+  return map;
+}
+
+function toPerf(map: Record<string, PerfEntry>) {
+  return Object.values(map).map(e => ({
+    name: e.name,
+    open: e.open,
+    cleaning: e.cleaning,
+    cleaned: e.cleaned,
+    total: e.total,
+    rate: e.total > 0 ? Math.round((e.cleaned / e.total) * 100) : 0,
+    avgCleanupHours: e.cleaned > 0 ? Math.round((e.cleanedHrs / e.cleaned) * 10) / 10 : 0,
+  })).sort((a, b) => b.total - a.total);
+}
+
+// ── GET /api/health-inspector/analytics ───────────────────────────────────────
+router.get("/health-inspector/analytics", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
+  try {
+    const svRows = await db.execute(sql`
+      SELECT id, name, ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id = ${Number(user.officerId)}
+    `);
+    const svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
+    if (!svList.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], supervisorPerformance: [] });
+      return;
+    }
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name });
+      }
+    }
+    if (!wardEntries.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], supervisorPerformance: [] });
+      return;
+    }
+    const allReports = await fetchReportsInWardEntries(wardEntries, {});
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const open = allReports.filter(r => r.status === "reported").length;
+    const cleaning = allReports.filter(r => r.status === "cleaning").length;
+    const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
+    const total = allReports.length;
+    res.json({
+      kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
+              avgCleanupHours: computeAvgCleanupHrs(allReports),
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
+      dailyTrend: buildDailyTrend(allReports),
+      wardBacklog: buildWardBacklog(allReports),
+      supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
+    });
+  } catch (err) {
+    logger.error({ err }, "Error computing HI analytics");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/env-engineer/analytics ───────────────────────────────────────────
+router.get("/env-engineer/analytics", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
+  try {
+    const hiRows = await db.execute(sql`
+      SELECT id, name FROM health_inspectors WHERE environmental_engineer_id = ${Number(user.officerId)}
+    `);
+    const hiList = hiRows.rows as { id: number; name: string }[];
+    if (!hiList.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const hiIds = hiList.map(h => h.id);
+    const hiNameById = new Map(hiList.map(h => [h.id, h.name]));
+    const svRows = await db.execute(sql`
+      SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(","))})
+    `);
+    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name, hiName });
+      }
+    }
+    if (!wardEntries.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const allReports = await fetchReportsInWardEntries(wardEntries, {});
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const open = allReports.filter(r => r.status === "reported").length;
+    const cleaning = allReports.filter(r => r.status === "cleaning").length;
+    const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
+    const total = allReports.length;
+    res.json({
+      kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
+              avgCleanupHours: computeAvgCleanupHrs(allReports),
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
+      dailyTrend: buildDailyTrend(allReports),
+      wardBacklog: buildWardBacklog(allReports),
+      hiPerformance: toPerf(groupByKey(allReports, "hiName")),
+      supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
+    });
+  } catch (err) {
+    logger.error({ err }, "Error computing EE analytics");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/commissioner/analytics ───────────────────────────────────────────
+router.get("/commissioner/analytics", requireCommissioner, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  const panchayat = user.panchayatName ?? "Udupi";
+  try {
+    const eeRow = await db.execute(sql`SELECT id FROM environmental_engineers WHERE panchayat_name = ${panchayat} LIMIT 1`);
+    if (!eeRow.rows.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const eeId = (eeRow.rows[0] as any).id as number;
+    const hiRows = await db.execute(sql`SELECT id, name FROM health_inspectors WHERE environmental_engineer_id = ${eeId}`);
+    const hiList = hiRows.rows as { id: number; name: string }[];
+    if (!hiList.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const hiIds = hiList.map(h => h.id);
+    const hiNameById = new Map(hiList.map(h => [h.id, h.name]));
+    const svRows = await db.execute(sql`
+      SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(","))})
+    `);
+    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+    if (!svList.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name, hiName });
+      }
+    }
+    if (!wardEntries.length) {
+      res.json({ kpis: { open: 0, cleaning: 0, resolvedThisMonth: 0, totalCleaned: 0, total: 0, avgCleanupHours: 0, resolutionRate: 0 }, dailyTrend: [], wardBacklog: [], hiPerformance: [], supervisorPerformance: [] });
+      return;
+    }
+    const allReports = await fetchReportsInWardEntries(wardEntries, {});
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const open = allReports.filter(r => r.status === "reported").length;
+    const cleaning = allReports.filter(r => r.status === "cleaning").length;
+    const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
+    const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
+    const total = allReports.length;
+    res.json({
+      kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
+              avgCleanupHours: computeAvgCleanupHrs(allReports),
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
+      dailyTrend: buildDailyTrend(allReports),
+      wardBacklog: buildWardBacklog(allReports),
+      hiPerformance: toPerf(groupByKey(allReports, "hiName")),
+      supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
+    });
+  } catch (err) {
+    logger.error({ err }, "Error computing commissioner analytics");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
 
