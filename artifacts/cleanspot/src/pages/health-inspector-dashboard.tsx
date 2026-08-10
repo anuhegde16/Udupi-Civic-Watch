@@ -823,7 +823,9 @@ export default function HealthInspectorDashboard() {
 
   const overallRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
 
-  const [tab, setTab] = useState<"overview" | "analytics">("overview");
+  const [tab, setTab] = useState<"overview" | "analytics">(() =>
+    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
+  );
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
   const [drillWard, setDrillWard] = useState<string | null>(null);
   const [drillSupervisor, setDrillSupervisor] = useState<string | null>(null);

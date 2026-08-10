@@ -2,6 +2,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { getDashboardPath } from "@/lib/role-navigation";
 
 const ROLE_ALIASES: Record<string, string[]> = {
   admin: ["admin", "control_center"],
@@ -22,14 +23,7 @@ function expandRoles(roles: string[]): string[] {
 }
 
 function dashboardFor(role: string): string {
-  if (role === "admin" || role === "control_center") return "/admin/dashboard";
-  if (role === "panchayat_admin") return "/master/dashboard";
-  if (role === "commissioner") return "/commissioner/dashboard";
-  if (role === "supervisor") return "/supervisor/dashboard";
-  if (role === "health_inspector") return "/health-inspector/dashboard";
-  if (role === "environmental_engineer") return "/env-engineer/dashboard";
-  if (role === "community_mobiliser") return "/community-mobiliser/dashboard";
-  return "/officer/dashboard";
+  return getDashboardPath(role) ?? "/officer/dashboard";
 }
 
 export function AuthGuard({ children, roles }: { children: React.ReactNode, roles?: string[] }) {

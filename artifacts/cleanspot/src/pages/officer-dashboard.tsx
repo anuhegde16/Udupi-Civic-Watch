@@ -50,6 +50,9 @@ export default function OfficerDashboard() {
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
   const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(
+    () => new URLSearchParams(window.location.search).get("view") === "analytics",
+  );
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
@@ -116,6 +119,7 @@ export default function OfficerDashboard() {
     const pct = total > 0 ? Math.round((cleaned / total) * 100) : 0;
     return { total, newCount, inProgress, cleaned, pct };
   }, [allReports]);
+  const resolutionRate = stats.total > 0 ? Math.round((stats.cleaned / stats.total) * 100) : 0;
 
   const filteredReports = useMemo(() => {
     let list = allReports;
@@ -377,6 +381,37 @@ export default function OfficerDashboard() {
           </TabsList>
         </Tabs>
       </div>
+
+      {showAnalytics && (
+        <div className="bg-card rounded-3xl p-5 border border-border/50 shadow-sm">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 className="font-black text-lg">My area analytics</h2>
+              <p className="text-sm text-muted-foreground">A read-only summary of reports assigned to your area.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAnalytics(false)}
+              className="text-sm font-bold text-primary hover:underline"
+            >
+              Hide
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total reports", value: stats.total, color: "text-foreground", bg: "bg-muted/60" },
+              { label: "Open backlog", value: stats.newCount + stats.inProgress, color: "text-destructive", bg: "bg-destructive/8" },
+              { label: "In progress", value: stats.inProgress, color: "text-blue-500", bg: "bg-blue-50" },
+              { label: "Resolution rate", value: `${resolutionRate}%`, color: "text-primary", bg: "bg-primary/8" },
+            ].map((item) => (
+              <div key={item.label} className={`${item.bg} rounded-2xl px-4 py-3`}>
+                <p className={`text-2xl font-black ${item.color}`}>{item.value}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{item.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Report cards */}
       {isLoading ? (

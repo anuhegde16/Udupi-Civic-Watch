@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { formatWardLabel } from "@/lib/ward-names";
@@ -30,6 +30,9 @@ import {
   LayoutList,
   Users,
   ChevronRight,
+  BarChart2,
+  LayoutDashboard,
+  TrendingUp,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -110,11 +113,16 @@ export default function SupervisorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [view, setView] = useState<"overview" | "analytics">("overview");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [focusedWard, setFocusedWard] = useState<string | null>(null);
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
+
+  useEffect(() => {
+    setView(new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview");
+  }, []);
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: reportsData, isLoading: reportsLoading } = useReports();
@@ -142,6 +150,21 @@ export default function SupervisorDashboard() {
     cleaning: allReports.filter((r) => r.status === "cleaning").length,
     cleaned: allReports.filter((r) => r.status === "cleaned").length,
   }), [allReports]);
+  const resolutionRate = stats.total > 0 ? Math.round((stats.cleaned / stats.total) * 100) : 0;
+  const wardBreakdown = useMemo(() => {
+    const byWard = new Map<string, { total: number; open: number; cleaned: number }>();
+    allReports.forEach((report) => {
+      const ward = report.wardName ?? "Unassigned ward";
+      const row = byWard.get(ward) ?? { total: 0, open: 0, cleaned: 0 };
+      row.total += 1;
+      if (report.status === "cleaned") row.cleaned += 1;
+      else row.open += 1;
+      byWard.set(ward, row);
+    });
+    return [...byWard.entries()]
+      .map(([ward, values]) => ({ ward, ...values }))
+      .sort((a, b) => b.open - a.open || b.total - a.total);
+  }, [allReports]);
 
   const filtered = useMemo(() => {
     let list = statusFilter === "all" ? allReports : allReports.filter((r) => r.status === statusFilter);
@@ -243,8 +266,61 @@ export default function SupervisorDashboard() {
         </div>
       </div>
 
+      <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl w-fit">
+        <button
+          type="button"
+          onClick={() => setView("overview")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <LayoutDashboard className="w-4 h-4" /> Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("analytics")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          <BarChart2 className="w-4 h-4" /> Analytics
+        </button>
+      </div>
+
+      {view === "analytics" && (
+        <section className="space-y-5" aria-label="Ward analytics">
+          <div className="bg-card rounded-3xl border border-border/50 p-6 shadow-sm">
+            <p className="text-sm font-bold text-muted-foreground">Your wards · read-only summary</p>
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: "Total reports", value: stats.total, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60" },
+                { label: "Open backlog", value: stats.reported + stats.cleaning, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
+                { label: "In progress", value: stats.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50" },
+                { label: "Resolution rate", value: `${resolutionRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
+              ].map((item) => (
+                <div key={item.label} className={`${item.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
+                  <div className={item.color}>{item.icon}</div>
+                  <div><p className={`text-2xl font-black ${item.color}`}>{item.value}</p><p className="text-xs font-semibold text-muted-foreground">{item.label}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-card rounded-3xl border border-border/50 overflow-hidden shadow-sm">
+            <div className="p-5 border-b border-border/50"><h2 className="font-black text-lg">Backlog by ward</h2><p className="text-sm text-muted-foreground">Only the wards assigned to you are shown.</p></div>
+            {wardBreakdown.length === 0 ? <p className="p-6 text-sm text-muted-foreground">No ward reports are available yet.</p> : (
+              <div className="divide-y divide-border/50">
+                {wardBreakdown.map((row) => (
+                  <div key={row.ward} className="p-4 flex items-center gap-4">
+                    <p className="font-bold text-sm min-w-0 flex-1">{formatWardLabel(row.ward)}</p>
+                    <span className="text-xs font-bold text-destructive">{row.open} open</span>
+                    <span className="text-xs font-bold text-primary">{row.cleaned} cleaned</span>
+                    <span className="text-xs text-muted-foreground w-14 text-right">{row.total} total</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Ward coverage map */}
-      {wardGeoNames.length > 0 && (
+      {view === "overview" && wardGeoNames.length > 0 && (
         <div ref={mapWrapperRef}>
           <RoleMap
             reports={mapReports}
@@ -259,7 +335,7 @@ export default function SupervisorDashboard() {
       )}
 
       {/* Filters */}
-      <div className="flex flex-col gap-3">
+      {view === "overview" && <div className="flex flex-col gap-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
@@ -277,10 +353,10 @@ export default function SupervisorDashboard() {
             <TabsTrigger value="cleaned" className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-primary py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1">Cleaned ({stats.cleaned})</TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>
+      </div>}
 
       {/* Report cards */}
-      {isLoading ? (
+      {view === "overview" && (isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
           <p className="font-bold text-lg">Loading ward reports…</p>
@@ -381,7 +457,7 @@ export default function SupervisorDashboard() {
             );
           })}
         </div>
-      )}
+      ))}
     </div>
   );
 }

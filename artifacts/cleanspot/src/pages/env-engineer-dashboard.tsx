@@ -699,7 +699,9 @@ export default function EnvEngineerDashboard() {
     return { reported, cleaning, cleaned, total, supervisors, resolutionRate };
   }, [his]);
 
-  const [tab, setTab] = useState<"overview" | "analytics">("overview");
+  const [tab, setTab] = useState<"overview" | "analytics">(() =>
+    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
+  );
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
   const [drillWard, setDrillWard] = useState<string | null>(null);
   const [selectedSearchReport, setSelectedSearchReport] = useState<ReportDetail | null>(null);

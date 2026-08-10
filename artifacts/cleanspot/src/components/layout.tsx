@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { NotificationBell } from "@/components/notification-bell";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { getAnalyticsPath, getDashboardLabel, getDashboardPath } from "@/lib/role-navigation";
 
 // BeforeInstallPromptEvent is not in standard TS DOM lib
 interface BeforeInstallPromptEvent extends Event {
@@ -191,6 +192,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const dashboardPath = getDashboardPath(user?.role);
+  const dashboardLabel = getDashboardLabel(user?.role);
+  const analyticsPath = getAnalyticsPath(user?.role);
 
   const { data: testModeData } = useQuery({
     queryKey: ["test-mode"],
@@ -211,7 +215,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-primary/10 shadow-sm shadow-primary/5">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link
-            href={isOfficer ? "/officer/dashboard" : isAdmin ? "/admin/dashboard" : isPanchayatAdmin ? "/master/dashboard" : "/"}
+            href={isAuthenticated && dashboardPath ? dashboardPath : "/"}
             className="flex items-center gap-3 group"
           >
             <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground group-hover:scale-105 transition-transform shadow-md shadow-primary/20">
@@ -261,22 +265,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </div>
 
                   <nav className="flex flex-col gap-1 flex-1">
+                     {dashboardPath && (
+                       <Link href={dashboardPath} onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-bold text-foreground transition-colors">
+                         {dashboardLabel}
+                       </Link>
+                     )}
+                     {analyticsPath && (
+                       <Link href={analyticsPath} onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">
+                         Analytics
+                       </Link>
+                     )}
                     {isAdmin && (
                       <>
-                        <Link href="/admin/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Dashboard</Link>
                         <Link href="/admin/reports" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">All Reports</Link>
                         <Link href="/admin/officers" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Officers</Link>
-                        <Link href="/admin/analytics" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Analytics</Link>
                       </>
-                    )}
-                    {isPanchayatAdmin && (
-                      <>
-                        <Link href="/master/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Panchayat</Link>
-                        <Link href="/master/analytics" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">Analytics</Link>
-                      </>
-                    )}
-                    {isOfficer && (
-                      <Link href="/officer/dashboard" onClick={closeMenu} className="px-4 py-3 rounded-xl hover:bg-primary/5 font-medium text-foreground transition-colors">My Area</Link>
                     )}
                   </nav>
 
