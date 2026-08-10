@@ -66,6 +66,9 @@ let insideReportId: number;
 let outsideReportId: number;
 // A second "inside" report with status="cleaning" to test the filter
 let insideCleaningReportId: number;
+// Dedicated report for supervisor status-transition tests so the shared filter
+// fixtures keep their original statuses for later hierarchy test suites.
+let supervisorTransitionReportId: number;
 
 beforeAll(async () => {
   // Load the Express app
@@ -136,6 +139,14 @@ beforeAll(async () => {
   `);
   insideCleaningReportId = (r3.rows[0] as any).id as number;
   createdReportIds.push(insideCleaningReportId);
+
+  const r4 = await db.execute(sql`
+    INSERT INTO reports (latitude, longitude, status, address, description)
+    VALUES (${INSIDE_LAT}, ${INSIDE_LNG}, ${"reported"}, ${"Supervisor transition test"}, ${"cleanup evidence test"})
+    RETURNING id
+  `);
+  supervisorTransitionReportId = (r4.rows[0] as any).id as number;
+  createdReportIds.push(supervisorTransitionReportId);
 });
 
 afterAll(async () => {
@@ -252,6 +263,63 @@ describe("GET /api/health-inspector/reports — zone-scoped PiP filter", () => {
       expect(r).toHaveProperty("wardName");
       expect(r.wardName).toMatch(/Udupi Ward/);
     }
+  });
+});
+
+describe("PATCH /api/supervisor/reports/:id — Udupi cleanup evidence", () => {
+  const supervisorCookie = () =>
+    `session=${sessionCookie({ role: "supervisor", officerId: svId, panchayatName: "Udupi" })}`;
+
+  it("allows a supervisor to mark an in-ward report In Progress without cleanup photos", async () => {
+    const res = await request(app)
+      .patch(`/api/supervisor/reports/${supervisorTransitionReportId}`)
+      .set("Cookie", supervisorCookie())
+      .send({ status: "cleaning" });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: supervisorTransitionReportId, status: "cleaning" });
+  });
+
+  it("rejects marking an in-ward report Cleaned without cleanup evidence", async () => {
+    const res = await request(app)
+      .patch(`/api/supervisor/reports/${supervisorTransitionReportId}`)
+      .set("Cookie", supervisorCookie())
+      .send({ status: "cleaned" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/cleanup photo is required/i);
+  });
+
+  it("stores cleanup evidence when marking an in-ward report Cleaned", async () => {
+    const cleanupImageUrls = [
+      { url: "https://example.test/cleanup-one.jpg", uploadedAt: "2026-08-10T10:00:00.000Z" },
+      { url: "https://example.test/cleanup-two.jpg", uploadedAt: "2026-08-10T10:01:00.000Z" },
+    ];
+    const res = await request(app)
+      .patch(`/api/supervisor/reports/${supervisorTransitionReportId}`)
+      .set("Cookie", supervisorCookie())
+      .send({ status: "cleaned", cleanupImageUrls });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: supervisorTransitionReportId,
+      status: "cleaned",
+      cleanupImageUrl: cleanupImageUrls[0].url,
+      cleanupImageUrls,
+    });
+  });
+
+  it("keeps out-of-ward reports blocked even when cleanup evidence is supplied", async () => {
+    const res = await request(app)
+      .patch(`/api/supervisor/reports/${outsideReportId}`)
+      .set("Cookie", supervisorCookie())
+      .send({
+        status: "cleaned",
+        cleanupImageUrls: [{ url: "https://example.test/cleanup.jpg" }],
+      });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/not in your wards/i);
   });
 });
 

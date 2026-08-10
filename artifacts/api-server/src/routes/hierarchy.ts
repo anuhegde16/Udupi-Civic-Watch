@@ -354,9 +354,26 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid report ID" }); return; }
-  const { status } = req.body ?? {};
+  const { status, cleanupImageUrl, cleanupImageUrls } = req.body ?? {};
   if (!["cleaning", "cleaned"].includes(status)) {
     res.status(400).json({ error: "status must be 'cleaning' or 'cleaned'" });
+    return;
+  }
+  const validCleanupImageUrls = Array.isArray(cleanupImageUrls)
+    ? cleanupImageUrls.filter((photo: unknown): photo is { url: string; uploadedAt?: string } =>
+      !!photo
+      && typeof photo === "object"
+      && typeof (photo as { url?: unknown }).url === "string"
+      && (photo as { url: string }).url.trim().length > 0
+    )
+    : [];
+  const resolvedCleanupImageUrls = validCleanupImageUrls.length > 0
+    ? validCleanupImageUrls
+    : typeof cleanupImageUrl === "string" && cleanupImageUrl.trim().length > 0
+      ? [{ url: cleanupImageUrl.trim() }]
+      : [];
+  if (status === "cleaned" && resolvedCleanupImageUrls.length === 0) {
+    res.status(400).json({ error: "At least one cleanup photo is required before marking a report as cleaned" });
     return;
   }
   try {
@@ -386,20 +403,19 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
       res.status(403).json({ error: "Report not in your wards" });
       return;
     }
-    const setFields: Record<string, any> = { status };
-    if (status === "cleaning") setFields.cleaning_started_at = sql`COALESCE(cleaning_started_at, NOW())`;
-    if (status === "cleaned") {
-      setFields.cleaned_at = sql`COALESCE(cleaned_at, NOW())`;
-      setFields.cleaning_started_at = sql`COALESCE(cleaning_started_at, NOW())`;
-    }
+    const cleanupImageUrlsJson = status === "cleaned" ? JSON.stringify(resolvedCleanupImageUrls) : null;
+    const cleanupImageUrlValue = status === "cleaned" ? resolvedCleanupImageUrls[0].url : null;
     const updated = await db.execute(sql`
       UPDATE reports
       SET status = ${status},
           cleaning_started_at = CASE WHEN ${status} IN ('cleaning','cleaned') THEN COALESCE(cleaning_started_at, NOW()) ELSE cleaning_started_at END,
           cleaned_at = CASE WHEN ${status} = 'cleaned' THEN COALESCE(cleaned_at, NOW()) ELSE cleaned_at END,
+          cleanup_image_urls = CASE WHEN ${status} = 'cleaned' THEN ${cleanupImageUrlsJson}::jsonb ELSE cleanup_image_urls END,
+          cleanup_image_url = CASE WHEN ${status} = 'cleaned' THEN ${cleanupImageUrlValue} ELSE cleanup_image_url END,
           updated_at = NOW()
       WHERE id = ${id} AND deleted_at IS NULL
-      RETURNING id, status, updated_at
+      RETURNING id, status, cleanup_image_url AS "cleanupImageUrl",
+        cleanup_image_urls AS "cleanupImageUrls", updated_at AS "updatedAt"
     `);
     res.json(updated.rows[0] ?? { id, status });
   } catch (err) {

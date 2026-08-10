@@ -7,6 +7,7 @@ import { getGreeting } from "@/lib/greeting";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,6 +18,16 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
+import { compressImage } from "@/lib/compress-image";
+import { uploadImageWithProgress, UploadTimeoutError } from "@/lib/upload-with-progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { RoleMap, type RoleMapReport } from "@/components/role-map";
 import {
   MapPin,
@@ -33,6 +44,9 @@ import {
   BarChart2,
   LayoutDashboard,
   TrendingUp,
+  Camera,
+  Images,
+  X,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -56,13 +70,26 @@ type Report = {
   latitude: number;
   longitude: number;
   imageUrl: string | null;
-  imageUrls: { url: string }[] | null;
+  imageUrls: { url: string; uploadedAt?: string }[] | null;
+  cleanupImageUrl: string | null;
+  cleanupImageUrls: { url: string; uploadedAt?: string }[] | null;
   wasteTypes: string[] | null;
   wasteSeverity: string | null;
   createdAt: string;
   wardName: string | null;
   officerName: string | null;
 };
+
+type CleanupPhoto = {
+  id: string;
+  preview: string;
+  url: string;
+  uploadedAt: string;
+  progress: number;
+  error: string | null;
+};
+
+const MAX_CLEANUP_PHOTOS = 5;
 
 function useProfile() {
   return useQuery<SupervisorProfile>({
@@ -109,6 +136,51 @@ const STATUS_LABEL: Record<string, string> = {
   cleaned: "Cleaned",
 };
 
+function PhotoEvidenceSection({
+  title,
+  emptyLabel,
+  photos,
+  onOpen,
+  complete = false,
+}: {
+  title: string;
+  emptyLabel: string;
+  photos: { url: string; uploadedAt?: string }[];
+  onOpen: (index: number) => void;
+  complete?: boolean;
+}) {
+  return (
+    <section className="rounded-2xl border border-border overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/70 bg-muted/30">
+        {complete ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Camera className="w-4 h-4 text-muted-foreground" />}
+        <h3 className="font-bold text-sm">{title}</h3>
+        {photos.length > 0 && <Badge variant="secondary" className="ml-auto text-xs">{photos.length}</Badge>}
+      </div>
+      {photos.length > 0 ? (
+        <div className={`grid gap-1 ${photos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+          {photos.map((photo, index) => (
+            <button
+              key={`${photo.url}-${index}`}
+              type="button"
+              className="aspect-[4/3] bg-muted cursor-zoom-in group relative overflow-hidden"
+              onClick={() => onOpen(index)}
+              aria-label={`View ${title.toLowerCase()} ${index + 1} full screen`}
+            >
+              <img
+                src={photo.url}
+                alt={`${title} ${index + 1}`}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="p-6 text-center text-sm text-muted-foreground">{emptyLabel}</div>
+      )}
+    </section>
+  );
+}
+
 export default function SupervisorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -117,7 +189,12 @@ export default function SupervisorDashboard() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [focusedWard, setFocusedWard] = useState<string | null>(null);
+  const [previewReport, setPreviewReport] = useState<Report | null>(null);
+  const [cleanupReport, setCleanupReport] = useState<Report | null>(null);
+  const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const mapWrapperRef = useRef<HTMLDivElement>(null);
+  const cleanupFileInputRef = useRef<HTMLInputElement>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   useEffect(() => {
@@ -128,19 +205,96 @@ export default function SupervisorDashboard() {
   const { data: reportsData, isLoading: reportsLoading } = useReports();
 
   const updateStatus = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
+    mutationFn: ({ id, status, cleanupImageUrls }: {
+      id: number;
+      status: string;
+      cleanupImageUrls?: { url: string; uploadedAt?: string }[];
+    }) =>
       customFetch(`/api/supervisor/reports/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          ...(cleanupImageUrls?.length
+            ? { cleanupImageUrl: cleanupImageUrls[0].url, cleanupImageUrls }
+            : {}),
+        }),
         headers: { "Content-Type": "application/json" },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] });
+      setCleanupReport(null);
+      setCleanupPhotos([]);
       toast({ title: "Status updated" });
     },
     onError: (err: any) =>
       toast({ title: "Failed to update status", description: err.message, variant: "destructive" }),
   });
+
+  const startCleanupUpload = (photoId: string, dataUrl: string) => {
+    setCleanupPhotos((photos) => photos.map((photo) =>
+      photo.id === photoId ? { ...photo, progress: 0, error: null } : photo
+    ));
+    uploadImageWithProgress(dataUrl, (progress) => {
+      setCleanupPhotos((photos) => photos.map((photo) =>
+        photo.id === photoId ? { ...photo, progress } : photo
+      ));
+    }).then((uploaded) => {
+      setCleanupPhotos((photos) => photos.map((photo) =>
+        photo.id === photoId
+          ? { ...photo, url: uploaded.url, uploadedAt: uploaded.uploadedAt, progress: 100, error: null }
+          : photo
+      ));
+    }).catch((error) => {
+      const message = error instanceof UploadTimeoutError
+        ? error.message
+        : error instanceof Error ? error.message : "Upload failed. Please try again.";
+      setCleanupPhotos((photos) => photos.map((photo) =>
+        photo.id === photoId ? { ...photo, progress: 0, error: message } : photo
+      ));
+    });
+  };
+
+  const addCleanupPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || cleanupPhotos.length >= MAX_CLEANUP_PHOTOS) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try {
+      setIsProcessingImage(true);
+      const preview = await compressImage(file);
+      setCleanupPhotos((photos) => [...photos, {
+        id, preview, url: "", uploadedAt: "", progress: 0, error: null,
+      }]);
+      setIsProcessingImage(false);
+      startCleanupUpload(id, preview);
+    } catch {
+      setIsProcessingImage(false);
+      toast({ title: "Could not process image", description: "Please choose another photo and try again.", variant: "destructive" });
+    }
+  };
+
+  const openCleanupEvidence = (report: Report) => {
+    setPreviewReport(null);
+    setCleanupPhotos([]);
+    setCleanupReport(report);
+  };
+  const closeCleanupEvidence = () => {
+    if (!updateStatus.isPending) {
+      setCleanupReport(null);
+      setCleanupPhotos([]);
+    }
+  };
+  const submitCleaned = () => {
+    const completedPhotos = cleanupPhotos.filter((photo) => photo.url);
+    if (completedPhotos.length === 0 || completedPhotos.length !== cleanupPhotos.length) return;
+    if (cleanupReport) {
+      updateStatus.mutate({
+        id: cleanupReport.id,
+        status: "cleaned",
+        cleanupImageUrls: completedPhotos.map(({ url, uploadedAt }) => ({ url, uploadedAt })),
+      });
+    }
+  };
 
   const allReports = reportsData?.reports ?? [];
 
@@ -183,10 +337,114 @@ export default function SupervisorDashboard() {
   const { data: mapData } = useMapReports();
   const mapReports = mapData?.reports ?? [];
   const wardGeoNames = useMemo(() => wardNames.map(svWardToGeoName), [wardNames]);
+  const previewOriginalPhotos = previewReport
+    ? (previewReport.imageUrls?.filter((photo) => photo?.url) ?? []).length
+      ? previewReport.imageUrls!.filter((photo) => photo?.url)
+      : previewReport.imageUrl ? [{ url: previewReport.imageUrl }] : []
+    : [];
+  const previewCleanupPhotos = previewReport
+    ? (previewReport.cleanupImageUrls?.filter((photo) => photo?.url) ?? []).length
+      ? previewReport.cleanupImageUrls!.filter((photo) => photo?.url)
+      : previewReport.cleanupImageUrl ? [{ url: previewReport.cleanupImageUrl }] : []
+    : [];
+  const hasPendingCleanupUploads = isProcessingImage || cleanupPhotos.some((photo) => !photo.url && !photo.error);
+  const hasUploadErrors = cleanupPhotos.some((photo) => !!photo.error);
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {lightbox}
+      <Dialog open={!!previewReport} onOpenChange={(open) => !open && setPreviewReport(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Report #{previewReport?.id} photo evidence</DialogTitle>
+            <DialogDescription>Review the citizen’s complaint photos and, once available, cleanup confirmation photos.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <PhotoEvidenceSection
+              title="Complaint photos"
+              emptyLabel="No complaint photo was provided."
+              photos={previewOriginalPhotos}
+              onOpen={(index) => openLightbox(previewOriginalPhotos.map((photo) => photo.url), index)}
+            />
+            <PhotoEvidenceSection
+              title="Cleanup confirmation photos"
+              emptyLabel="No cleanup photo has been submitted yet."
+              photos={previewCleanupPhotos}
+              onOpen={(index) => openLightbox(previewCleanupPhotos.map((photo) => photo.url), index)}
+              complete
+            />
+          </div>
+          {previewReport?.status !== "cleaned" && (
+            <DialogFooter>
+              <Button onClick={() => previewReport && openCleanupEvidence(previewReport)} className="rounded-xl">
+                <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!cleanupReport} onOpenChange={(open) => !open && closeCleanupEvidence()}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Confirm cleanup with photos</DialogTitle>
+            <DialogDescription>
+              Add at least one photo of the cleaned location before marking report #{cleanupReport?.id} as Cleaned.
+            </DialogDescription>
+          </DialogHeader>
+          <input
+            ref={cleanupFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={addCleanupPhoto}
+          />
+          <div className="space-y-3">
+            {cleanupPhotos.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                {cleanupPhotos.map((photo) => (
+                  <div key={photo.id} className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted border border-border">
+                    <img src={photo.preview} alt="Cleanup evidence preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setCleanupPhotos((photos) => photos.filter((item) => item.id !== photo.id))}
+                      className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1"
+                      aria-label="Remove cleanup photo"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                    {!photo.url && !photo.error && <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs font-bold px-2 py-1.5">Uploading {photo.progress}%</div>}
+                    {photo.error && <div className="absolute inset-x-0 bottom-0 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1.5">{photo.error}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+            {cleanupPhotos.length < MAX_CLEANUP_PHOTOS && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-20 border-dashed rounded-xl"
+                disabled={isProcessingImage}
+                onClick={() => cleanupFileInputRef.current?.click()}
+              >
+                {isProcessingImage ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Images className="w-5 h-5 mr-2" />}
+                Add cleanup photo
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground font-medium">At least one clear photo is required. You can add up to {MAX_CLEANUP_PHOTOS} photos.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeCleanupEvidence} disabled={updateStatus.isPending}>Cancel</Button>
+            <Button
+              onClick={submitCleaned}
+              disabled={cleanupPhotos.length === 0 || hasPendingCleanupUploads || hasUploadErrors || updateStatus.isPending}
+            >
+              {updateStatus.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Mark as Cleaned
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
@@ -383,11 +641,9 @@ export default function SupervisorDashboard() {
                   {thumb ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        const urls = report.imageUrls?.length ? report.imageUrls.map((p) => p.url) : [thumb!];
-                        openLightbox(urls, 0);
-                      }}
-                      className="absolute inset-0 w-full h-full cursor-zoom-in"
+                      onClick={() => setPreviewReport(report)}
+                      className="absolute inset-0 w-full h-full cursor-pointer"
+                      aria-label={`Open report ${report.id} preview`}
                     >
                       <img src={thumb} alt="Waste report" className="w-full h-full object-cover" />
                     </button>
@@ -420,6 +676,14 @@ export default function SupervisorDashboard() {
                   {report.description && (
                     <p className="text-xs text-muted-foreground italic font-medium bg-muted/50 p-2.5 rounded-xl line-clamp-2">"{report.description}"</p>
                   )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-9 rounded-xl text-xs font-bold"
+                    onClick={() => setPreviewReport(report)}
+                  >
+                    View photos & details
+                  </Button>
 
                   {report.wasteTypes && report.wasteTypes.length > 0 && (
                     <div className="flex flex-wrap gap-1">
@@ -439,7 +703,10 @@ export default function SupervisorDashboard() {
                     {report.status !== "cleaned" && (
                       <Select
                         value={report.status}
-                        onValueChange={(v) => updateStatus.mutate({ id: report.id, status: v })}
+                        onValueChange={(v) => {
+                          if (v === "cleaned") openCleanupEvidence(report);
+                          else updateStatus.mutate({ id: report.id, status: v });
+                        }}
                       >
                         <SelectTrigger className="h-9 rounded-xl text-xs font-bold border-border/60 bg-muted/50">
                           <SelectValue />
