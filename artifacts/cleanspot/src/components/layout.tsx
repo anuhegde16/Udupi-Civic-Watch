@@ -347,10 +347,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Panchayat Admin Login
                     </Link>
-                    <Link href="/commissioner/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors text-sm font-medium">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Commissioner Login
-                    </Link>
                     <Link href="/admin/login" onClick={closeMenu} className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-sm font-medium">
                       <Lock className="w-3.5 h-3.5" />
                       Control Center Login

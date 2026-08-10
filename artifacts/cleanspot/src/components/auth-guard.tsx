@@ -44,10 +44,8 @@ export function AuthGuard({ children, roles }: { children: React.ReactNode, role
         const loginPath =
           roles?.some((r) => r === "admin" || r === "control_center") && !roles?.some((r) => r === "officer" || r === "field_officer" || r === "panchayat_admin")
             ? "/admin/login"
-            : roles?.some((r) => r === "panchayat_admin")
+            : roles?.some((r) => r === "panchayat_admin" || r === "commissioner")
             ? "/master/login"
-            : roles?.some((r) => r === "commissioner")
-            ? "/commissioner/login"
             : roles?.some((r) => r === "health_inspector" || r === "environmental_engineer")
             ? "/supervisory/login"
             : "/staff/login";
