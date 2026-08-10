@@ -1,4 +1,5 @@
 - [Geofence extraction from ArcMap GeoPDF](geofence-extraction.md) — extract boundary from PDF vector stream via GPTS/LPTS georef; lat increases with PDF_y (don't ship flipped); keep client+server geofences.json byte-identical.
+- [Udupi ward map PDF audit](pdf-ward-label-extraction.md) — two GeoPDF editions use DIFFERENT ward numbering; label-vs-centroid distance is not proof of misassignment; use pairwise-overlap + coverage-delta instead.
 - [Leaflet init/draw race](leaflet-init-draw-race.md) — async map init + data-driven draw effect can deadlock when query data is cached; gate draw on a `mapReady` state.
 - [Three-tier role hierarchy](three-tier-roles.md) — control_center / panchayat_admin / field_officer; old names are aliases kept for compat.
 - [DB schema push workaround](db-push-workaround.md) — drizzle-kit push hangs on interactive column-rename prompts; use psql direct SQL as fallback.
