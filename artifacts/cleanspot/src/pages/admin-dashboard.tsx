@@ -99,6 +99,8 @@ import {
 import { AdminDistrictMap } from "@/components/admin-district-map";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
 import type { MapReport, MapOfficer } from "@/components/admin-district-map";
+import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
+import { ReportNumberSearch } from "@/components/report-number-search";
 
 const panchayatAreaNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
@@ -218,6 +220,7 @@ export default function AdminDashboard() {
   const [paCreateOpen, setPaCreateOpen] = useState(false);
   const [paEditOpen, setPaEditOpen] = useState(false);
   const [editingPa, setEditingPa] = useState<PanchayatAdminItem | null>(null);
+  const [selectedSearchReport, setSelectedSearchReport] = useState<ReportDetail | null>(null);
 
   const { data: summary, isLoading: isLoadingSummary, dataUpdatedAt: summaryUpdatedAt } = useGetReportsSummary({
     query: {
@@ -531,16 +534,19 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            title="Refresh data"
-            className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl shrink-0 self-start"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Updated {relativeLastRefreshed}</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0 self-start">
+            <ReportNumberSearch onFound={(r) => setSelectedSearchReport(r)} />
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh data"
+              className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Updated {relativeLastRefreshed}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1388,6 +1394,12 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
+      <ReportDetailSheet
+        report={selectedSearchReport}
+        open={selectedSearchReport !== null}
+        onClose={() => setSelectedSearchReport(null)}
+      />
     </div>
   );
 }

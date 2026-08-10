@@ -497,6 +497,84 @@ router.post("/health-inspector/reports/:reportId/reassign", requireHealthInspect
 
 // ── PATCH /api/health-inspector/supervisor/:id/credentials ─────────────────────
 // Health Inspector can update name, phone, or password for a supervisor under them.
+// ── GET /api/health-inspector/report/:id ──────────────────────────────────────
+// Look up a single report by ID, authorised via the same ward-PiP scope used by
+// /api/health-inspector/reports.  Only returns the report if its lat/lng falls
+// within a ward polygon belonging to one of this HI's supervisors.
+router.get("/health-inspector/report/:id", requireHealthInspector, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
+
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id) || id <= 0) { res.status(400).json({ error: "Invalid report ID" }); return; }
+
+  try {
+    // 1. Collect ward rings for all supervisors under this HI (mirrors /health-inspector/reports).
+    const svRows = await db.execute(sql`
+      SELECT id, name, ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id = ${Number(user.officerId)}
+    `);
+    const svList = svRows.rows as { id: number; name: string; wardNames: string[] }[];
+
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string }[] = [];
+    for (const sv of svList) {
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name });
+      }
+    }
+
+    if (!wardEntries.length) {
+      // No ward rings resolved (e.g. Saligrama HI with no geo rings) — cannot authorise.
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    // 2. Fetch the report by ID (no role gate — we authorise via PiP below).
+    const rptRows = await db.execute(sql`
+      SELECT
+        r.id,
+        r.latitude,
+        r.longitude,
+        r.address,
+        r.status,
+        r.image_url          AS "imageUrl",
+        r.image_urls         AS "imageUrls",
+        r.cleanup_image_url  AS "cleanupImageUrl",
+        r.cleanup_image_urls AS "cleanupImageUrls",
+        r.created_at         AS "createdAt",
+        o.name               AS "officerName"
+      FROM reports r
+      LEFT JOIN officers o ON o.id = r.assigned_officer_id
+      WHERE r.id = ${id} AND r.deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (!rptRows.rows.length) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    // 3. PiP authorisation: the report must fall inside one of the HI's ward polygons.
+    const rpt = rptRows.rows[0] as any;
+    const lat = Number(rpt.latitude);
+    const lng = Number(rpt.longitude);
+    const match = wardEntries.find(e => pip(lat, lng, e.ring));
+    if (!match) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    res.json({ ...rpt, wardName: match.wardName });
+  } catch (err) {
+    logger.error({ err }, "Error fetching HI report by ID");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.patch("/health-inspector/supervisor/:id/credentials", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(403).json({ error: "No HI profile" }); return; }
@@ -662,6 +740,97 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
     res.json({ healthInspectors });
   } catch (err) {
     logger.error({ err }, "Error fetching EE full hierarchy");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── GET /api/env-engineer/report/:id ─────────────────────────────────────────
+// Look up a single report by ID, authorised via the same ward-PiP scope used by
+// /api/env-engineer/reports.  Only returns the report if its lat/lng falls within
+// a ward polygon belonging to any supervisor under any HI under this EE.
+router.get("/env-engineer/report/:id", requireEnvEngineer, async (req, res): Promise<void> => {
+  const user = (req as any).user as SessionUser;
+  if (!user.officerId) { res.status(403).json({ error: "No EE profile" }); return; }
+
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id) || id <= 0) { res.status(400).json({ error: "Invalid report ID" }); return; }
+
+  try {
+    // 1. Resolve the HI chain under this EE (mirrors /env-engineer/reports).
+    const hiRows = await db.execute(sql`
+      SELECT id, name FROM health_inspectors
+      WHERE environmental_engineer_id = ${Number(user.officerId)}
+    `);
+    const hiList = hiRows.rows as { id: number; name: string }[];
+    if (!hiList.length) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    const hiIds = hiList.map(h => h.id);
+    const hiNameById = new Map(hiList.map(h => [h.id, h.name]));
+
+    const svRows = await db.execute(sql`
+      SELECT id, name, health_inspector_id AS "hiId", ward_names AS "wardNames"
+      FROM supervisors WHERE health_inspector_id IN (${sql.raw(hiIds.join(','))})
+    `);
+    const svList = svRows.rows as { id: number; name: string; hiId: number; wardNames: string[] }[];
+
+    const wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName: string }[] = [];
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      for (const wn of (sv.wardNames ?? [])) {
+        const m = wn.match(/^Ward (\d+)/);
+        if (!m) continue;
+        const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
+        if (entry) wardEntries.push({ ring: entry.ring, wardName: entry.name, svName: sv.name, hiName });
+      }
+    }
+
+    if (!wardEntries.length) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    // 2. Fetch the report by ID.
+    const rptRows = await db.execute(sql`
+      SELECT
+        r.id,
+        r.latitude,
+        r.longitude,
+        r.address,
+        r.status,
+        r.image_url          AS "imageUrl",
+        r.image_urls         AS "imageUrls",
+        r.cleanup_image_url  AS "cleanupImageUrl",
+        r.cleanup_image_urls AS "cleanupImageUrls",
+        r.created_at         AS "createdAt",
+        o.name               AS "officerName"
+      FROM reports r
+      LEFT JOIN officers o ON o.id = r.assigned_officer_id
+      WHERE r.id = ${id} AND r.deleted_at IS NULL
+      LIMIT 1
+    `);
+
+    if (!rptRows.rows.length) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    // 3. PiP authorisation: the report must fall inside one of the EE's ward polygons.
+    const rpt = rptRows.rows[0] as any;
+    const lat = Number(rpt.latitude);
+    const lng = Number(rpt.longitude);
+    const match = wardEntries.find(e => pip(lat, lng, e.ring));
+    if (!match) {
+      res.status(404).json({ error: "Report not found or not accessible" });
+      return;
+    }
+
+    res.json({ ...rpt, wardName: match.wardName });
+  } catch (err) {
+    logger.error({ err }, "Error fetching EE report by ID");
     res.status(500).json({ error: "Internal server error" });
   }
 });

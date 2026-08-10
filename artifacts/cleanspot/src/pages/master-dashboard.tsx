@@ -202,6 +202,7 @@ import {
 } from "@/components/ui/sheet";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
+import { ReportNumberSearch } from "@/components/report-number-search";
 
 const allWardNames: string[] = geofencesData.features
   .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
@@ -677,6 +678,7 @@ export default function MasterDashboard() {
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               <span>Updated {relativeLastRefreshed}</span>
             </button>
+            <ReportNumberSearch onFound={(r) => setSelectedReport(r)} />
 
             <Link
               href="/master/reports"

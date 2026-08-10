@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
+import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
+import { ReportNumberSearch } from "@/components/report-number-search";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
@@ -699,6 +701,7 @@ export default function EnvEngineerDashboard() {
   const [tab, setTab] = useState<"overview" | "analytics">("overview");
   const [drillStatus, setDrillStatus] = useState<string | null>(null);
   const [drillWard, setDrillWard] = useState<string | null>(null);
+  const [selectedSearchReport, setSelectedSearchReport] = useState<ReportDetail | null>(null);
 
   const drillOpen = drillStatus !== null || drillWard !== null;
 
@@ -765,6 +768,12 @@ export default function EnvEngineerDashboard() {
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-sky-500/5 rounded-bl-[100px] pointer-events-none" />
+        <div className="flex justify-end mb-3 relative z-10">
+          <ReportNumberSearch
+            onFound={(r) => setSelectedSearchReport(r)}
+            buildUrl={(id) => `/api/env-engineer/report/${id}`}
+          />
+        </div>
         <p className="text-sm font-medium text-muted-foreground mb-1">{getGreeting(user?.name)}</p>
         <div className="inline-flex items-center gap-2 bg-sky-50 text-sky-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-sky-200">
           <Users className="w-3.5 h-3.5" /> Environmental Engineer
@@ -859,6 +868,12 @@ export default function EnvEngineerDashboard() {
       {tab === "analytics" && (
         <EEAnalyticsPanel onWardClick={(wardGeoName) => setDrillWard(wardGeoName)} />
       )}
+
+      <ReportDetailSheet
+        report={selectedSearchReport}
+        open={selectedSearchReport !== null}
+        onClose={() => setSelectedSearchReport(null)}
+      />
     </div>
   );
 }
