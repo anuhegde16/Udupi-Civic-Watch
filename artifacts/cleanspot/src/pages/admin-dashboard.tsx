@@ -1105,7 +1105,9 @@ export default function AdminDashboard() {
                   )} />
                   <FormField control={createPaForm.control} name="panchayatName" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-bold">Panchayat Area</FormLabel>
+                      <FormLabel className="font-bold">
+                        Panchayat Area <span className="text-destructive ml-0.5">*</span>
+                      </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || ""}>
                         <FormControl>
                           <SelectTrigger className="bg-muted/50 rounded-xl h-11 border-border/50">
@@ -1173,9 +1175,13 @@ export default function AdminDashboard() {
                     <span className="font-bold text-sm text-foreground truncate">{pa.name}</span>
                   </div>
                   <p className="text-xs text-muted-foreground truncate ml-9">{pa.email}</p>
-                  {pa.panchayatName && (
+                  {pa.panchayatName ? (
                     <p className="text-xs font-semibold text-indigo-600 mt-1 ml-9 truncate flex items-center gap-1">
                       <Building2 className="w-3 h-3 shrink-0" />{pa.panchayatName}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-semibold text-amber-600 mt-1 ml-9 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />No panchayat assigned
                     </p>
                   )}
                   <p className="text-[10px] text-muted-foreground ml-9 mt-0.5">{pa.officerCount} officer{pa.officerCount !== 1 ? "s" : ""}</p>
@@ -1239,7 +1245,9 @@ export default function AdminDashboard() {
                   )} />
                   <FormField control={editPaForm.control} name="panchayatName" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="font-bold">Panchayat Area</FormLabel>
+                      <FormLabel className="font-bold">
+                        Panchayat Area <span className="text-destructive ml-0.5">*</span>
+                      </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || ""}>
                         <FormControl>
                           <SelectTrigger className="bg-muted/50 rounded-xl h-11 border-border/50">

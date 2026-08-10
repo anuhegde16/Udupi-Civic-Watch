@@ -644,7 +644,7 @@ router.get("/admin/panchayat-admins", requireControlCenter, async (req, res): Pr
 router.post("/admin/panchayat-admins", requireControlCenter, async (req, res): Promise<void> => {
   const { name, email, password, panchayatName } = req.body;
 
-  if (!name || !email || !password || !panchayatName) {
+  if (!name || !email || !password || !panchayatName || !String(panchayatName).trim()) {
     res.status(400).json({ error: "name, email, password, and panchayatName are required" });
     return;
   }
@@ -707,6 +707,17 @@ router.patch("/admin/panchayat-admins/:id", requireControlCenter, async (req, re
   }
 
   const { name, email, panchayatName, password } = req.body ?? {};
+
+  // Compute the effective panchayatName after this update:
+  // use the submitted value if present, otherwise fall back to the stored value.
+  // Reject if the result is null/blank — this catches both explicit clears and
+  // legacy accounts that have panchayat_name = NULL being updated without fixing it.
+  const effectivePanchayatName =
+    "panchayatName" in (req.body ?? {}) ? panchayatName : existing.panchayatName;
+  if (!effectivePanchayatName || !String(effectivePanchayatName).trim()) {
+    res.status(400).json({ error: "panchayatName is required and must not be empty" });
+    return;
+  }
 
   // Check email uniqueness if changing
   if (email && email !== existing.email) {
