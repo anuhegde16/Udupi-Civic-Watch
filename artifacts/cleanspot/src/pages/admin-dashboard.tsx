@@ -41,6 +41,8 @@ import {
   Pencil,
   FlaskConical,
   RefreshCw,
+  UserRoundCog,
+  Map,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -185,6 +187,24 @@ type ReportItem = {
   imageUrls?: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl?: string | null;
   cleanupImageUrls?: { url: string; uploadedAt: string }[] | null;
+};
+
+type PanchayatSnapshot = {
+  name: string;
+  officers: (MapOfficer & {
+    id: number;
+    name: string;
+    email: string;
+    reportCount: number;
+    pendingCount: number;
+  })[];
+  admins: PanchayatAdminItem[];
+  reports: ReportItem[];
+  total: number;
+  reported: number;
+  cleaning: number;
+  cleaned: number;
+  unassignedZones: number;
 };
 
 export default function AdminDashboard() {
@@ -356,8 +376,58 @@ export default function AdminDashboard() {
     const fromOfficers = Array.from(
       new Set(officers.map((o) => o.panchayatName).filter(Boolean))
     ) as string[];
-    return Array.from(new Set([...panchayatAreaNames, ...fromOfficers]));
-  }, [officers]);
+    const fromAdmins = panchayatAdmins
+      .map((admin) => admin.panchayatName)
+      .filter(Boolean) as string[];
+    return Array.from(new Set([...panchayatAreaNames, ...fromOfficers, ...fromAdmins])).sort();
+  }, [officers, panchayatAdmins]);
+
+  const panchayatSnapshots = useMemo<PanchayatSnapshot[]>(() => {
+    return panchayatOptions.map((name) => {
+      const panchayatOfficers = officers.filter((officer) => officer.panchayatName === name);
+      const officerIds = new Set(panchayatOfficers.map((officer) => officer.id));
+      const reports = allReports.filter((report) => officerIds.has(report.assignedOfficerId ?? -1));
+      const coveredAreas = new Set(
+        panchayatOfficers.map((officer) => officer.areaName).filter(Boolean)
+      );
+      const zoneCount = geofencesData.features.filter(
+        (feature) =>
+          feature.geometry.type === "Polygon" &&
+          (feature.properties as any)?.type === "ward" &&
+          (feature.properties as any)?.panchayat === name
+      ).length;
+
+      return {
+        name,
+        officers: panchayatOfficers,
+        admins: panchayatAdmins.filter((admin) => admin.panchayatName === name),
+        reports,
+        total: reports.length,
+        reported: reports.filter((report) => report.status === "reported").length,
+        cleaning: reports.filter((report) => report.status === "cleaning").length,
+        cleaned: reports.filter((report) => report.status === "cleaned").length,
+        unassignedZones: Math.max(0, zoneCount - coveredAreas.size),
+      };
+    });
+  }, [allReports, officers, panchayatAdmins, panchayatOptions]);
+
+  const selectedPanchayatSnapshot = useMemo(
+    () => panchayatSnapshots.find((snapshot) => snapshot.name === selectedPanchayat) ?? null,
+    [panchayatSnapshots, selectedPanchayat]
+  );
+
+  const selectPanchayat = (name: string | null) => {
+    setSelectedPanchayat(name);
+    setSelectedOfficerId(null);
+    setSelectedWardName(null);
+  };
+
+  const reportLink = (status?: "reported" | "cleaning" | "cleaned") => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (selectedOfficerId) params.set("officerId", String(selectedOfficerId));
+    return `/admin/reports${params.size ? `?${params.toString()}` : ""}`;
+  };
 
   const scopedOfficers = useMemo(() => {
     if (!selectedPanchayat) return officers;
@@ -531,6 +601,8 @@ export default function AdminDashboard() {
             <p className="text-muted-foreground font-medium text-sm sm:text-lg">
               {selectedOfficer
                 ? `Viewing: ${formatWardLabel(selectedOfficer.areaName) || selectedOfficer.areaName || selectedOfficer.name}`
+                : selectedPanchayat
+                ? `${selectedPanchayat} monitoring workspace — people, coverage, and reports in one place.`
                 : "District Administration Overview — Udupi, Karnataka."}
             </p>
           </div>
@@ -551,6 +623,95 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* ── Panchayat monitoring overview ── */}
+      <section className="mb-5 sm:mb-8" aria-labelledby="panchayat-overview">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 id="panchayat-overview" className="text-lg sm:text-2xl font-black text-foreground">
+                  Panchayat monitor
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                  Start here to compare areas, then open one panchayat without mixing its people or workload with another.
+                </p>
+              </div>
+            </div>
+          </div>
+          {selectedPanchayat && (
+            <button
+              type="button"
+              onClick={() => selectPanchayat(null)}
+              className="self-start sm:self-auto text-xs font-bold text-primary bg-primary/10 hover:bg-primary/15 px-3 py-2 rounded-xl transition-colors"
+            >
+              View all panchayats
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {panchayatSnapshots.map((snapshot) => {
+            const isSelected = selectedPanchayat === snapshot.name;
+            const completion = snapshot.total > 0
+              ? Math.round((snapshot.cleaned / snapshot.total) * 100)
+              : 0;
+            const needsAttention = snapshot.reported + snapshot.unassignedZones;
+
+            return (
+              <button
+                type="button"
+                key={snapshot.name}
+                onClick={() => selectPanchayat(isSelected ? null : snapshot.name)}
+                className={`text-left bg-card rounded-2xl border p-4 sm:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                  isSelected ? "border-primary ring-1 ring-primary/20" : "border-border/50"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="min-w-0">
+                    <p className="font-black text-base text-foreground truncate">{snapshot.name}</p>
+                    <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                      {snapshot.officers.length} officer{snapshot.officers.length !== 1 ? "s" : ""} · {snapshot.admins.length} admin{snapshot.admins.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 text-[10px] font-black px-2 py-1 rounded-full ${
+                    needsAttention > 0 ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"
+                  }`}>
+                    {needsAttention > 0 ? `${needsAttention} need attention` : "On track"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="rounded-xl bg-muted/55 px-2.5 py-2">
+                    <p className="text-lg font-black text-foreground leading-none">{snapshot.total}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground mt-1">Reports</p>
+                  </div>
+                  <div className="rounded-xl bg-red-50 px-2.5 py-2">
+                    <p className="text-lg font-black text-red-700 leading-none">{snapshot.reported}</p>
+                    <p className="text-[10px] font-bold text-red-600 mt-1">New</p>
+                  </div>
+                  <div className="rounded-xl bg-green-50 px-2.5 py-2">
+                    <p className="text-lg font-black text-green-700 leading-none">{completion}%</p>
+                    <p className="text-[10px] font-bold text-green-600 mt-1">Completed</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+                  <span className={snapshot.unassignedZones > 0 ? "text-amber-700" : "text-muted-foreground"}>
+                    {snapshot.unassignedZones > 0
+                      ? `${snapshot.unassignedZones} zone${snapshot.unassignedZones !== 1 ? "s" : ""} need coverage`
+                      : "Coverage assigned"}
+                  </span>
+                  <span className="text-primary flex items-center gap-1">
+                    {isSelected ? "Viewing workspace" : "Open workspace"} <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-5 sm:mb-8">
         <StatCard
@@ -560,7 +721,7 @@ export default function AdminDashboard() {
           colorClass="text-blue-600"
           iconBg="bg-blue-50"
           desc={selectedOfficerId ? undefined : `${summary?.last7d || 0} this week`}
-          href={selectedOfficerId ? `/admin/reports?officerId=${selectedOfficerId}` : "/admin/reports"}
+          href={reportLink()}
         />
         <StatCard
           title="Needs Attention"
@@ -568,7 +729,7 @@ export default function AdminDashboard() {
           icon={FileWarning}
           colorClass="text-red-600"
           iconBg="bg-red-50"
-          href="/admin/reports?status=reported"
+          href={reportLink("reported")}
         />
         <StatCard
           title="In Progress"
@@ -576,7 +737,7 @@ export default function AdminDashboard() {
           icon={Clock}
           colorClass="text-blue-600"
           iconBg="bg-blue-50"
-          href="/admin/reports?status=cleaning"
+          href={reportLink("cleaning")}
         />
         <StatCard
           title="Cleaned"
@@ -584,7 +745,7 @@ export default function AdminDashboard() {
           icon={CheckCircle2}
           colorClass="text-green-600"
           iconBg="bg-green-50"
-          href="/admin/reports?status=cleaned"
+          href={reportLink("cleaned")}
         />
       </div>
 
@@ -592,7 +753,7 @@ export default function AdminDashboard() {
       <div className="mb-5 sm:mb-8 bg-card rounded-2xl border border-border/50 shadow-sm p-4 sm:p-5">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs sm:text-sm font-bold text-foreground">
-            District Completion Rate
+            {selectedPanchayat ? `${selectedPanchayat} Completion Rate` : "District Completion Rate"}
             {selectedOfficer && (
               <span className="text-muted-foreground font-medium ml-1.5">
                 · {formatWardLabel(selectedOfficer.areaName) || selectedOfficer.areaName || selectedOfficer.name}
@@ -634,7 +795,7 @@ export default function AdminDashboard() {
               These waste reports have been sitting in "New" status without being picked up.
             </p>
           </div>
-          <Link href="/admin/reports?status=reported">
+          <Link href={reportLink("reported")}>
             <div className="shrink-0 text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 border border-red-200 px-3 py-1.5 rounded-xl transition-colors cursor-pointer whitespace-nowrap">
               Review now →
             </div>
@@ -658,9 +819,7 @@ export default function AdminDashboard() {
                 value={selectedPanchayat ?? "all"}
                 onChange={(e) => {
                   const val = e.target.value === "all" ? null : e.target.value;
-                  setSelectedPanchayat(val);
-                  setSelectedOfficerId(null);
-                  setSelectedWardName(null);
+                  selectPanchayat(val);
                 }}
               >
                 <option value="all">All Panchayats</option>
@@ -827,11 +986,7 @@ export default function AdminDashboard() {
           activePanchayat={selectedPanchayat}
           panchayatOptions={panchayatOptions}
           onWardSelect={(wardName) => setSelectedWardName(wardName)}
-          onPanchayatChange={(p) => {
-            setSelectedPanchayat(p);
-            setSelectedOfficerId(null);
-            setSelectedWardName(null);
-          }}
+            onPanchayatChange={selectPanchayat}
         />
         {selectedOfficerId && (
           <div className="px-4 sm:px-6 py-2 bg-primary/5 border-t border-primary/10 flex items-center justify-between">
@@ -847,6 +1002,99 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Selected panchayat operations ── */}
+      {selectedPanchayatSnapshot && (
+        <section className="mb-5 sm:mb-8 bg-slate-950 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-xl overflow-hidden relative">
+          <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-primary/30 blur-3xl pointer-events-none" />
+          <div className="relative">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-primary-foreground/60 font-black mb-1">
+                  Focused operations workspace
+                </p>
+                <h2 className="text-xl sm:text-3xl font-black">{selectedPanchayatSnapshot.name}</h2>
+                <p className="text-sm text-white/70 font-medium mt-1">
+                  The team, local administrator, zones, and report workload for this panchayat only.
+                </p>
+              </div>
+              <Link
+                href={reportLink()}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-white text-slate-950 px-3.5 py-2 text-xs font-black hover:bg-white/90 transition-colors"
+              >
+                View local reports <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_1fr] gap-4">
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4 text-primary-foreground" />
+                  <h3 className="font-black text-sm">Officers & zones</h3>
+                  <span className="ml-auto text-xs font-bold text-white/60">{selectedPanchayatSnapshot.officers.length} assigned</span>
+                </div>
+                {selectedPanchayatSnapshot.officers.length ? (
+                  <div className="space-y-2">
+                    {selectedPanchayatSnapshot.officers.map((officer) => (
+                      <button
+                        type="button"
+                        key={officer.id}
+                        onClick={() => setSelectedOfficerId(officer.id)}
+                        className={`w-full text-left rounded-xl px-3 py-2.5 transition-colors ${
+                          selectedOfficerId === officer.id ? "bg-primary text-primary-foreground" : "bg-white/10 hover:bg-white/15"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm truncate">{officer.name}</p>
+                            <p className="text-xs opacity-70 truncate">{formatWardLabel(officer.areaName) || officer.areaName || "Zone awaiting assignment"}</p>
+                          </div>
+                          <span className="shrink-0 text-xs font-black">{officer.pendingCount} open</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyOperationsState icon={Users} message="No officers are assigned to this panchayat yet." />
+                )}
+                {selectedPanchayatSnapshot.unassignedZones > 0 && (
+                  <p className="mt-3 text-xs font-bold text-amber-200">
+                    {selectedPanchayatSnapshot.unassignedZones} mapped zone{selectedPanchayatSnapshot.unassignedZones !== 1 ? "s are" : " is"} waiting for officer coverage.
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl bg-white/10 border border-white/15 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserRoundCog className="w-4 h-4 text-primary-foreground" />
+                  <h3 className="font-black text-sm">Panchayat administrator</h3>
+                </div>
+                {selectedPanchayatSnapshot.admins.length ? (
+                  <div className="space-y-2">
+                    {selectedPanchayatSnapshot.admins.map((admin) => (
+                      <div key={admin.id} className="rounded-xl bg-white/10 px-3 py-3">
+                        <p className="font-bold text-sm">{admin.name}</p>
+                        <p className="text-xs text-white/70 truncate mt-0.5">{admin.email}</p>
+                        <p className="text-xs text-primary-foreground/80 font-semibold mt-2">
+                          Oversees {admin.officerCount} officer{admin.officerCount !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyOperationsState icon={UserRoundCog} message="No administrator has been assigned to this panchayat." />
+                )}
+                <Link
+                  href="/admin/officers"
+                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-black text-white hover:text-primary-foreground/80"
+                >
+                  Manage local staffing <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── Charts row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-5 sm:mb-8">
@@ -1087,8 +1335,10 @@ export default function AdminDashboard() {
               <Building2 className="w-5 h-5 text-indigo-600" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-foreground">Panchayat Admins</h2>
-              <p className="text-xs text-muted-foreground font-medium">{panchayatAdmins.length} admin{panchayatAdmins.length !== 1 ? "s" : ""} registered</p>
+              <h2 className="text-lg font-black text-foreground">{selectedPanchayat ? `${selectedPanchayat} Admins` : "Panchayat Admins"}</h2>
+              <p className="text-xs text-muted-foreground font-medium">
+                {(selectedPanchayatSnapshot?.admins ?? panchayatAdmins).length} admin{(selectedPanchayatSnapshot?.admins ?? panchayatAdmins).length !== 1 ? "s" : ""} shown
+              </p>
             </div>
           </div>
           <Dialog open={paCreateOpen} onOpenChange={setPaCreateOpen}>
@@ -1164,15 +1414,15 @@ export default function AdminDashboard() {
           </Dialog>
         </div>
 
-        {panchayatAdmins.length === 0 ? (
+        {(selectedPanchayatSnapshot?.admins ?? panchayatAdmins).length === 0 ? (
           <div className="flex flex-col items-center py-10 text-center text-muted-foreground">
             <Shield className="w-10 h-10 mb-3 text-muted-foreground/40" />
-            <p className="font-bold text-sm">No panchayat admins yet</p>
-            <p className="text-xs mt-1">Add your first panchayat admin to delegate management</p>
+            <p className="font-bold text-sm">{selectedPanchayat ? `No administrator for ${selectedPanchayat}` : "No panchayat admins yet"}</p>
+            <p className="text-xs mt-1">Add an administrator to delegate local management</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {panchayatAdmins.map((pa) => (
+            {(selectedPanchayatSnapshot?.admins ?? panchayatAdmins).map((pa) => (
               <div key={pa.id} className="flex items-start justify-between gap-3 p-4 bg-muted/30 rounded-2xl border border-border/50 hover:border-indigo-200 transition-colors group">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -1456,5 +1706,20 @@ function QuickAction({ href, title, desc }: { href: string; title: string; desc:
         </div>
       </div>
     </Link>
+  );
+}
+
+function EmptyOperationsState({
+  icon: Icon,
+  message,
+}: {
+  icon: React.ElementType;
+  message: string;
+}) {
+  return (
+    <div className="rounded-xl border border-dashed border-white/25 px-3 py-6 text-center">
+      <Icon className="w-5 h-5 mx-auto text-white/50 mb-2" />
+      <p className="text-xs font-semibold text-white/70">{message}</p>
+    </div>
   );
 }
