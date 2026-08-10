@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Crosshair } from "lucide-react";
 
 const UDUPI_CENTER: [number, number] = [13.3409, 74.7421];
 
@@ -55,22 +56,37 @@ interface MapPickerProps {
   onChange: (loc: { lat: number; lng: number }) => void;
   height?: string;
   geofenceRing?: [number, number][]; // GeoJSON [lon, lat] pairs
+  wardRings?: { name: string; ring: [number, number][] }[]; // GeoJSON [lon, lat] pairs
   outsideFence?: boolean;
   readonly?: boolean;
   userLocation?: { lat: number; lng: number } | null;
+  onRecenter?: () => void;
 }
 
-export function MapPicker({ value, onChange, height = "260px", geofenceRing, outsideFence, readonly = false, userLocation }: MapPickerProps) {
+export function MapPicker({
+  value,
+  onChange,
+  height = "260px",
+  geofenceRing,
+  wardRings = [],
+  outsideFence,
+  readonly = false,
+  userLocation,
+  onRecenter,
+}: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const fenceLayerRef = useRef<L.Polygon | null>(null);
+  const wardLayersRef = useRef<L.Polygon[]>([]);
   const youAreHereRef = useRef<L.Marker | null>(null);
   const readonlyRef = useRef(readonly);
   const onChangeRef = useRef(onChange);
+  const onRecenterRef = useRef(onRecenter);
 
   useEffect(() => { readonlyRef.current = readonly; }, [readonly]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { onRecenterRef.current = onRecenter; }, [onRecenter]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -102,6 +118,29 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
         map.fitBounds(poly.getBounds(), { padding: [20, 20] });
       }
     }
+
+    // The first geofence is Saligrama's outer boundary. Udupi is represented by
+    // its individual ward polygons, so draw those separately instead of relying
+    // on the district boundary layer above.
+    wardLayersRef.current = wardRings.map(({ name, ring }) => {
+      const layer = L.polygon(
+        ring.map(([lon, lat]) => [lat, lon] as [number, number]),
+        {
+          color: "#0e6b7c",
+          weight: 2,
+          opacity: 0.9,
+          fillColor: "#14b8a6",
+          fillOpacity: 0.08,
+          bubblingMouseEvents: false,
+        },
+      ).addTo(map);
+      layer.bindTooltip(name, {
+        sticky: true,
+        direction: "center",
+        className: "text-xs font-bold",
+      });
+      return layer;
+    });
 
     if (value) {
       const m = L.marker([value.lat, value.lng], { draggable: !readonly, icon: buildIcon() }).addTo(map);
@@ -149,6 +188,7 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       mapRef.current = null;
       markerRef.current = null;
       fenceLayerRef.current = null;
+      wardLayersRef.current = [];
       youAreHereRef.current = null;
     };
   }, []);
@@ -184,6 +224,9 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
       const bounds = fenceLayerRef.current.getBounds();
       if (userLocation) {
         bounds.extend([userLocation.lat, userLocation.lng] as [number, number]);
+      }
+      for (const wardLayer of wardLayersRef.current) {
+        bounds.extend(wardLayer.getBounds());
       }
       mapRef.current.fitBounds(bounds, { padding: [32, 32], animate: true });
     }
@@ -229,11 +272,38 @@ export function MapPicker({ value, onChange, height = "260px", geofenceRing, out
     }
   }, [userLocation?.lat, userLocation?.lng]);
 
+  const recenter = () => {
+    // In test-mode manual placement, recenter the map view without moving the
+    // manually selected report pin. GPS mode asks the parent to refresh GPS,
+    // which updates both the pin and the map view.
+    if (!readonlyRef.current && userLocation && mapRef.current) {
+      mapRef.current.setView([userLocation.lat, userLocation.lng], Math.max(mapRef.current.getZoom(), 15), {
+        animate: true,
+      });
+      return;
+    }
+    onRecenterRef.current?.();
+  };
+
   return (
-    <div
-      ref={containerRef}
-      style={{ height, width: "100%", borderRadius: "inherit" }}
-      className="z-0"
-    />
+    <div className="relative" style={{ height, width: "100%" }}>
+      <div
+        ref={containerRef}
+        style={{ height: "100%", width: "100%", borderRadius: "inherit" }}
+        className="z-0"
+      />
+      <button
+        type="button"
+        aria-label="Recenter map on my location"
+        title="Recenter map on my location"
+        onClick={(event) => {
+          event.stopPropagation();
+          recenter();
+        }}
+        className="absolute right-3 bottom-7 z-[1000] flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-md transition hover:bg-slate-50 active:scale-95"
+      >
+        <Crosshair className="h-5 w-5" />
+      </button>
+    </div>
   );
 }

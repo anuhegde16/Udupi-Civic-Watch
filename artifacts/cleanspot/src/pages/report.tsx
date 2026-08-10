@@ -102,6 +102,20 @@ export default function Report() {
     return undefined;
   }, []);
 
+  const udupiWardRings = useMemo(() => (
+    geofencesData.features
+      .filter(
+        (feature) =>
+          feature.geometry.type === "Polygon" &&
+          (feature.properties as { type?: string; panchayat?: string }).type === "ward" &&
+          (feature.properties as { type?: string; panchayat?: string }).panchayat === "Udupi",
+      )
+      .map((feature) => ({
+        name: (feature.properties as { name?: string }).name ?? "Udupi ward",
+        ring: feature.geometry.coordinates[0] as [number, number][],
+      }))
+  ), []);
+
   const outsideFence = useMemo(() => {
     if (!location) return false;
     return !isWithinServiceArea(location.lat, location.lng);
@@ -588,9 +602,11 @@ export default function Report() {
                 onChange={setGeoLocation}
                 height="300px"
                 geofenceRing={geofenceRing}
+                wardRings={udupiWardRings}
                 outsideFence={outsideFence}
                 readonly={!testMode || locationMode === "auto"}
                 userLocation={gpsCoords}
+                onRecenter={getLocation}
               />
             )}
           </div>
