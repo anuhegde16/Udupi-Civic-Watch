@@ -320,18 +320,12 @@ async function seedUdupiHierarchy() {
     const PANCHAYAT = "Udupi";
 
     // ── Initial password provisioning ────────────────────────────────────────
-    // New accounts are created with a locked hash; the admin retrieves
-    // activation tokens via GET /api/admin/hierarchy-accounts and staff
-    // visit /activate?token=<token> to set their own password.
-    const { randomBytes } = await import("crypto");
-    const lockedHash = await hashPassword(randomBytes(32).toString("hex")); // unguessable
-
-    // New accounts use a random locked hash; staff activate via token
-    const passwordHash = lockedHash;
+    // All hierarchy accounts are created with a known shared password so staff
+    // can log in immediately without an activation flow.
+    const KNOWN_PASSWORD = "Udupi@1234";
+    const knownHash = await hashPassword(KNOWN_PASSWORD);
 
     // Helper: insert a users row for a phone-identified person (idempotent).
-    // Accounts are created with password_reset_required=true so every user
-    // must set their own password on first login.
     async function ensureUser(
       phone: string,
       name: string,
@@ -345,23 +339,18 @@ async function seedUdupiHierarchy() {
         .limit(1);
       if (existing.length > 0) return;
 
-      // One-time activation token: admin retrieves it via
-      // GET /api/admin/hierarchy-accounts to distribute to the staff member,
-      // who then goes to /activate?token=<token> to set their initial password.
-      const activationToken = randomBytes(20).toString("hex"); // 40 hex chars
-
       await db.execute(sql`
         INSERT INTO users (email, password_hash, name, role, officer_id, panchayat_name, phone, password_reset_required, activation_token)
         VALUES (
           ${phone + "@phone.local"},
-          ${passwordHash},
+          ${knownHash},
           ${name},
           ${role},
           ${profileId !== null ? String(profileId) : null},
           ${PANCHAYAT},
           ${phone},
-          true,
-          ${activationToken}
+          false,
+          NULL
         )
         ON CONFLICT DO NOTHING
       `);
@@ -544,6 +533,57 @@ async function ensurePanchayatAdmin() {
   }
 }
 
+// ── Self-healing: ensure all known hierarchy accounts always have the shared
+// password unlocked. Runs on every boot so a DB wipe auto-recovers on restart.
+async function ensureHierarchyPasswordsUnlocked() {
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+    const { hashPassword } = await import("./lib/auth");
+
+    const knownHash = await hashPassword("Udupi@1234");
+
+    // Every phone number in the Udupi hierarchy — EE, Commissioner, HIs,
+    // supervisors, and community mobilisers.
+    const knownPhones = [
+      "7624851225", // EE — Ravi Prakash
+      "8277293917", // Commissioner — Mahantesh Hangaragi
+      // Health Inspectors
+      "9739296004", "9535052544", "9845905977", "9964213243",
+      // Supervisors
+      "8431564819", "9844963244", "9743600255", "9743883501",
+      "8105136113", "7676880597", "9880605830", "9901995778",
+      "8861038802", "9035088749", "9880625188",
+      // Community Mobilisers
+      "9480113566", "8073001725", "8660649340", "9964786320",
+      "9742028159", "9380752725", "9632268961", "7019922564",
+      "9538608770", "9353499589", "9743662050", "8746819027",
+      "8748967646", "6361668572", "8296368243", "9743579735",
+      "9481213815", "7899101290", "8618325567", "9880715984",
+      "8971681037", "9964586450", "9741874680", "8147125096",
+    ];
+
+    // Only migrate accounts still in the legacy locked/pending-activation state.
+    // Once a user has set their own password (activation_token = NULL and
+    // password_reset_required = false) we leave their credential untouched.
+    // This makes the update fully idempotent and non-destructive.
+    for (const phone of knownPhones) {
+      await db.execute(sql`
+        UPDATE users
+        SET password_hash           = ${knownHash},
+            password_reset_required  = false,
+            activation_token         = NULL
+        WHERE phone = ${phone}
+          AND (activation_token IS NOT NULL OR password_reset_required = true)
+      `);
+    }
+
+    logger.info("Hierarchy account passwords normalised to known shared password (legacy-locked accounts only)");
+  } catch (err) {
+    logger.warn({ err }, "Could not normalise hierarchy passwords");
+  }
+}
+
 async function seedOfficerPanchayatNames() {
   try {
     const { db } = await import("@workspace/db");
@@ -619,6 +659,7 @@ async function start() {
   // system_migrations table already exists
   await ensureUdupiHierarchyTables();
   await seedUdupiHierarchy();
+  await ensureHierarchyPasswordsUnlocked();
 
   startScheduler();
 
