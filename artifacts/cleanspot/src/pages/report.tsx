@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
+import { formatWardLabel } from "@/lib/ward-names";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -341,7 +342,7 @@ export default function Report() {
           {assignedWardName && (
             <div className="mt-3 flex items-center gap-2 pt-3 border-t border-border/50">
               <LayoutGrid className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{assignedWardName}</span></span>
+              <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{formatWardLabel(assignedWardName)}</span></span>
             </div>
           )}
         </div>

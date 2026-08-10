@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { formatWardLabel } from "@/lib/ward-names";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
 import { format } from "date-fns";
@@ -210,7 +211,7 @@ export default function SupervisorDashboard() {
                         : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
                     }`}
                   >
-                    {w}
+                    {formatWardLabel(w)}
                   </button>
                 );
               })}
@@ -329,7 +330,7 @@ export default function SupervisorDashboard() {
                   </div>
                   {report.wardName && (
                     <div className="absolute bottom-3 left-3">
-                      <span className="bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-lg">{report.wardName}</span>
+                      <span className="bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-lg">{formatWardLabel(report.wardName)}</span>
                     </div>
                   )}
                 </div>

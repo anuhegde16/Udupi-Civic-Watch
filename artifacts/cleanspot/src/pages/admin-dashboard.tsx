@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
+import { formatWardLabel } from "@/lib/ward-names";
 import {
   useGetReportsSummary,
   getGetReportsSummaryQueryKey,
@@ -529,7 +530,7 @@ export default function AdminDashboard() {
             </h1>
             <p className="text-muted-foreground font-medium text-sm sm:text-lg">
               {selectedOfficer
-                ? `Viewing: ${selectedOfficer.areaName || selectedOfficer.name}`
+                ? `Viewing: ${formatWardLabel(selectedOfficer.areaName) || selectedOfficer.areaName || selectedOfficer.name}`
                 : "District Administration Overview — Udupi, Karnataka."}
             </p>
           </div>
@@ -594,7 +595,7 @@ export default function AdminDashboard() {
             District Completion Rate
             {selectedOfficer && (
               <span className="text-muted-foreground font-medium ml-1.5">
-                · {selectedOfficer.areaName || selectedOfficer.name}
+                · {formatWardLabel(selectedOfficer.areaName) || selectedOfficer.areaName || selectedOfficer.name}
               </span>
             )}
           </span>
@@ -686,7 +687,7 @@ export default function AdminDashboard() {
                 <option value="all">{selectedPanchayat ? "All Wards" : "All Zones"}</option>
                 {scopedOfficers.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.areaName || o.name}
+                    {formatWardLabel(o.areaName) || o.areaName || o.name}
                   </option>
                 ))}
               </select>
@@ -835,7 +836,7 @@ export default function AdminDashboard() {
         {selectedOfficerId && (
           <div className="px-4 sm:px-6 py-2 bg-primary/5 border-t border-primary/10 flex items-center justify-between">
             <p className="text-xs font-bold text-primary">
-              Showing: {selectedOfficer?.areaName || selectedOfficer?.name} zone only
+              Showing: {(selectedOfficer?.areaName ? formatWardLabel(selectedOfficer.areaName) || selectedOfficer.areaName : selectedOfficer?.name)} zone only
             </p>
             <button
               className="text-xs font-bold text-primary/70 hover:text-primary transition-colors"
@@ -982,7 +983,7 @@ export default function AdminDashboard() {
                         {officer.name}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-medium truncate">
-                        {officer.areaName || "Unassigned"}
+                        {formatWardLabel(officer.areaName) || officer.areaName || "Unassigned"}
                       </p>
                     </div>
                     <span

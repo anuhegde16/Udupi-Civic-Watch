@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { formatWardLabel } from "@/lib/ward-names";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
 import {
@@ -283,7 +284,7 @@ function ReportRow({ report }: { report: Report }) {
             <span className="text-[10px] font-bold text-muted-foreground flex items-center gap-0.5">
               <Users className="w-2.5 h-2.5" />{report.assignedOfficer.name}
               {report.assignedOfficer.areaName && (
-                <span className="ml-0.5 text-muted-foreground/60">· {report.assignedOfficer.areaName}</span>
+                <span className="ml-0.5 text-muted-foreground/60">· {formatWardLabel(report.assignedOfficer.areaName)}</span>
               )}
             </span>
           )}
@@ -628,7 +629,7 @@ export default function MasterAnalytics() {
                         <span className="font-black text-sm text-foreground truncate">{officer.name}</span>
                         {officer.areaName && (
                           <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
-                            <MapPin className="w-2.5 h-2.5" />{officer.areaName}
+                            <MapPin className="w-2.5 h-2.5" />{formatWardLabel(officer.areaName)}
                           </span>
                         )}
                       </div>

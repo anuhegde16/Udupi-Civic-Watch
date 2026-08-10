@@ -2844,7 +2844,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 1",
-        "wardName": "Padukare",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -3324,7 +3323,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 2",
-        "wardName": "Viishnumoorthy",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -4376,7 +4374,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 3",
-        "wardName": "Gendekere",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -4860,7 +4857,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 4",
-        "wardName": "Thodukattuu",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -5780,7 +5776,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 5",
-        "wardName": "Karthattu",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -6516,7 +6511,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 6",
-        "wardName": "Marigudi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -7408,7 +7402,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 7",
-        "wardName": "Pete",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -7844,7 +7837,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 8",
-        "wardName": "Badaholi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -8320,7 +8312,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 9",
-        "wardName": "Mooduholi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -8924,7 +8915,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 10",
-        "wardName": "Thenkuholi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -9620,7 +9610,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 11",
-        "wardName": "Paduholi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -9996,7 +9985,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 12",
-        "wardName": "Bhagavathi",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -10376,7 +10364,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 13",
-        "wardName": "Pathalabettu",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -10852,7 +10839,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 14",
-        "wardName": "Doddamanebettu",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -11236,7 +11222,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 15",
-        "wardName": "Challamaki",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -11612,7 +11597,6 @@
       "type": "Feature",
       "properties": {
         "name": "Ward 16",
-        "wardName": "Yakshamata",
         "type": "ward",
         "panchayat": "Saligrama"
       },
@@ -15750,7 +15734,8 @@
       "properties": {
         "name": "Udupi Ward 1",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kola"
       },
       "geometry": {
         "type": "Polygon",
@@ -16181,7 +16166,8 @@
       "properties": {
         "name": "Udupi Ward 2",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Vadabhandeshwara"
       },
       "geometry": {
         "type": "Polygon",
@@ -16712,7 +16698,8 @@
       "properties": {
         "name": "Udupi Ward 3",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Malpe Central"
       },
       "geometry": {
         "type": "Polygon",
@@ -17555,7 +17542,8 @@
       "properties": {
         "name": "Udupi Ward 4",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kodavoor"
       },
       "geometry": {
         "type": "Polygon",
@@ -19318,7 +19306,8 @@
       "properties": {
         "name": "Udupi Ward 5",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kalmady"
       },
       "geometry": {
         "type": "Polygon",
@@ -19949,7 +19938,8 @@
       "properties": {
         "name": "Udupi Ward 6",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Moodubettu"
       },
       "geometry": {
         "type": "Polygon",
@@ -21688,7 +21678,8 @@
       "properties": {
         "name": "Udupi Ward 7",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kodankuru"
       },
       "geometry": {
         "type": "Polygon",
@@ -22327,7 +22318,8 @@
       "properties": {
         "name": "Udupi Ward 8",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Nittur"
       },
       "geometry": {
         "type": "Polygon",
@@ -23502,7 +23494,8 @@
       "properties": {
         "name": "Udupi Ward 9",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Subhrahmanya Nagar"
       },
       "geometry": {
         "type": "Polygon",
@@ -24841,7 +24834,8 @@
       "properties": {
         "name": "Udupi Ward 10",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Gopalapura"
       },
       "geometry": {
         "type": "Polygon",
@@ -26136,7 +26130,8 @@
       "properties": {
         "name": "Udupi Ward 11",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kakkunje"
       },
       "geometry": {
         "type": "Polygon",
@@ -26731,7 +26726,8 @@
       "properties": {
         "name": "Udupi Ward 12",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Karamballi"
       },
       "geometry": {
         "type": "Polygon",
@@ -27438,7 +27434,8 @@
       "properties": {
         "name": "Udupi Ward 13",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Moodu Perampalli"
       },
       "geometry": {
         "type": "Polygon",
@@ -28129,7 +28126,8 @@
       "properties": {
         "name": "Udupi Ward 14",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Saralabettu"
       },
       "geometry": {
         "type": "Polygon",
@@ -29200,7 +29198,8 @@
       "properties": {
         "name": "Udupi Ward 15",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Shettibettu"
       },
       "geometry": {
         "type": "Polygon",
@@ -30391,7 +30390,8 @@
       "properties": {
         "name": "Udupi Ward 16",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Parkala"
       },
       "geometry": {
         "type": "Polygon",
@@ -31598,7 +31598,8 @@
       "properties": {
         "name": "Udupi Ward 17",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Eshwar Nagar"
       },
       "geometry": {
         "type": "Polygon",
@@ -32509,7 +32510,8 @@
       "properties": {
         "name": "Udupi Ward 18",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Manipal"
       },
       "geometry": {
         "type": "Polygon",
@@ -33708,7 +33710,8 @@
       "properties": {
         "name": "Udupi Ward 19",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Moodu Sagri"
       },
       "geometry": {
         "type": "Polygon",
@@ -35007,7 +35010,8 @@
       "properties": {
         "name": "Udupi Ward 20",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Indrali"
       },
       "geometry": {
         "type": "Polygon",
@@ -36310,7 +36314,8 @@
       "properties": {
         "name": "Udupi Ward 21",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Indira Nagar"
       },
       "geometry": {
         "type": "Polygon",
@@ -36681,7 +36686,8 @@
       "properties": {
         "name": "Udupi Ward 22",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "76 Badagubettu"
       },
       "geometry": {
         "type": "Polygon",
@@ -37564,7 +37570,8 @@
       "properties": {
         "name": "Udupi Ward 23",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Chitpady"
       },
       "geometry": {
         "type": "Polygon",
@@ -38559,7 +38566,8 @@
       "properties": {
         "name": "Udupi Ward 24",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kasthurba Nagar"
       },
       "geometry": {
         "type": "Polygon",
@@ -39546,7 +39554,8 @@
       "properties": {
         "name": "Udupi Ward 25",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kunjibettu"
       },
       "geometry": {
         "type": "Polygon",
@@ -40357,7 +40366,8 @@
       "properties": {
         "name": "Udupi Ward 26",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kadiyali"
       },
       "geometry": {
         "type": "Polygon",
@@ -41032,7 +41042,8 @@
       "properties": {
         "name": "Udupi Ward 27",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Gundibailu"
       },
       "geometry": {
         "type": "Polygon",
@@ -42123,7 +42134,8 @@
       "properties": {
         "name": "Udupi Ward 28",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Bannanje"
       },
       "geometry": {
         "type": "Polygon",
@@ -43294,7 +43306,8 @@
       "properties": {
         "name": "Udupi Ward 29",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Tenkapete"
       },
       "geometry": {
         "type": "Polygon",
@@ -43849,7 +43862,8 @@
       "properties": {
         "name": "Udupi Ward 30",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Olakadu"
       },
       "geometry": {
         "type": "Polygon",
@@ -44276,7 +44290,8 @@
       "properties": {
         "name": "Udupi Ward 31",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Bailoor"
       },
       "geometry": {
         "type": "Polygon",
@@ -44887,7 +44902,8 @@
       "properties": {
         "name": "Udupi Ward 32",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Kinnimulky"
       },
       "geometry": {
         "type": "Polygon",
@@ -45310,7 +45326,8 @@
       "properties": {
         "name": "Udupi Ward 33",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Ajjarakadu"
       },
       "geometry": {
         "type": "Polygon",
@@ -45749,7 +45766,8 @@
       "properties": {
         "name": "Udupi Ward 34",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Shiribeedu"
       },
       "geometry": {
         "type": "Polygon",
@@ -46216,7 +46234,8 @@
       "properties": {
         "name": "Udupi Ward 35",
         "type": "ward",
-        "panchayat": "Udupi"
+        "panchayat": "Udupi",
+        "wardName": "Ambalapady"
       },
       "geometry": {
         "type": "Polygon",

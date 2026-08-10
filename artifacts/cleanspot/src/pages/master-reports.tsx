@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatWardLabel } from "@/lib/ward-names";
 import { customFetch, useUpdateReport } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
@@ -226,7 +227,7 @@ export default function MasterReports() {
               <SelectContent className="rounded-xl border-border/50 shadow-lg">
                 <SelectItem value="all">All Wards</SelectItem>
                 {wardNames.map((w) => (
-                  <SelectItem key={w} value={w}>{w}</SelectItem>
+                  <SelectItem key={w} value={w}>{formatWardLabel(w)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -347,7 +348,7 @@ export default function MasterReports() {
                           <span className="text-xs font-bold text-foreground/80">{report.assignedOfficer.name}</span>
                           {report.assignedOfficer.areaName && (
                             <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
-                              Ward: {report.assignedOfficer.areaName}
+                              Ward: {formatWardLabel(report.assignedOfficer.areaName)}
                             </span>
                           )}
                         </div>

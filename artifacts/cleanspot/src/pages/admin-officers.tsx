@@ -72,6 +72,7 @@ import { useToast } from "@/hooks/use-toast";
 import { OfficerZonesMap } from "@/components/officer-zones-map";
 import { OfficerAreaEditMap } from "@/components/officer-area-edit-map";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 const UDUPI_CENTER = { lat: 13.3409, lng: 74.7421 };
 const ZONE_COLORS = ["#f97316", "#8b5cf6", "#f43f5e", "#3b82f6", "#10b981", "#ec4899"];
@@ -544,7 +545,7 @@ export default function AdminOfficers() {
                                   <SelectItem key={wardName} value={wardName}>
                                     <span className="flex items-center gap-2 min-w-0">
                                       <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                      <span className="font-medium">{wardName}</span>
+                                      <span className="font-medium">{formatWardLabel(wardName)}</span>
                                       {assignedTo && (
                                         <span className="ml-1 text-[11px] text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full shrink-0">
                                           {assignedTo}
@@ -602,7 +603,7 @@ export default function AdminOfficers() {
             <AlertDialogDescription className="text-base text-muted-foreground mt-3 leading-relaxed">
               {pendingSubmitData?.areaName && assignedWardsMap[pendingSubmitData.areaName] ? (
                 <>
-                  <span className="font-semibold text-foreground">{pendingSubmitData.areaName}</span>
+                  <span className="font-semibold text-foreground">{formatWardLabel(pendingSubmitData.areaName)}</span>
                   {" is already assigned to "}
                   <span className="font-semibold text-foreground">{assignedWardsMap[pendingSubmitData.areaName]}</span>
                   {". Do you want to reassign it to the new officer?"}
@@ -706,7 +707,7 @@ export default function AdminOfficers() {
                     {officer.areaName ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary/80 bg-primary/8 px-1.5 py-0.5 rounded-md mt-0.5">
                         <MapPin className="w-2.5 h-2.5 shrink-0" />
-                        {officer.areaName}
+                        {formatWardLabel(officer.areaName)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md mt-0.5 border border-amber-200">

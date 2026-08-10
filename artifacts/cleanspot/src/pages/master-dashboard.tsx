@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { formatWardLabel } from "@/lib/ward-names";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
 
@@ -108,7 +109,7 @@ function CommissionerTeamView() {
                       </div>
                       {wards.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-1.5">
-                          {wards.map((w) => <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{w}</span>)}
+                          {wards.map((w) => <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">{formatWardLabel(w)}</span>)}
                         </div>
                       )}
                       <div className="flex gap-2 flex-wrap">
@@ -786,7 +787,7 @@ export default function MasterDashboard() {
                             <SelectItem key={w} value={w}>
                               <span className="flex items-center gap-2">
                                 <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                                {w}
+                                {formatWardLabel(w)}
                                 {assignedWards.has(w) && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 ml-1">Assigned</Badge>}
                               </span>
                             </SelectItem>
@@ -890,7 +891,7 @@ export default function MasterDashboard() {
                           </p>
                           {officer && (
                             <p className="text-[11px] text-muted-foreground font-medium mt-0.5">
-                              {officer.name} · <span className="font-semibold">Ward:</span> {officer.areaName}
+                              {officer.name} · <span className="font-semibold">Ward:</span> {formatWardLabel(officer.areaName)}
                             </p>
                           )}
                           {r.createdAt && (
@@ -968,7 +969,7 @@ export default function MasterDashboard() {
                       }`}
                     >
                       <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? "bg-primary-foreground" : officer ? "bg-primary" : "bg-muted-foreground/40"}`} />
-                      <span className="truncate">{ward}</span>
+                      <span className="truncate">{formatWardLabel(ward)}</span>
                     </button>
                   );
                 })}
@@ -1335,7 +1336,7 @@ export default function MasterDashboard() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
-                            <p className="text-[11px] text-muted-foreground font-bold truncate">{officer.areaName || "No ward assigned"}</p>
+                            <p className="text-[11px] text-muted-foreground font-bold truncate">{formatWardLabel(officer.areaName) || officer.areaName || "No ward assigned"}</p>
                           </div>
                           {officer.pendingCount > 0 && (
                             <Badge className="bg-destructive/10 text-destructive border-destructive/20 shrink-0 text-[10px] font-black">{officer.pendingCount} pending</Badge>
@@ -1354,7 +1355,7 @@ export default function MasterDashboard() {
                             <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-[9px] font-black px-1.5 py-0 h-4 shrink-0">Supervisor</Badge>
                           </div>
                           <p className="text-[11px] text-muted-foreground font-bold truncate">
-                            {sv.wardNames?.join(", ") || "No wards assigned"}
+                            {sv.wardNames?.map(formatWardLabel).join(", ") || "No wards assigned"}
                           </p>
                         </div>
                         {sv.reportedCount > 0 && (
@@ -1378,7 +1379,7 @@ export default function MasterDashboard() {
                               </div>
                               <div className="min-w-0">
                                 <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
-                                <p className="text-[10px] text-muted-foreground font-bold truncate">{officer.areaName || "No ward assigned"}</p>
+                                <p className="text-[10px] text-muted-foreground font-bold truncate">{formatWardLabel(officer.areaName) || officer.areaName || "No ward assigned"}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-0.5 shrink-0">
@@ -1437,7 +1438,7 @@ export default function MasterDashboard() {
                           {wardList.length > 0 && (
                             <div className="flex flex-wrap gap-1 mb-2">
                               {wardList.map((w) => (
-                                <span key={w} className="text-[9px] font-bold bg-muted/60 border border-border/50 px-1.5 py-0.5 rounded-md text-muted-foreground">{w}</span>
+                                <span key={w} className="text-[9px] font-bold bg-muted/60 border border-border/50 px-1.5 py-0.5 rounded-md text-muted-foreground">{formatWardLabel(w)}</span>
                               ))}
                             </div>
                           )}
@@ -1473,7 +1474,7 @@ export default function MasterDashboard() {
                     <div className="min-w-0 flex-1">
                       <h3 className="font-black text-foreground text-sm leading-tight truncate">{sv.name}</h3>
                       <p className="text-[11px] text-muted-foreground font-bold truncate">
-                        {sv.areaNames.length > 0 ? sv.areaNames.map((n) => n.replace("Udupi ", "")).join(", ") : "No wards assigned"}
+                        {sv.areaNames.length > 0 ? sv.areaNames.map((n) => formatWardLabel(n)).join(", ") : "No wards assigned"}
                       </p>
                     </div>
                     {sv.pendingCount > 0 && (
@@ -1514,7 +1515,7 @@ export default function MasterDashboard() {
                             onClick={() => setSelectedWard(ward)}
                             className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition-colors hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 bg-muted/50 border-border/50 text-muted-foreground"
                           >
-                            {ward.replace("Udupi ", "")}
+                            {formatWardLabel(ward)}
                           </button>
                         ))}
                       </div>
@@ -1556,7 +1557,7 @@ export default function MasterDashboard() {
                     <div className="min-w-0 flex-1">
                       <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
                       <p className="text-[11px] text-muted-foreground font-bold truncate">
-                        {officer.areaName || "No ward assigned"}
+                        {formatWardLabel(officer.areaName) || officer.areaName || "No ward assigned"}
                       </p>
                     </div>
                     {officer.pendingCount > 0 && (
@@ -1584,7 +1585,7 @@ export default function MasterDashboard() {
                         <div className="min-w-0">
                           <h3 className="font-black text-foreground text-sm leading-tight truncate">{officer.name}</h3>
                           <p className="text-[10px] text-muted-foreground font-bold truncate">
-                            {officer.areaName || "No ward assigned"}
+                            {formatWardLabel(officer.areaName) || officer.areaName || "No ward assigned"}
                           </p>
                         </div>
                       </div>
@@ -1739,7 +1740,7 @@ export default function MasterDashboard() {
                   )}
                   <div className="flex items-center gap-2 text-sm font-bold bg-muted/30 px-2.5 py-2 rounded-lg">
                     <MapPin className="w-4 h-4 text-primary shrink-0" />
-                    <span className="truncate">{officer.areaName || "No ward assigned"}</span>
+                    <span className="truncate">{formatWardLabel(officer.areaName) || officer.areaName || "No ward assigned"}</span>
                   </div>
                 </div>
 

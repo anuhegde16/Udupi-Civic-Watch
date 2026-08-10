@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import geofencesData from "../data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 const SALIGRAMA_CENTER: [number, number] = [13.4945, 74.7158];
 
@@ -61,12 +62,13 @@ function addWardContext(map: L.Map, activeAreaName?: string | null): L.Layer[] {
       const lngs = ring.map((p) => p.lng);
       const cLat = lats.reduce((s, v) => s + v, 0) / lats.length;
       const cLng = lngs.reduce((s, v) => s + v, 0) / lngs.length;
-      const wardNum = (props?.name as string)?.replace("Ward ", "") ?? "";
+      const rawName = (props?.name as string) ?? "";
+      const wardLabel = formatWardLabel(rawName) || rawName.replace("Ward ", "") || rawName;
       layers.push(
         L.marker([cLat, cLng], {
           icon: L.divIcon({
             className: "",
-            html: `<div style="color:${WARD_AMBER};font-size:9px;font-weight:800;opacity:${isActive ? "1" : "0.6"};pointer-events:none;">${wardNum}</div>`,
+            html: `<div style="color:${WARD_AMBER};font-size:9px;font-weight:800;opacity:${isActive ? "1" : "0.6"};pointer-events:none;">${wardLabel}</div>`,
             iconAnchor: [6, 6],
           }),
           interactive: false,

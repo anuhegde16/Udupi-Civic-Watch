@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatWardLabel, formatWardChartLabel } from "@/lib/ward-names";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -293,7 +294,7 @@ function SupervisorRow({
               key={w}
               className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full"
             >
-              {w}
+              {formatWardLabel(w)}
             </span>
           ))}
         </div>
@@ -674,8 +675,8 @@ function CommissionerAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoNam
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
-              <Tooltip />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={110} tickFormatter={formatWardChartLabel} />
+              <Tooltip formatter={(value) => [value, "Open Reports"]} labelFormatter={formatWardChartLabel} />
               <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>

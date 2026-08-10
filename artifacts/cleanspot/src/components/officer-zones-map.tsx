@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import geofencesData from "../data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 const SALIGRAMA_CENTER: [number, number] = [13.4945, 74.7158];
 
@@ -35,7 +36,8 @@ function drawWardBackground(map: L.Map): L.Layer[] {
       const ring = (feature.geometry.coordinates[0] as [number, number][]).map(
         ([lon, lat]) => L.latLng(lat, lon)
       );
-      const wardNum = ((feature.properties as any)?.name as string)?.replace("Ward ", "") ?? "";
+      const rawName = ((feature.properties as any)?.name as string) ?? "";
+      const wardLabel = formatWardLabel(rawName) || rawName.replace("Ward ", "") || rawName;
       const poly = L.polygon(ring, {
         color: WARD_AMBER,
         fillColor: WARD_AMBER,
@@ -50,7 +52,7 @@ function drawWardBackground(map: L.Map): L.Layer[] {
       ];
       const label = L.divIcon({
         className: "",
-        html: `<div style="color:${WARD_AMBER};font-size:9px;font-weight:800;opacity:0.7;pointer-events:none;">${wardNum}</div>`,
+        html: `<div style="color:${WARD_AMBER};font-size:9px;font-weight:800;opacity:0.7;pointer-events:none;">${wardLabel}</div>`,
         iconAnchor: [6, 6],
       });
       layers.push(poly, L.marker([cLat, cLng], { icon: label, interactive: false }).addTo(map));

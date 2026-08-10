@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatWardLabel, formatWardChartLabel } from "@/lib/ward-names";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
@@ -372,7 +373,7 @@ function HiCard({ hi }: { hi: HealthInspector }) {
                           key={w}
                           className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full"
                         >
-                          {w}
+                          {formatWardLabel(w)}
                         </span>
                       ))}
                     </div>
@@ -625,7 +626,7 @@ function EEAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string)
                     <td className="py-2 pr-2 text-muted-foreground max-w-[90px]">
                       <span className="block truncate" title={sv.hiName}>{sv.hiName}</span>
                     </td>
-                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards}</td>
+                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards.split(", ").map(formatWardChartLabel).join(", ")}</td>
                     <td className="py-2 px-2 text-right text-destructive font-semibold">{sv.open}</td>
                     <td className="py-2 px-2 text-right text-blue-500 font-semibold">{sv.cleaning}</td>
                     <td className="py-2 px-2 text-right text-primary font-semibold">{sv.cleaned}</td>
@@ -660,8 +661,8 @@ function EEAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string)
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
-              <Tooltip />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={110} tickFormatter={formatWardChartLabel} />
+              <Tooltip formatter={(value) => [value, "Open Reports"]} labelFormatter={formatWardChartLabel} />
               <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>

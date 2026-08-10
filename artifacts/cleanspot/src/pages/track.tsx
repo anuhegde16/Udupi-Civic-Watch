@@ -1,6 +1,7 @@
 import { useRoute, useLocation } from "wouter";
 import { useTrackReport, getTrackReportQueryKey, ApiError } from "@workspace/api-client-react";
 import { Loader2, Search, CheckCircle2, Clock, HardHat, AlertCircle, Info, MapPin, Archive, Camera } from "lucide-react";
+import { formatWardLabel } from "@/lib/ward-names";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { useImageLightbox } from "@/components/image-lightbox";
@@ -118,7 +119,7 @@ export default function Track() {
         {report.wardName && (
           <div className="mt-3 flex items-center gap-2">
             <MapPin className="w-4 h-4 text-primary shrink-0" />
-            <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{report.wardName}</span></span>
+            <span className="text-sm font-bold text-foreground">Ward: <span className="text-primary">{formatWardLabel(report.wardName)}</span></span>
           </div>
         )}
         

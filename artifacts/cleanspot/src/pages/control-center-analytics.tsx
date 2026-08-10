@@ -1,5 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatWardLabel } from "@/lib/ward-names";
 import { customFetch, useBackfillPhotoAnalysis } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -299,7 +300,7 @@ function exportPDF(data: DistrictAnalytics) {
       (o) => `
       <tr>
         <td style="font-weight:700">${escHtml(o.name)}</td>
-        <td>${escHtml(o.areaName)}</td>
+        <td>${escHtml(formatWardLabel(o.areaName ?? "") || (o.areaName ?? ""))}</td>
         <td>${escHtml(o.panchayatName)}</td>
         <td style="font-weight:700;text-align:center">${o.total}</td>
         <td style="text-align:center">${o.cleaned}</td>
@@ -330,7 +331,7 @@ function exportPDF(data: DistrictAnalytics) {
     .map(
       (w) => `
       <tr>
-        <td style="font-weight:700">${escHtml(w.ward)}</td>
+        <td style="font-weight:700">${escHtml(formatWardLabel(w.ward) || w.ward)}</td>
         <td style="text-align:center">${w.total}</td>
         <td style="text-align:center">${escHtml(formatHours(w.avgReportedToCleaningHours))}</td>
         <td style="text-align:center">${escHtml(formatHours(w.avgReportedToCleanedHours))}</td>
@@ -888,7 +889,7 @@ export default function ControlCenterAnalytics() {
               <tbody className="divide-y divide-border/30">
                 {data.delayMetrics.byWard.map((w) => (
                   <tr key={w.ward}>
-                    <td className="py-2.5 pr-3 font-bold text-foreground">{w.ward}</td>
+                    <td className="py-2.5 pr-3 font-bold text-foreground">{formatWardLabel(w.ward)}</td>
                     <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{w.total}</td>
                     <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{formatHours(w.avgReportedToCleaningHours)}</td>
                     <td className="py-2.5 pr-3 text-muted-foreground font-semibold">{formatHours(w.avgReportedToCleanedHours)}</td>
@@ -969,7 +970,7 @@ export default function ControlCenterAnalytics() {
                       <span className="font-black text-sm text-foreground truncate">{officer.name}</span>
                       {officer.areaName && (
                         <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full shrink-0 flex items-center gap-0.5">
-                          <MapPin className="w-2.5 h-2.5" />{officer.areaName}
+                          <MapPin className="w-2.5 h-2.5" />{formatWardLabel(officer.areaName)}
                         </span>
                       )}
                       {officer.topPerformer && (

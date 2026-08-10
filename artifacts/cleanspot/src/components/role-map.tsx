@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { format } from "date-fns";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -330,7 +331,7 @@ export function RoleMap({
         if (r.wardName) {
           const wEl = document.createElement("div");
           wEl.style.cssText = "font-size:10px;font-weight:700;color:#6b7280;margin-bottom:3px;";
-          wEl.textContent = r.wardName; popup.appendChild(wEl);
+          wEl.textContent = formatWardLabel(r.wardName); popup.appendChild(wEl);
         }
 
         // Waste type tags

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Globe, Building2 } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 const ZONE_PALETTE = [
   "#3b82f6",
@@ -296,7 +297,7 @@ export function AdminDistrictMap({
           }
 
           poly.bindTooltip(
-            assignedOfficer ? `${zone.name} — ${assignedOfficer.name}` : zone.name,
+            assignedOfficer ? `${formatWardLabel(zone.name)} — ${assignedOfficer.name}` : formatWardLabel(zone.name),
             { permanent: false, direction: "center", className: "zone-label" }
           );
 

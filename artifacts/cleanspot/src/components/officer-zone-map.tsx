@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Report } from "@workspace/api-client-react";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 interface OfficerZoneMapProps {
   reports: Report[];
@@ -62,7 +63,7 @@ export function OfficerZoneMap({
             fillColor: "#f59e0b",
             fillOpacity: isMine ? 0.15 : 0.04,
           }).addTo(map);
-          poly.bindTooltip(props?.name ?? "Ward", {
+          poly.bindTooltip(formatWardLabel(props?.name) || props?.name || "Ward", {
             direction: "center",
             className: "zone-label",
           });
@@ -230,7 +231,7 @@ export function OfficerZoneMap({
       <div className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-3 py-2 bg-card/90 backdrop-blur-md border-b border-border/50">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-          <span className="text-xs font-bold text-foreground">{areaName}</span>
+          <span className="text-xs font-bold text-foreground">{formatWardLabel(areaName) || areaName}</span>
           <span className="text-xs text-muted-foreground">Officer Zone</span>
         </div>
         <span className="text-xs text-muted-foreground font-medium">{reports.length} report{reports.length !== 1 ? "s" : ""}</span>

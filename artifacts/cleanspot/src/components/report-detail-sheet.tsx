@@ -1,4 +1,5 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { formatWardLabel } from "@/lib/ward-names";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,7 +101,7 @@ export function ReportDetailSheet({ report, open, onClose, onStatusChange, isUpd
                 {report.wardName && (
                   <div className="flex items-center gap-2 text-muted-foreground font-medium">
                     <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span><span className="font-black text-foreground">Ward:</span> {report.wardName}</span>
+                    <span><span className="font-black text-foreground">Ward:</span> {formatWardLabel(report.wardName)}</span>
                   </div>
                 )}
                 {report.officerName && (

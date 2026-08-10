@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 
 const STATUS_COLORS: Record<string, string> = {
   reported: "#ef4444",
@@ -249,10 +250,10 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
         }).addTo(map);
 
         if (officer) {
-          // Show compact ward number instead of officer name to avoid clutter.
+          // Show compact ward label (number · name) instead of officer name to avoid clutter.
           // Plain text only — no background, border, or chip of any kind.
           const wardNum = ward.name.replace(/\D+/g, "");
-          const labelText = wardNum ? wardNum : ward.name.slice(0, 4);
+          const labelText = formatWardLabel(ward.name) || (wardNum ? wardNum : ward.name.slice(0, 4));
           const labelColor = isHighlighted ? "#0d9488" : color;
           const icon = L.divIcon({
             html: `<div style="

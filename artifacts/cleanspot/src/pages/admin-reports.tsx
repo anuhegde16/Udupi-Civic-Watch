@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { formatWardLabel } from "@/lib/ward-names";
 import {
   useAdminListReports,
   useListOfficers,
@@ -433,7 +434,7 @@ export default function AdminReports() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-bold text-foreground truncate">
-                        {officer.areaName || officer.name}
+                        {formatWardLabel(officer.areaName) || officer.areaName || officer.name}
                       </span>
                       <span className="text-sm font-black ml-2 shrink-0" style={{ color }}>
                         {rate}%
@@ -557,7 +558,7 @@ export default function AdminReports() {
                             <span className="text-xs font-bold text-foreground/80">{report.assignedOfficer.name}</span>
                             {report.assignedOfficer.areaName && (
                               <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
-                                Ward: {report.assignedOfficer.areaName}
+                                Ward: {formatWardLabel(report.assignedOfficer.areaName)}
                               </span>
                             )}
                           </div>
@@ -643,7 +644,7 @@ export default function AdminReports() {
                   <p className="text-xs font-semibold text-muted-foreground mt-1 flex items-center gap-1.5">
                     <span>{mapReport.assignedOfficer.name}</span>
                     {mapReport.assignedOfficer.areaName && (
-                      <span className="bg-muted px-1.5 py-0.5 rounded-md">Ward: {mapReport.assignedOfficer.areaName}</span>
+                      <span className="bg-muted px-1.5 py-0.5 rounded-md">Ward: {formatWardLabel(mapReport.assignedOfficer.areaName)}</span>
                     )}
                   </p>
                 )}
@@ -1018,7 +1019,7 @@ export default function AdminReports() {
                   <SelectItem key={off.id} value={off.id.toString()} className="py-3 focus:bg-muted">
                     <div className="flex flex-col">
                       <span className="font-bold text-foreground">{off.name}</span>
-                      <span className="text-xs text-muted-foreground mt-0.5">{off.areaName || "No specific area"} • {off.pendingCount} pending</span>
+                      <span className="text-xs text-muted-foreground mt-0.5">{formatWardLabel(off.areaName) || off.areaName || "No specific area"} • {off.pendingCount} pending</span>
                     </div>
                   </SelectItem>
                 ))}

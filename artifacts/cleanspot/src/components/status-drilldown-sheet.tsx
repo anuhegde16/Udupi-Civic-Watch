@@ -1,6 +1,7 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, FileWarning, Loader2, CheckCircle2, Circle } from "lucide-react";
+import { formatWardLabel } from "@/lib/ward-names";
 import { format } from "date-fns";
 import { useImageLightbox } from "@/components/image-lightbox";
 
@@ -122,7 +123,7 @@ export function StatusDrilldownSheet({
               >
                 <option value="">All wards</option>
                 {availableWards!.map((w) => (
-                  <option key={w} value={w}>{w}</option>
+                  <option key={w} value={w}>{formatWardLabel(w)}</option>
                 ))}
               </select>
             </div>
@@ -184,7 +185,7 @@ export function StatusDrilldownSheet({
                         <span className="text-xs text-muted-foreground font-mono">#{r.id}</span>
                         {r.wardName && (
                           <span className="text-xs font-bold text-muted-foreground">
-                            {r.wardName}
+                            {formatWardLabel(r.wardName)}
                           </span>
                         )}
                       </div>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatWardLabel, formatWardChartLabel } from "@/lib/ward-names";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
@@ -294,7 +295,7 @@ function ReassignModal({
               >
                 <div className="font-bold text-sm text-foreground">{sv.name}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  {Array.isArray(sv.wardNames) ? sv.wardNames.join(", ") : "—"}
+                  {Array.isArray(sv.wardNames) ? sv.wardNames.map(formatWardLabel).join(", ") : "—"}
                 </div>
               </button>
             ))
@@ -388,7 +389,7 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {wardNames.map((w) => (
                       <span key={w} className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                        {w}
+                        {formatWardLabel(w)}
                       </span>
                     ))}
                   </div>
@@ -469,7 +470,7 @@ function SupervisorCard({ sv, allSupervisors }: { sv: SupervisorStat; allSupervi
                           </Badge>
                           <span className="text-xs text-muted-foreground font-mono">#{r.id}</span>
                           {r.wardName && (
-                            <span className="text-xs text-muted-foreground font-bold">{r.wardName}</span>
+                            <span className="text-xs text-muted-foreground font-bold">{formatWardLabel(r.wardName)}</span>
                           )}
                         </div>
                         <p className="text-sm font-medium text-foreground flex items-start gap-1.5 line-clamp-1">
@@ -703,8 +704,8 @@ function HIAnalyticsPanel({
             >
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={36} />
-              <Tooltip />
+              <YAxis type="category" dataKey="wardName" tick={{ fontSize: 10 }} width={110} tickFormatter={formatWardChartLabel} />
+              <Tooltip formatter={(value) => [value, "Open Reports"]} labelFormatter={formatWardChartLabel} />
               <Bar dataKey="open" name="Open Reports" fill="#ef4444" radius={[0, 4, 4, 0]} cursor="pointer" />
             </BarChart>
           </ResponsiveContainer>
@@ -776,7 +777,7 @@ function HIAnalyticsPanel({
                     <td className="py-2 pr-2 font-bold text-foreground max-w-[110px]">
                       <span className="block truncate" title={sv.name}>{sv.name}</span>
                     </td>
-                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards}</td>
+                    <td className="py-2 pr-2 text-muted-foreground whitespace-nowrap">{sv.wards.split(", ").map(formatWardChartLabel).join(", ")}</td>
                     <td className="py-2 px-2 text-right text-destructive font-semibold">{sv.open}</td>
                     <td className="py-2 px-2 text-right text-blue-500 font-semibold">{sv.cleaning}</td>
                     <td className="py-2 px-2 text-right text-primary font-semibold">{sv.cleaned}</td>

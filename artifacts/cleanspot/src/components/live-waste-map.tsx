@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
+import { formatWardLabel } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
 function ensureYouAreHereStyle() {
@@ -202,8 +203,9 @@ export function LiveWasteMap() {
             fillColor: isWard ? "#f59e0b" : "#0d9488",
             fillOpacity: isWard ? 0.05 : 0,
           }).addTo(map);
-          const name = props?.name ?? "Service Zone";
-          poly.bindTooltip(name, {
+          const rawName = props?.name ?? "Service Zone";
+          const displayName = isWard ? (formatWardLabel(rawName) || rawName) : rawName;
+          poly.bindTooltip(displayName, {
             permanent: false,
             direction: "center",
             className: "zone-label",

@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
+import { formatWardLabel } from "@/lib/ward-names";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -242,7 +243,7 @@ export default function OfficerDashboard() {
             </h1>
             <p className="text-muted-foreground font-medium">
               {officerData?.areaName
-                ? `Ward: ${officerData.areaName}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
+                ? `Ward: ${formatWardLabel(officerData.areaName)}${officerData.panchayatName ? ` — ${officerData.panchayatName} Panchayat` : ""}`
                 : "Your assigned area"}
             </p>
           </div>
