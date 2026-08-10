@@ -1732,16 +1732,20 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
 // ── Shared analytics helpers ───────────────────────────────────────────────────
 
 function buildDailyTrend(reports: any[], days = 30) {
-  const trend: Record<string, { date: string; reported: number; cleaned: number }> = {};
+  const trend: Record<string, { date: string; reported: number; cleaning: number; cleaned: number }> = {};
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
     const key = d.toISOString().split("T")[0];
-    trend[key] = { date: key, reported: 0, cleaned: 0 };
+    trend[key] = { date: key, reported: 0, cleaning: 0, cleaned: 0 };
   }
   for (const r of reports) {
     if (r.createdAt) {
       const k = new Date(r.createdAt).toISOString().split("T")[0];
       if (trend[k]) trend[k].reported++;
+    }
+    if (r.cleaningStartedAt) {
+      const k = new Date(r.cleaningStartedAt).toISOString().split("T")[0];
+      if (trend[k]) trend[k].cleaning++;
     }
     if (r.cleanedAt) {
       const k = new Date(r.cleanedAt).toISOString().split("T")[0];
@@ -1770,6 +1774,24 @@ function computeAvgCleanupHrs(reports: any[]) {
   const sum = cleaned.reduce((s, r) =>
     s + (new Date(r.cleanedAt).getTime() - new Date(r.createdAt).getTime()) / 3_600_000, 0);
   return Math.round((sum / cleaned.length) * 10) / 10;
+}
+
+function computeSlaHrs(reports: any[]) {
+  // Phase 1: Reported → Cleaning started
+  const startedReports = reports.filter(r => r.cleaningStartedAt && r.createdAt);
+  const reportedToCleaning = startedReports.length > 0
+    ? Math.round(startedReports.reduce((s, r) =>
+        s + (new Date(r.cleaningStartedAt).getTime() - new Date(r.createdAt).getTime()) / 3_600_000, 0)
+      / startedReports.length * 10) / 10
+    : 0;
+  // Phase 2: Cleaning started → Cleaned
+  const cleanedReports = reports.filter(r => r.cleanedAt && r.cleaningStartedAt);
+  const cleaningToCleaned = cleanedReports.length > 0
+    ? Math.round(cleanedReports.reduce((s, r) =>
+        s + (new Date(r.cleanedAt).getTime() - new Date(r.cleaningStartedAt).getTime()) / 3_600_000, 0)
+      / cleanedReports.length * 10) / 10
+    : 0;
+  return { reportedToCleaning, cleaningToCleaned };
 }
 
 type PerfEntry = { name: string; open: number; cleaning: number; cleaned: number; total: number; cleanedHrs: number };
@@ -1954,19 +1976,39 @@ router.get("/commissioner/analytics", requireCommissioner, async (req, res): Pro
       return;
     }
     const allReports = await fetchReportsInWardEntries(wardEntries, {});
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 3_600_000;
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 24 * 3_600_000;
+    const todayMidnight = new Date(); todayMidnight.setHours(0, 0, 0, 0);
+    const todayMs = todayMidnight.getTime();
+
     const open = allReports.filter(r => r.status === "reported").length;
     const cleaning = allReports.filter(r => r.status === "cleaning").length;
     const resolvedThisMonth = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= thirtyDaysAgo).length;
     const totalCleaned = allReports.filter(r => r.status === "cleaned").length;
     const total = allReports.length;
+    const openToday = allReports.filter(r => r.createdAt && new Date(r.createdAt).getTime() >= todayMs && r.status === "reported").length;
+    const cleanedToday = allReports.filter(r => r.cleanedAt && new Date(r.cleanedAt).getTime() >= todayMs).length;
+
+    // Supervisor count per HI
+    const svCountByHiName: Record<string, number> = {};
+    for (const sv of svList) {
+      const hiName = hiNameById.get(sv.hiId) ?? "";
+      svCountByHiName[hiName] = (svCountByHiName[hiName] ?? 0) + 1;
+    }
+    const hiLeaderboard = toPerf(groupByKey(allReports, "hiName")).map(hi => ({
+      ...hi,
+      supervisorCount: svCountByHiName[hi.name] ?? 0,
+    }));
+
     res.json({
       kpis: { open, cleaning, resolvedThisMonth, totalCleaned, total,
               avgCleanupHours: computeAvgCleanupHrs(allReports),
-              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0 },
+              resolutionRate: total > 0 ? Math.round((totalCleaned / total) * 100) : 0,
+              openToday, cleanedToday },
+      sla: computeSlaHrs(allReports),
       dailyTrend: buildDailyTrend(allReports),
       wardBacklog: buildWardBacklog(allReports),
-      hiPerformance: toPerf(groupByKey(allReports, "hiName")),
+      hiLeaderboard,
       supervisorPerformance: toPerf(groupByKey(allReports, "supervisorName")),
     });
   } catch (err) {
