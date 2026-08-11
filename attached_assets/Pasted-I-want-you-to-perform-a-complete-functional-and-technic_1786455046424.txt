@@ -1,0 +1,252 @@
+I want you to perform a complete functional and technical audit of the existing Udupi Civic Watch application.
+
+IMPORTANT:
+
+* Do NOT modify, delete, refactor, or create any code or files.
+* Do NOT change the database.
+* Do NOT change the UI.
+* Do NOT deploy anything.
+* This is an analysis/documentation task only.
+* Carefully inspect the entire existing codebase before responding.
+* Do not assume a feature exists just because you find references to it in the code. Distinguish between implemented, partially implemented, and unused/planned functionality.
+
+I need a comprehensive inventory of what Udupi Civic Watch currently does because I am preparing an official project proposal for the District Administration.
+
+Please provide the report in the following structure:
+
+## 1. EXECUTIVE SUMMARY
+
+Explain in simple language:
+
+* What Udupi Civic Watch is
+* What problem it solves
+* Who uses it
+* What the main purpose of the platform is
+* What makes the current system different/useful
+
+## 2. CITIZEN FEATURES
+
+List every feature currently available to citizens.
+
+For each feature explain:
+
+* Feature name
+* What the citizen can do
+* How it works
+* What information/data is collected
+* Whether photo/video/location/file uploads are supported
+* Whether notifications are generated
+* Whether the citizen can track status
+
+## 3. ADMINISTRATION FEATURES
+
+List every feature currently available to administrators/officials.
+
+Include:
+
+* Dashboard
+* Complaint/issue management
+* Department allocation
+* User management
+* Status management
+* Reports
+* Analytics
+* Search/filtering
+* Notifications
+* Any other administrative functionality
+
+For every feature explain exactly what an administrator can do.
+
+## 4. DEPARTMENT / OFFICER WORKFLOW
+
+Explain the complete workflow from:
+
+Citizen submits issue
+→ Issue is received
+→ Issue is assigned
+→ Officer/department processes it
+→ Status is updated
+→ Citizen receives update
+→ Issue is closed
+
+If the actual workflow is different, describe the actual implementation.
+
+## 5. USER ROLES & PERMISSIONS
+
+Identify every type of user currently implemented.
+
+For each role explain:
+
+* What they can see
+* What they can create
+* What they can edit
+* What they can delete
+* What administrative access they have
+
+## 6. NOTIFICATIONS
+
+Identify all notification mechanisms currently implemented.
+
+For example:
+
+* In-app notifications
+* Email
+* SMS
+* WhatsApp
+* Push notifications
+* Admin alerts
+
+Clearly distinguish between implemented and planned/unimplemented functionality.
+
+## 7. LOCATION / GIS FEATURES
+
+Identify all location-related functionality.
+
+Explain whether the system currently supports:
+
+* GPS/location capture
+* Maps
+* Coordinates
+* Area/ward identification
+* Location-based filtering
+* Geographic visualization
+* Any GIS integration
+
+## 8. DATABASE
+
+Identify:
+
+* Database technology
+* Main tables/entities
+* Important fields
+* Relationships between entities
+* What citizen information is stored
+* What complaint/issue information is stored
+* What administrative information is stored
+
+DO NOT expose passwords, API keys, secrets, tokens, or personally sensitive production data.
+
+## 9. API & INTEGRATIONS
+
+List all APIs and external services currently integrated.
+
+For each one explain:
+
+* Service name
+* Purpose
+* What data flows through it
+* Whether it is actively being used
+
+Do not reveal API keys or credentials.
+
+## 10. TECHNOLOGY STACK
+
+Identify:
+
+* Frontend technology
+* Backend technology
+* Database
+* Authentication
+* Hosting/deployment setup
+* Third-party services
+* Libraries/frameworks
+* Other important technologies
+
+## 11. SECURITY
+
+Identify the security mechanisms currently implemented, including:
+
+* Authentication
+* Authorization
+* Role-based access
+* Password/security mechanisms
+* Input validation
+* Data protection
+* API security
+* Rate limiting
+* File upload security
+* Backup mechanisms
+
+Also identify any obvious security weaknesses that should be addressed before government/public launch.
+
+## 12. CURRENT FUNCTIONALITY STATUS
+
+Create three categories:
+
+A. FULLY IMPLEMENTED & WORKING
+B. PARTIALLY IMPLEMENTED / NEEDS ATTENTION
+C. REFERENCED IN CODE BUT NOT ACTUALLY IMPLEMENTED
+
+Do not guess.
+
+## 13. CURRENT LIMITATIONS
+
+Identify anything that could become a problem when the application is launched to the public.
+
+Consider:
+
+* Scalability
+* Performance
+* Security
+* Data backup
+* Authentication
+* Reliability
+* Error handling
+* Monitoring
+* Admin workflow
+* Citizen experience
+* Infrastructure
+
+## 14. FUTURE ENHANCEMENT OPPORTUNITIES
+
+Based on the existing architecture, suggest features that could be added later.
+
+Separate them into:
+
+* Immediate improvements before launch
+* Phase 2 features
+* Advanced/future features
+
+Do NOT implement any of them.
+
+## 15. GOVERNMENT PROJECT FEATURE LIST
+
+Finally, create a clean, non-technical feature list suitable for putting into an official government proposal.
+
+Do not use programming terminology here.
+
+Group the features under headings such as:
+
+* Citizen Services
+* Complaint & Issue Reporting
+* Department Administration
+* Monitoring & Tracking
+* Notifications
+* Reports & Analytics
+* User Management
+* Infrastructure & Security
+
+## 16. PROJECT COMPLEXITY ASSESSMENT
+
+Based on the actual codebase and functionality, provide a reasoned assessment of whether this should be considered:
+
+* Basic application
+* Intermediate application
+* Advanced application
+* Production-grade civic technology platform
+
+Explain why.
+
+## 17. DEVELOPMENT EFFORT
+
+Based on the codebase, architecture, number of modules, database structure, integrations and functionality, provide a rough estimate of the development effort that would normally be required to build this system from scratch.
+
+Do NOT simply estimate based on the current number of files.
+
+Give a range in developer hours and explain the assumptions.
+
+## 18. FINAL ONE-PAGE SUMMARY
+
+Finish with a concise one-page summary that I can give to someone who has no technical background and wants to understand exactly what Udupi Civic Watch currently provides.
+
+Again: DO NOT MODIFY ANYTHING. This is strictly an inspection and documentation exercise.
