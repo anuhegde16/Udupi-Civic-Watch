@@ -65,7 +65,9 @@ interface WasteSpot {
   address: string | null;
   createdAt: string;
   imageUrl: string | null;
+  imageUrls: { url: string; uploadedAt: string }[] | null;
   cleanupImageUrl: string | null;
+  cleanupImageUrls: { url: string; uploadedAt: string }[] | null;
 }
 
 interface Zone {
@@ -213,18 +215,8 @@ export function LiveWasteMap() {
         }
       }
 
-      map.on("popupopen", (e: any) => {
-        const el = e.popup.getElement?.();
-        const img = el?.querySelector?.("img");
-        if (img && !img.dataset.lightboxBound) {
-          img.dataset.lightboxBound = "true";
-          img.style.cursor = "zoom-in";
-          img.addEventListener("click", (ev: Event) => {
-            ev.stopPropagation();
-            openLightboxRef.current([img.src]);
-          });
-        }
-      });
+      // Lightbox binding is now done directly in placeMarkers via DOM click handlers.
+      // No popupopen hook needed.
 
       leafletMapRef.current = map;
       setMapReady(true);
@@ -288,33 +280,152 @@ export function LiveWasteMap() {
       });
 
       const timeAgo = getTimeAgo(spot.createdAt);
-      const showAfter = spot.status === "cleaned" && !!spot.cleanupImageUrl;
-      const imgHtml = spot.imageUrl
-        ? showAfter
-          ? `<div style="display:flex; gap:4px; margin:-4px -4px 10px -4px;">
-               <div style="flex:1; position:relative; border-radius:8px 0 0 8px; overflow:hidden; height:130px;">
-                 <img src="${spot.imageUrl}" alt="Before" style="width:100%; height:100%; object-fit:cover; display:block;" />
-                 <span style="position:absolute; bottom:3px; left:3px; font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:99px;">Before</span>
-               </div>
-               <div style="flex:1; position:relative; border-radius:0 8px 8px 0; overflow:hidden; height:130px;">
-                 <img src="${spot.cleanupImageUrl}" alt="After" style="width:100%; height:100%; object-fit:cover; display:block;" />
-                 <span style="position:absolute; bottom:3px; left:3px; font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:rgba(0,0,0,0.55); padding:1px 5px; border-radius:99px;">After</span>
-               </div>
-             </div>`
-          : `<div style="margin:-4px -4px 10px -4px; border-radius:8px 8px 0 0; overflow:hidden; height:130px;">
-             <img src="${spot.imageUrl}" alt="Waste photo" style="width:100%; height:100%; object-fit:cover; display:block;" />
-           </div>`
-        : "";
-      const popup = L.popup({ className: "waste-popup", maxWidth: 240 }).setContent(`
-        <div style="font-family: 'Bricolage Grotesque', sans-serif; padding: 4px;">
-          ${imgHtml}
-          <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:${color}; margin-bottom:4px;">${label}</div>
-          ${spot.description ? `<div style="font-size:13px; font-weight:600; color:#1a1a1a; margin-bottom:4px; line-height:1.4;">${spot.description.length > 80 ? spot.description.slice(0, 80) + "…" : spot.description}</div>` : ""}
-          ${spot.address ? `<div style="font-size:12px; color:#666; margin-bottom:4px;">${spot.address}</div>` : ""}
-          <div style="font-size:11px; color:#999;">Reported ${timeAgo}</div>
-          <a href="/track/${spot.id}" style="display:inline-block; margin-top:8px; font-size:12px; font-weight:700; color:#0f766e; text-decoration:none; background:#f0fdf4; padding:4px 10px; border-radius:6px;">View Report →</a>
-        </div>
-      `);
+
+      // Resolve all complaint photos (prefer array, fall back to singular)
+      const beforeUrls: string[] =
+        spot.imageUrls && spot.imageUrls.length > 0
+          ? spot.imageUrls.map((i) => i.url)
+          : spot.imageUrl
+            ? [spot.imageUrl]
+            : [];
+      // Cleanup photos only shown for cleaned reports
+      const afterUrls: string[] =
+        spot.status === "cleaned"
+          ? spot.cleanupImageUrls && spot.cleanupImageUrls.length > 0
+            ? spot.cleanupImageUrls.map((i) => i.url)
+            : spot.cleanupImageUrl
+              ? [spot.cleanupImageUrl]
+              : []
+          : [];
+      const allPhotoUrls = [...beforeUrls, ...afterUrls];
+
+      // Build the popup entirely via DOM APIs so no user-supplied value
+      // (photo URLs, description, address) is ever interpolated into HTML.
+      const buildThumb = (
+        src: string,
+        altText: string,
+        pillText: string | null,
+        wrapStyle: string,
+        onClick: () => void,
+      ): HTMLElement => {
+        const wrap = document.createElement("div");
+        wrap.style.cssText = wrapStyle;
+        const img = document.createElement("img");
+        img.src = src; // assigned as property — safe, never interpolated into HTML
+        img.alt = altText;
+        img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;";
+        img.addEventListener("click", (ev) => { ev.stopPropagation(); onClick(); });
+        wrap.appendChild(img);
+        if (pillText) {
+          const tag = document.createElement("span");
+          tag.style.cssText =
+            "position:absolute;bottom:3px;left:3px;font-size:9px;font-weight:800;" +
+            "letter-spacing:0.04em;text-transform:uppercase;color:#fff;" +
+            "background:rgba(0,0,0,0.55);padding:1px 5px;border-radius:99px;";
+          tag.textContent = pillText;
+          wrap.appendChild(tag);
+        }
+        return wrap;
+      };
+
+      const container = document.createElement("div");
+      container.style.cssText = "font-family:'Bricolage Grotesque',sans-serif;padding:4px;";
+
+      // ── Photo section ──────────────────────────────────────────────────────
+      if (allPhotoUrls.length > 0) {
+        const photoSection = document.createElement("div");
+
+        if (beforeUrls.length === 1 && afterUrls.length === 0) {
+          // Single complaint photo — full-width
+          photoSection.style.cssText =
+            "margin:-4px -4px 10px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:130px;";
+          photoSection.appendChild(
+            buildThumb(beforeUrls[0], "Waste photo", null,
+              "width:100%;height:100%;", () => openLightboxRef.current(allPhotoUrls, 0))
+          );
+        } else if (beforeUrls.length === 1 && afterUrls.length === 1) {
+          // Classic side-by-side before/after
+          photoSection.style.cssText = "display:flex;gap:4px;margin:-4px -4px 10px -4px;";
+          photoSection.appendChild(
+            buildThumb(beforeUrls[0], "Before", "Before",
+              "flex:1;position:relative;border-radius:8px 0 0 8px;overflow:hidden;height:130px;",
+              () => openLightboxRef.current(allPhotoUrls, 0))
+          );
+          photoSection.appendChild(
+            buildThumb(afterUrls[0], "After", "After",
+              "flex:1;position:relative;border-radius:0 8px 8px 0;overflow:hidden;height:130px;",
+              () => openLightboxRef.current(allPhotoUrls, 1))
+          );
+        } else {
+          // Scrollable strip for multiple photos
+          photoSection.style.cssText =
+            "display:flex;gap:4px;margin:-4px -4px 10px -4px;" +
+            "overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;";
+          beforeUrls.forEach((url, i) => {
+            photoSection.appendChild(
+              buildThumb(
+                url, `Photo ${i + 1}`,
+                afterUrls.length > 0 ? "Before" : null,
+                "flex-shrink:0;width:76px;position:relative;border-radius:6px;overflow:hidden;height:120px;",
+                () => openLightboxRef.current(allPhotoUrls, i)
+              )
+            );
+          });
+          afterUrls.forEach((url, i) => {
+            photoSection.appendChild(
+              buildThumb(
+                url, `After ${i + 1}`, "After",
+                "flex-shrink:0;width:76px;position:relative;border-radius:6px;overflow:hidden;height:120px;",
+                () => openLightboxRef.current(allPhotoUrls, beforeUrls.length + i)
+              )
+            );
+          });
+        }
+
+        container.appendChild(photoSection);
+      }
+
+      // ── Status label ───────────────────────────────────────────────────────
+      const statusEl = document.createElement("div");
+      statusEl.style.cssText = `font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${color};margin-bottom:4px;`;
+      statusEl.textContent = label;
+      container.appendChild(statusEl);
+
+      // ── Description (textContent — never innerHTML) ────────────────────────
+      if (spot.description) {
+        const descEl = document.createElement("div");
+        descEl.style.cssText = "font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:4px;line-height:1.4;";
+        descEl.textContent =
+          spot.description.length > 80
+            ? spot.description.slice(0, 80) + "…"
+            : spot.description;
+        container.appendChild(descEl);
+      }
+
+      // ── Address (textContent — never innerHTML) ────────────────────────────
+      if (spot.address) {
+        const addrEl = document.createElement("div");
+        addrEl.style.cssText = "font-size:12px;color:#666;margin-bottom:4px;";
+        addrEl.textContent = spot.address;
+        container.appendChild(addrEl);
+      }
+
+      // ── Time ago ───────────────────────────────────────────────────────────
+      const timeEl = document.createElement("div");
+      timeEl.style.cssText = "font-size:11px;color:#999;";
+      timeEl.textContent = `Reported ${timeAgo}`;
+      container.appendChild(timeEl);
+
+      // ── View report link ───────────────────────────────────────────────────
+      const link = document.createElement("a");
+      link.href = `/track/${Number(spot.id)}`; // spot.id is a number — safe
+      link.style.cssText =
+        "display:inline-block;margin-top:8px;font-size:12px;font-weight:700;" +
+        "color:#0f766e;text-decoration:none;background:#f0fdf4;padding:4px 10px;border-radius:6px;";
+      link.textContent = "View Report →";
+      container.appendChild(link);
+
+      const popup = L.popup({ className: "waste-popup", maxWidth: 240 }).setContent(container);
 
       const marker = L.marker([spot.latitude, spot.longitude], { icon })
         .bindPopup(popup)

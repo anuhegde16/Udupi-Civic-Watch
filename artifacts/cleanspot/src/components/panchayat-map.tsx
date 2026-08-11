@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import geofencesData from "@/data/geofences.json";
 import { formatWardLabel } from "@/lib/ward-names";
+import { useImageLightbox } from "@/components/image-lightbox";
 
 const STATUS_COLORS: Record<string, string> = {
   reported: "#ef4444",
@@ -117,6 +118,9 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
   const mapRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const hasZoomedRef = useRef(false);
+  const { lightbox, open: openLightbox } = useImageLightbox();
+  const openLightboxRef = useRef(openLightbox);
+  useEffect(() => { openLightboxRef.current = openLightbox; }, [openLightbox]);
 
   // Filter wards and district to the relevant municipality when panchayatName is set.
   // When requirePanchayat is true and panchayatName is falsy, return empty rather
@@ -294,26 +298,38 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
         const popup = document.createElement("div");
         popup.style.cssText = "min-width:160px;padding:4px 0;";
 
-        const beforeUrl =
-          (report.imageUrls && report.imageUrls[0]?.url) || report.imageUrl || null;
-        const afterUrl =
+        const beforeUrls: string[] =
+          report.imageUrls?.length
+            ? report.imageUrls.map((i) => i.url)
+            : report.imageUrl
+              ? [report.imageUrl]
+              : [];
+        const afterUrls: string[] =
           report.status === "cleaned"
-            ? (report.cleanupImageUrls && report.cleanupImageUrls[0]?.url) || report.cleanupImageUrl || null
-            : null;
+            ? report.cleanupImageUrls?.length
+              ? report.cleanupImageUrls.map((i) => i.url)
+              : report.cleanupImageUrl
+                ? [report.cleanupImageUrl]
+                : []
+            : [];
+        const allPhotoUrls = [...beforeUrls, ...afterUrls];
 
-        const hasImages = beforeUrl || afterUrl;
-
-        if (hasImages) {
-          const imgRow = document.createElement("div");
-
-          const buildThumb = (src: string, label: string, side: "left" | "right" | "full") => {
+        if (allPhotoUrls.length > 0) {
+          const buildThumb = (
+            src: string,
+            label: string,
+            cornerRadius: string,
+            height: string,
+            flex: string,
+            onClick: () => void,
+          ) => {
             const wrap = document.createElement("div");
-            const radius = side === "left" ? "8px 0 0 0" : side === "right" ? "0 8px 0 0" : "8px 8px 0 0";
-            wrap.style.cssText = `flex:1;position:relative;border-radius:${radius};overflow:hidden;height:100px;`;
+            wrap.style.cssText = `${flex}position:relative;border-radius:${cornerRadius};overflow:hidden;height:${height};`;
             const img = document.createElement("img");
             img.src = src;
             img.alt = label;
-            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in;";
+            img.addEventListener("click", (ev: Event) => { ev.stopPropagation(); onClick(); });
             wrap.appendChild(img);
             const tag = document.createElement("span");
             tag.style.cssText =
@@ -323,19 +339,62 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
             return wrap;
           };
 
-          if (beforeUrl && afterUrl) {
-            imgRow.style.cssText = "display:flex;gap:3px;margin:-4px -4px 8px -4px;";
-            imgRow.appendChild(buildThumb(beforeUrl, "Before", "left"));
-            imgRow.appendChild(buildThumb(afterUrl, "After", "right"));
-          } else if (afterUrl) {
-            imgRow.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
-            imgRow.appendChild(buildThumb(afterUrl, "Cleaned", "full"));
-          } else if (beforeUrl) {
-            imgRow.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
-            imgRow.appendChild(buildThumb(beforeUrl, "Photo", "full"));
+          const imgSection = document.createElement("div");
+
+          if (beforeUrls.length === 1 && afterUrls.length === 0) {
+            // Single complaint photo — full-width
+            imgSection.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+            imgSection.appendChild(
+              buildThumb(beforeUrls[0], "Photo", "8px 8px 0 0", "100px", "", () =>
+                openLightboxRef.current(allPhotoUrls, 0)
+              )
+            );
+          } else if (beforeUrls.length === 0 && afterUrls.length === 1) {
+            // Only a cleanup photo (edge case)
+            imgSection.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:100px;";
+            imgSection.appendChild(
+              buildThumb(afterUrls[0], "Cleaned", "8px 8px 0 0", "100px", "", () =>
+                openLightboxRef.current(allPhotoUrls, 0)
+              )
+            );
+          } else if (beforeUrls.length === 1 && afterUrls.length === 1) {
+            // Classic side-by-side before/after
+            imgSection.style.cssText = "display:flex;gap:3px;margin:-4px -4px 8px -4px;";
+            imgSection.appendChild(
+              buildThumb(beforeUrls[0], "Before", "8px 0 0 0", "100px", "flex:1;", () =>
+                openLightboxRef.current(allPhotoUrls, 0)
+              )
+            );
+            imgSection.appendChild(
+              buildThumb(afterUrls[0], "After", "0 8px 0 0", "100px", "flex:1;", () =>
+                openLightboxRef.current(allPhotoUrls, 1)
+              )
+            );
+          } else {
+            // Scrollable strip for multiple photos
+            imgSection.style.cssText = "display:flex;gap:3px;margin:-4px -4px 8px -4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;";
+            beforeUrls.forEach((url, i) => {
+              imgSection.appendChild(
+                buildThumb(
+                  url,
+                  afterUrls.length > 0 ? "Before" : "Photo",
+                  "6px",
+                  "95px",
+                  "flex-shrink:0;width:74px;",
+                  () => openLightboxRef.current(allPhotoUrls, i)
+                )
+              );
+            });
+            afterUrls.forEach((url, i) => {
+              imgSection.appendChild(
+                buildThumb(url, "After", "6px", "95px", "flex-shrink:0;width:74px;", () =>
+                  openLightboxRef.current(allPhotoUrls, beforeUrls.length + i)
+                )
+              );
+            });
           }
 
-          popup.appendChild(imgRow);
+          popup.appendChild(imgSection);
         }
 
         const badge = document.createElement("span");
@@ -379,10 +438,13 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
   }, [officers, reports, mapReady, highlightedWard, onReportClick, wardFeatures, districtFeature]);
 
   return (
-    <div
-      ref={containerRef}
-      className="z-0 w-full rounded-2xl overflow-hidden"
-      style={{ height: 320 }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="z-0 w-full rounded-2xl overflow-hidden"
+        style={{ height: 320 }}
+      />
+      {lightbox}
+    </>
   );
 }
