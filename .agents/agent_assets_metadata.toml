@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "wbcuLdx1bXjfzjM7cU4kS"
@@ -24,3 +23,10 @@ id = "9-qc4Xng80Uc4f1nUkiBe"
 uri = "file://artifacts/cleanspot/public/login-bg.png"
 type = "image"
 title = "Coastal fishing boats"
+
+[[outputs]]
+id = "3DrEknac_UNqBrdS9_j0_"
+uri = "file://attached_assets/udupi-civic-watch-functional-technical-audit.pdf"
+type = "pdf"
+title = "Udupi Civic Watch — Complete Functional & Technical Audit"
+description = "16-page A4 PDF containing all 18 audit sections, the 1,800–3,200 hour development-effort estimate, and a clearly labeled note that verified Replit hours are unavailable. Observable project activity spans 109 calendar days from April 24 to August 11, 2026; this is not presented as hours worked."
