@@ -5,7 +5,7 @@ import { formatWardLabel } from "@/lib/ward-names";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +56,10 @@ export default function OfficerDashboard() {
   );
   const { lightbox, open: openLightbox } = useImageLightbox();
   const isUdupiWardStaff = user?.panchayatName === "Udupi";
+  const openReportFromMap = useCallback(
+    (report: { id: number }) => setLocation(`/officer/report/${report.id}`),
+    [setLocation],
+  );
 
   useEffect(() => {
     if (isUdupiWardStaff) {
@@ -329,6 +333,7 @@ export default function OfficerDashboard() {
         <OfficerZoneMap
           reports={allReports}
           areaName={officerData!.areaName || "My Zone"}
+          onReportClick={openReportFromMap}
         />
       )}
 

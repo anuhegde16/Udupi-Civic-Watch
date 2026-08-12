@@ -75,6 +75,19 @@ function seedReport(
   );
   const existing = parseInt(selectOut, 10);
   if (!isNaN(existing)) {
+    // Restore the expected actionable state on every run. The supervisor action
+    // test must not inherit a prior run that completed this fixture.
+    psql(
+      dbUrl,
+      `UPDATE reports
+       SET status = 'reported',
+           cleanup_image_url = NULL,
+           cleanup_image_urls = NULL,
+           cleaning_started_at = NULL,
+           cleaned_at = NULL
+       WHERE id = ${existing};`,
+    );
+
     // If a photo was requested and the row was seeded without one, backfill it.
     if (imageUrl) {
       const imageUrls = JSON.stringify([{ url: imageUrl, uploadedAt: new Date().toISOString() }]);

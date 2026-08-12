@@ -7,12 +7,14 @@ interface OfficerZoneMapProps {
   reports: Report[];
   areaName: string;
   highlightId?: number | null;
+  onReportClick?: (report: Report) => void;
 }
 
 export function OfficerZoneMap({
   reports,
   areaName,
   highlightId,
+  onReportClick,
 }: OfficerZoneMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
@@ -197,11 +199,29 @@ export function OfficerZoneMap({
       addrEl.textContent = addr.length > 60 ? addr.slice(0, 60) + "…" : addr;
       popupEl.appendChild(addrEl);
 
-      const link = document.createElement("a");
-      link.href = `/officer/report/${Number(r.id)}`;
-      link.style.cssText = "display:inline-block;font-size:11px;font-weight:700;color:#0f766e;text-decoration:none;background:#f0fdf4;padding:3px 9px;border-radius:6px;";
-      link.textContent = "View Report →";
-      popupEl.appendChild(link);
+      const action = document.createElement("button");
+      action.type = "button";
+      action.style.cssText =
+        "display:block;width:100%;font-size:11px;font-weight:800;color:#fff;border:0;text-decoration:none;background:#0f766e;padding:7px 9px;border-radius:7px;cursor:pointer;";
+      action.textContent = r.status === "reported" ? "Start Cleanup" : r.status === "cleaning" ? "Manage Cleanup" : "View Report";
+      action.setAttribute(
+        "aria-label",
+        r.status === "reported"
+          ? `Open report ${r.id} to mark cleanup in progress`
+          : r.status === "cleaning"
+            ? `Open report ${r.id} to add cleanup evidence`
+            : `View report ${r.id}`,
+      );
+      action.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (onReportClick) {
+          onReportClick(r);
+        } else {
+          window.location.assign(`/officer/report/${Number(r.id)}`);
+        }
+      });
+      popupEl.appendChild(action);
 
       const popup = L.popup({ maxWidth: 220, className: "waste-popup" }).setContent(popupEl);
 
