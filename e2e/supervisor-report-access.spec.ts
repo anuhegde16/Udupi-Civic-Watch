@@ -285,3 +285,101 @@ test.describe("supervisor report detail — out-of-ward report", () => {
     ).not.toBeVisible();
   });
 });
+
+// ── Suite: API-level write access control ─────────────────────────────────────
+//
+// The UI no longer exposes out-of-ward controls, so a server-side gap would
+// be invisible to users. These tests issue PATCH requests directly against the
+// supervisor API — bypassing the UI — to confirm the server enforces the ward
+// boundary on every write, not just on reads.
+//
+// Test matrix:
+//   out-of-ward report + status=cleaning         → 403
+//   out-of-ward report + status=cleaned + photo  → 403
+//   in-ward report     + status=cleaning         → 200  (proves check is scoped,
+//                                                        not blanket-deny)
+
+test.describe("supervisor API — direct write access control", () => {
+  // Each test in this suite logs in via the full browser flow (to reuse
+  // loginAsSupervisor) and then issues API calls through page.request, which
+  // carries the same session cookie the browser holds.
+
+  test("PATCH status=cleaning on an out-of-ward report is rejected with 403", async ({
+    page,
+  }) => {
+    await loginAsSupervisor(page);
+
+    const res = await page.request.patch(`/api/supervisor/reports/${OUT_WARD_ID}`, {
+      data: { status: "cleaning" },
+    });
+
+    expect(res.status()).toBe(403);
+    const body = await res.json();
+    // The server should explain the reason, not just send a bare 403
+    expect(body).toHaveProperty("error");
+  });
+
+  test("PATCH status=cleaned with a cleanup photo on an out-of-ward report is rejected with 403", async ({
+    page,
+  }) => {
+    await loginAsSupervisor(page);
+
+    const res = await page.request.patch(`/api/supervisor/reports/${OUT_WARD_ID}`, {
+      data: {
+        status: "cleaned",
+        cleanupImageUrls: [
+          { url: "https://picsum.photos/seed/e2e-sv-cleanup-test/800/600" },
+        ],
+      },
+    });
+
+    expect(res.status()).toBe(403);
+    const body = await res.json();
+    expect(body).toHaveProperty("error");
+  });
+
+  test("out-of-ward report status is unchanged after a rejected PATCH", async ({
+    page,
+  }) => {
+    // Attempt to move the out-of-ward report to cleaning — this must fail.
+    await loginAsSupervisor(page);
+
+    const patchRes = await page.request.patch(`/api/supervisor/reports/${OUT_WARD_ID}`, {
+      data: { status: "cleaning" },
+    });
+    expect(patchRes.status()).toBe(403);
+
+    // Verify the stored status through the public tracking endpoint (no auth
+    // required). This is the real DB-backed assertion: if the server ran the
+    // UPDATE before checking authorization, the tracking response would show
+    // status="cleaning" and a non-null cleaning_started_at — confirming the
+    // check is enforced *before* any mutation, not after.
+    const trackRes = await page.request.get(`/api/reports/${OUT_WARD_ID}/track`);
+    expect(trackRes.status()).toBe(200);
+    const tracked = await trackRes.json();
+    expect(tracked.status).toBe("reported");
+    expect(tracked.cleanupImageUrl).toBeNull();
+    expect(tracked.cleanupImageUrls).toBeNull();
+  });
+
+  test("PATCH status=cleaning on an in-ward report succeeds (check is scoped, not blanket-deny)", async ({
+    page,
+  }) => {
+    // This is the positive counterpart: the same endpoint must allow writes
+    // for a report that is genuinely inside the supervisor's wards.
+    await loginAsSupervisor(page);
+
+    const res = await page.request.patch(`/api/supervisor/reports/${IN_WARD_ID}`, {
+      data: { status: "cleaning" },
+    });
+
+    // 200 = write accepted; any non-403, non-401 is a pass — the point is
+    // that the ward check is not a blanket deny.
+    expect(res.status()).not.toBe(403);
+    expect(res.status()).not.toBe(401);
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body).toHaveProperty("id", IN_WARD_ID);
+    expect(body).toHaveProperty("status", "cleaning");
+  });
+});
