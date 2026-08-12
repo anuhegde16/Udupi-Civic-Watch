@@ -442,21 +442,8 @@ export default function OfficerReportDetail() {
           {/* Action Area */}
           <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 space-y-4">
             <h3 className="font-black text-lg text-foreground mb-4">
-              {isSupervisor ? "Ward Staff Actions" : "Officer Actions"}
+              Officer Actions
             </h3>
-            {isSupervisor && (
-              <div className="grid grid-cols-3 gap-2 text-xs font-bold">
-                <div className={`rounded-xl px-3 py-2 ${report.status === "reported" ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200" : "bg-primary/10 text-primary"}`}>
-                  {report.status === "reported" ? "1. Dispatch team" : "✓ Dispatched"}
-                </div>
-                <div className={`rounded-xl px-3 py-2 ${report.status === "cleaning" ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200" : report.status === "cleaned" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                  {report.status === "cleaned" ? "✓ Photos added" : "2. Add photos"}
-                </div>
-                <div className={`rounded-xl px-3 py-2 ${report.status === "cleaned" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
-                  {report.status === "cleaned" ? "✓ Completed" : "3. Complete"}
-                </div>
-              </div>
-            )}
             
             {report.status === 'reported' && (
               <Button 

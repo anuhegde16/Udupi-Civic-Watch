@@ -1,14 +1,14 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
+import { useRelativeTime } from "@/hooks/use-relative-time";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,19 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
-import { compressImage } from "@/lib/compress-image";
-import { uploadImageWithProgress, UploadTimeoutError } from "@/lib/upload-with-progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { RoleMap, type RoleMapReport } from "@/components/role-map";
+import { UdupiSupervisorZoneMap } from "@/components/udupi-supervisor-zone-map";
 import {
   MapPin,
   Clock,
@@ -40,14 +29,9 @@ import {
   AlertCircle,
   Wrench,
   LayoutList,
-  Users,
-  ChevronRight,
-  BarChart2,
-  LayoutDashboard,
-  TrendingUp,
-  Camera,
-  Images,
-  X,
+  ArrowUpDown,
+  RefreshCw,
+  WifiOff,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -81,17 +65,6 @@ type Report = {
   officerName: string | null;
 };
 
-type CleanupPhoto = {
-  id: string;
-  preview: string;
-  url: string;
-  uploadedAt: string;
-  progress: number;
-  error: string | null;
-};
-
-const MAX_CLEANUP_PHOTOS = 5;
-
 function useProfile() {
   return useQuery<SupervisorProfile>({
     queryKey: ["supervisor-me"],
@@ -106,16 +79,6 @@ function useReports() {
     queryFn: () => customFetch("/api/supervisor/reports"),
     staleTime: 60_000,
     refetchInterval: 120_000,
-    refetchIntervalInBackground: false,
-  });
-}
-
-function useMapReports() {
-  return useQuery<{ reports: RoleMapReport[] }>({
-    queryKey: ["sv-map-reports"],
-    queryFn: () => customFetch("/api/supervisor/map-reports"),
-    staleTime: 60_000,
-    refetchInterval: 180_000,
     refetchIntervalInBackground: false,
   });
 }
@@ -137,183 +100,29 @@ const STATUS_LABEL: Record<string, string> = {
   cleaned: "Cleaned",
 };
 
-function PhotoEvidenceSection({
-  title,
-  emptyLabel,
-  photos,
-  onOpen,
-  complete = false,
-}: {
-  title: string;
-  emptyLabel: string;
-  photos: { url: string; uploadedAt?: string }[];
-  onOpen: (index: number) => void;
-  complete?: boolean;
-}) {
-  return (
-    <section className="rounded-2xl border border-border overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-border/70 bg-muted/30">
-        {complete ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Camera className="w-4 h-4 text-muted-foreground" />}
-        <h3 className="font-bold text-sm">{title}</h3>
-        {photos.length > 0 && <Badge variant="secondary" className="ml-auto text-xs">{photos.length}</Badge>}
-      </div>
-      {photos.length > 0 ? (
-        <div className={`grid gap-1 ${photos.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-          {photos.map((photo, index) => (
-            <button
-              key={`${photo.url}-${index}`}
-              type="button"
-              className="aspect-[4/3] bg-muted cursor-zoom-in group relative overflow-hidden"
-              onClick={() => onOpen(index)}
-              aria-label={`View ${title.toLowerCase()} ${index + 1} full screen`}
-            >
-              <img
-                src={photo.url}
-                alt={`${title} ${index + 1}`}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div className="p-6 text-center text-sm text-muted-foreground">{emptyLabel}</div>
-      )}
-    </section>
-  );
-}
-
 export default function SupervisorDashboard() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const [view, setView] = useState<"overview" | "analytics">("overview");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
-  const [focusedWard, setFocusedWard] = useState<string | null>(null);
-  const [previewReport, setPreviewReport] = useState<Report | null>(null);
-  const [cleanupReport, setCleanupReport] = useState<Report | null>(null);
-  const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const mapWrapperRef = useRef<HTMLDivElement>(null);
-  const cleanupFileInputRef = useRef<HTMLInputElement>(null);
+  const [sort, setSort] = useState<"newest" | "oldest" | "status">("newest");
+  const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const relativeLastRefreshed = useRelativeTime(lastRefreshed);
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   useEffect(() => {
-    setView(new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview");
+    const online = () => setIsOffline(false);
+    const offline = () => setIsOffline(true);
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
   }, []);
 
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: reportsData, isLoading: reportsLoading } = useReports();
-
-  const updateStatus = useMutation({
-    mutationFn: ({ id, status, cleanupImageUrls }: {
-      id: number;
-      status: string;
-      cleanupImageUrls?: { url: string; uploadedAt?: string }[];
-    }) =>
-      customFetch(`/api/supervisor/reports/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status,
-          ...(cleanupImageUrls?.length
-            ? { cleanupImageUrl: cleanupImageUrls[0].url, cleanupImageUrls }
-            : {}),
-        }),
-        headers: { "Content-Type": "application/json" },
-      }),
-    onSuccess: (
-      updated: Partial<Report> & { id: number; status: string },
-      variables,
-    ) => {
-      queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] });
-      queryClient.invalidateQueries({ queryKey: ["sv-map-reports"] });
-      setPreviewReport((current) =>
-        current?.id === updated.id
-          ? {
-              ...current,
-              ...updated,
-              ...(variables.cleanupImageUrls?.length
-                ? {
-                    cleanupImageUrl: variables.cleanupImageUrls[0].url,
-                    cleanupImageUrls: variables.cleanupImageUrls,
-                  }
-                : {}),
-            }
-          : current
-      );
-      setCleanupReport(null);
-      setCleanupPhotos([]);
-      toast({ title: "Status updated" });
-    },
-    onError: (err: any) =>
-      toast({ title: "Failed to update status", description: err.message, variant: "destructive" }),
-  });
-
-  const startCleanupUpload = (photoId: string, dataUrl: string) => {
-    setCleanupPhotos((photos) => photos.map((photo) =>
-      photo.id === photoId ? { ...photo, progress: 0, error: null } : photo
-    ));
-    uploadImageWithProgress(dataUrl, (progress) => {
-      setCleanupPhotos((photos) => photos.map((photo) =>
-        photo.id === photoId ? { ...photo, progress } : photo
-      ));
-    }).then((uploaded) => {
-      setCleanupPhotos((photos) => photos.map((photo) =>
-        photo.id === photoId
-          ? { ...photo, url: uploaded.url, uploadedAt: uploaded.uploadedAt, progress: 100, error: null }
-          : photo
-      ));
-    }).catch((error) => {
-      const message = error instanceof UploadTimeoutError
-        ? error.message
-        : error instanceof Error ? error.message : "Upload failed. Please try again.";
-      setCleanupPhotos((photos) => photos.map((photo) =>
-        photo.id === photoId ? { ...photo, progress: 0, error: message } : photo
-      ));
-    });
-  };
-
-  const addCleanupPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || cleanupPhotos.length >= MAX_CLEANUP_PHOTOS) return;
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    try {
-      setIsProcessingImage(true);
-      const preview = await compressImage(file);
-      setCleanupPhotos((photos) => [...photos, {
-        id, preview, url: "", uploadedAt: "", progress: 0, error: null,
-      }]);
-      setIsProcessingImage(false);
-      startCleanupUpload(id, preview);
-    } catch {
-      setIsProcessingImage(false);
-      toast({ title: "Could not process image", description: "Please choose another photo and try again.", variant: "destructive" });
-    }
-  };
-
-  const openCleanupEvidence = (report: Report) => {
-    setCleanupPhotos([]);
-    setCleanupReport(report);
-  };
-  const closeCleanupEvidence = () => {
-    if (!updateStatus.isPending) {
-      setCleanupReport(null);
-      setCleanupPhotos([]);
-    }
-  };
-  const submitCleaned = () => {
-    const completedPhotos = cleanupPhotos.filter((photo) => photo.url);
-    if (completedPhotos.length === 0 || completedPhotos.length !== cleanupPhotos.length) return;
-    if (cleanupReport) {
-      updateStatus.mutate({
-        id: cleanupReport.id,
-        status: "cleaned",
-        cleanupImageUrls: completedPhotos.map(({ url, uploadedAt }) => ({ url, uploadedAt })),
-      });
-    }
-  };
 
   const allReports = reportsData?.reports ?? [];
 
@@ -323,22 +132,6 @@ export default function SupervisorDashboard() {
     cleaning: allReports.filter((r) => r.status === "cleaning").length,
     cleaned: allReports.filter((r) => r.status === "cleaned").length,
   }), [allReports]);
-  const resolutionRate = stats.total > 0 ? Math.round((stats.cleaned / stats.total) * 100) : 0;
-  const wardBreakdown = useMemo(() => {
-    const byWard = new Map<string, { total: number; open: number; cleaned: number }>();
-    allReports.forEach((report) => {
-      const ward = report.wardName ?? "Unassigned ward";
-      const row = byWard.get(ward) ?? { total: 0, open: 0, cleaned: 0 };
-      row.total += 1;
-      if (report.status === "cleaned") row.cleaned += 1;
-      else row.open += 1;
-      byWard.set(ward, row);
-    });
-    return [...byWard.entries()]
-      .map(([ward, values]) => ({ ward, ...values }))
-      .sort((a, b) => b.open - a.open || b.total - a.total);
-  }, [allReports]);
-
   const filtered = useMemo(() => {
     let list = statusFilter === "all" ? allReports : allReports.filter((r) => r.status === statusFilter);
     if (search.trim()) {
@@ -347,243 +140,61 @@ export default function SupervisorDashboard() {
         r.address?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q) || r.wardName?.toLowerCase().includes(q)
       );
     }
+    if (sort === "newest") list = [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    else if (sort === "oldest") list = [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    else list = [...list].sort((a, b) => ({ reported: 0, cleaning: 1, cleaned: 2 }[a.status] ?? 9) - ({ reported: 0, cleaning: 1, cleaned: 2 }[b.status] ?? 9));
     return list;
-  }, [allReports, statusFilter, search]);
+  }, [allReports, statusFilter, search, sort]);
 
   const wardNames: string[] = profile?.ward_names ?? [];
   const isLoading = profileLoading || reportsLoading;
 
-  const { data: mapData } = useMapReports();
-  const mapReports = mapData?.reports ?? [];
   const wardGeoNames = useMemo(() => wardNames.map(svWardToGeoName), [wardNames]);
-  const previewOriginalPhotos = previewReport
-    ? (previewReport.imageUrls?.filter((photo) => photo?.url) ?? []).length
-      ? previewReport.imageUrls!.filter((photo) => photo?.url)
-      : previewReport.imageUrl ? [{ url: previewReport.imageUrl }] : []
-    : [];
-  const previewCleanupPhotos = previewReport
-    ? (previewReport.cleanupImageUrls?.filter((photo) => photo?.url) ?? []).length
-      ? previewReport.cleanupImageUrls!.filter((photo) => photo?.url)
-      : previewReport.cleanupImageUrl ? [{ url: previewReport.cleanupImageUrl }] : []
-    : [];
-  const hasPendingCleanupUploads = isProcessingImage || cleanupPhotos.some((photo) => !photo.url && !photo.error);
-  const hasUploadErrors = cleanupPhotos.some((photo) => !!photo.error);
-  const openReportFromMap = useCallback((mapReport: RoleMapReport) => {
-    const report = allReports.find((item) => item.id === mapReport.id);
-    if (report) {
-      setPreviewReport(report);
-      return;
-    }
-    toast({
-      title: "Report unavailable",
-      description: "This report is no longer available in your assigned wards.",
-      variant: "destructive",
-    });
-  }, [allReports, toast]);
-  const openReport = useCallback((reportId: number) => {
-    setLocation(`/supervisor/report/${reportId}`);
-  }, [setLocation]);
+  const openReportFromMap = useCallback((report: Report) => setLocation(`/supervisor/report/${report.id}`), [setLocation]);
+  const refresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["supervisor-me"] }),
+        queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] }),
+      ]);
+      setLastRefreshed(new Date());
+    } finally { setIsRefreshing(false); }
+  };
+  const progress = stats.total ? Math.round((stats.cleaned / stats.total) * 100) : 0;
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {lightbox}
-      <Dialog open={!!previewReport} onOpenChange={(open) => !open && setPreviewReport(null)}>
-        <DialogContent className="max-w-2xl max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-border px-6 pb-4 pt-6 pr-14">
-            <div className="flex items-center gap-3">
-              <DialogTitle>Report #{previewReport?.id}</DialogTitle>
-              {previewReport && (
-                <Badge
-                  variant="outline"
-                  data-testid="map-report-status"
-                  className={STATUS_COLOR[previewReport.status] ?? "bg-muted text-muted-foreground border-border"}
-                >
-                  {STATUS_LABEL[previewReport.status] ?? previewReport.status}
-                </Badge>
-              )}
-            </div>
-            <DialogDescription>
-              {previewReport?.status === "reported"
-                ? "Step 1: dispatch the team and mark this report In Progress."
-                : previewReport?.status === "cleaning"
-                  ? "Step 2: upload cleanup photos once the dispatched team finishes the work."
-                  : "Cleanup complete. Confirmation photos are shown below."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 overflow-y-auto px-6 py-5">
-            <div className="space-y-5">
-              <PhotoEvidenceSection
-                title="Complaint photos"
-                emptyLabel="No complaint photo was provided."
-                photos={previewOriginalPhotos}
-                onOpen={(index) => openLightbox(previewOriginalPhotos.map((photo) => photo.url), index)}
-              />
-              <PhotoEvidenceSection
-                title="Cleanup confirmation photos"
-                emptyLabel="No cleanup photo has been submitted yet."
-                photos={previewCleanupPhotos}
-                onOpen={(index) => openLightbox(previewCleanupPhotos.map((photo) => photo.url), index)}
-                complete
-              />
-            </div>
-          </div>
-          {previewReport?.status !== "cleaned" && (
-            <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:justify-end">
-              {previewReport?.status === "reported" && (
-                <Button
-                  variant="outline"
-                  data-testid="map-report-progress-action"
-                  onClick={() => updateStatus.mutate({ id: previewReport.id, status: "cleaning" })}
-                  disabled={updateStatus.isPending}
-                  className="rounded-xl"
-                >
-                  {updateStatus.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  <Wrench className="w-4 h-4 mr-2" /> Mark as In Progress
-                </Button>
-              )}
-              {previewReport?.status === "cleaning" && (
-                <Button
-                  data-testid="map-report-cleanup-action"
-                  onClick={() => previewReport && openCleanupEvidence(previewReport)}
-                  className="rounded-xl"
-                >
-                  <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
-                </Button>
-              )}
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!cleanupReport} onOpenChange={(open) => !open && closeCleanupEvidence()}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Confirm cleanup with photos</DialogTitle>
-            <DialogDescription>
-              Add at least one photo of the cleaned location before marking report #{cleanupReport?.id} as Cleaned.
-            </DialogDescription>
-          </DialogHeader>
-          <input
-            ref={cleanupFileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={addCleanupPhoto}
-          />
-          <div className="space-y-3">
-            {cleanupPhotos.length > 0 && (
-              <div className="grid grid-cols-2 gap-3">
-                {cleanupPhotos.map((photo) => (
-                  <div key={photo.id} className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted border border-border">
-                    <img src={photo.preview} alt="Cleanup evidence preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setCleanupPhotos((photos) => photos.filter((item) => item.id !== photo.id))}
-                      className="absolute top-2 right-2 rounded-full bg-black/70 text-white p-1"
-                      aria-label="Remove cleanup photo"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                    {!photo.url && !photo.error && <div className="absolute inset-x-0 bottom-0 bg-black/70 text-white text-xs font-bold px-2 py-1.5">Uploading {photo.progress}%</div>}
-                    {photo.error && <div className="absolute inset-x-0 bottom-0 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1.5">{photo.error}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-            {cleanupPhotos.length < MAX_CLEANUP_PHOTOS && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-20 border-dashed rounded-xl"
-                disabled={isProcessingImage}
-                onClick={() => cleanupFileInputRef.current?.click()}
-              >
-                {isProcessingImage ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Images className="w-5 h-5 mr-2" />}
-                Add cleanup photo
-              </Button>
-            )}
-            <p className="text-xs text-muted-foreground font-medium">At least one clear photo is required. You can add up to {MAX_CLEANUP_PHOTOS} photos.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeCleanupEvidence} disabled={updateStatus.isPending}>Cancel</Button>
-            <Button
-              onClick={submitCleaned}
-              disabled={cleanupPhotos.length === 0 || hasPendingCleanupUploads || hasUploadErrors || updateStatus.isPending}
-            >
-              {updateStatus.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Mark as Cleaned
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {isOffline && <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 text-sm font-medium"><WifiOff className="w-4 h-4 shrink-0 text-amber-500" />You're offline — showing data from {relativeLastRefreshed}. Move to a better signal area to receive new assignments.</div>}
 
       {/* Header */}
       <div className="bg-card rounded-3xl p-6 md:p-8 border border-border/50 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/5 rounded-bl-[100px] pointer-events-none" />
-        <div>
+          <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-bl-[100px] pointer-events-none" />
+          <div className="flex items-start justify-between gap-4">
+            <div>
           <p className="text-sm font-medium text-muted-foreground mb-1">{getGreeting(user?.name)}</p>
-          <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-emerald-200">
-            <Users className="w-3.5 h-3.5" /> Udupi Ward Staff
-          </div>
           <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
-            {profileLoading ? "Loading…" : (profile?.name ?? user?.name)}
+            My Zone
           </h1>
-          {profile?.health_inspector_name && (
-            <p className="text-sm text-muted-foreground font-medium flex items-center gap-1.5">
-              <ChevronRight className="w-3.5 h-3.5" />
-              Reports to: <span className="font-bold text-foreground">{profile.health_inspector_name}</span>
-              {profile.health_inspector_phone && (
-                <a href={`tel:${profile.health_inspector_phone}`} className="text-primary hover:underline text-xs ml-1">
-                  {profile.health_inspector_phone}
-                </a>
-              )}
-            </p>
-          )}
-
-          {/* Ward chips — tap to highlight that ward on the map */}
-          {wardNames.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3">
-              {wardNames.map((w) => {
-                const geoName = svWardToGeoName(w);
-                const isActive = focusedWard === geoName;
-                return (
-                  <button
-                    key={w}
-                    type="button"
-                    onClick={() => {
-                      const next = isActive ? null : geoName;
-                      setFocusedWard(next);
-                      if (next !== null && mapWrapperRef.current) {
-                        mapWrapperRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                      }
-                    }}
-                    className={`text-xs font-bold px-3 py-1 rounded-full border transition-all ${
-                      isActive
-                        ? "bg-emerald-700 text-white border-emerald-700 shadow-sm"
-                        : "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                    }`}
-                  >
-                    {formatWardLabel(w)}
-                  </button>
-                );
-              })}
+          <p className="text-muted-foreground font-medium">{wardNames.length ? `Wards: ${wardNames.map(formatWardLabel).join(", ")} — Udupi Municipality` : "Your assigned areas"}</p>
             </div>
-          )}
-        </div>
+            <button type="button" onClick={refresh} disabled={isRefreshing} title="Refresh data" className="relative z-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors bg-muted/60 hover:bg-muted disabled:opacity-50 px-3 py-2 rounded-xl shrink-0"><RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} /><span className="hidden sm:inline">Updated {relativeLastRefreshed}</span></button>
+          </div>
 
         {/* Stats strip */}
-        <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Total", value: stats.total, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60", filter: "all" as StatusFilter },
-            { label: "New", value: stats.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8", filter: "reported" as StatusFilter },
-            { label: "In Progress", value: stats.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50", filter: "cleaning" as StatusFilter },
-            { label: "Cleaned", value: stats.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8", filter: "cleaned" as StatusFilter },
+        {isLoading ? <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">{[0, 1, 2, 3].map((i) => <div key={i} className="h-16 bg-muted/40 rounded-2xl animate-pulse" />)}</div> : <>
+        <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">{[
+            { label: "Total", value: stats.total, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60", activeBg: "bg-muted ring-2 ring-foreground/30", filter: "all" as StatusFilter },
+            { label: "New", value: stats.reported, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8", activeBg: "bg-destructive/20 ring-2 ring-destructive/40", filter: "reported" as StatusFilter },
+            { label: "In Progress", value: stats.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50", activeBg: "bg-blue-100 ring-2 ring-blue-400/40", filter: "cleaning" as StatusFilter },
+            { label: "Cleaned", value: stats.cleaned, icon: <CheckCircle2 className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8", activeBg: "bg-primary/20 ring-2 ring-primary/40", filter: "cleaned" as StatusFilter },
           ].map((s) => (
             <button
               key={s.label}
               type="button"
               onClick={() => setStatusFilter(statusFilter === s.filter ? "all" : s.filter)}
-              className={`${statusFilter === s.filter ? "ring-2 ring-offset-1 brightness-95" : ""} ${s.bg} rounded-2xl px-4 py-3 flex items-center gap-3 transition-all cursor-pointer text-left w-full hover:brightness-95`}
+              className={`${statusFilter === s.filter ? s.activeBg : s.bg} rounded-2xl px-4 py-3 flex items-center gap-3 transition-all duration-150 hover:brightness-95 active:scale-95 cursor-pointer text-left w-full`}
             >
               <div className={s.color}>{s.icon}</div>
               <div>
@@ -591,89 +202,22 @@ export default function SupervisorDashboard() {
                 <div className="text-xs text-muted-foreground font-semibold">{s.label}</div>
               </div>
             </button>
-          ))}
-        </div>
+          ))}</div>
+          {stats.total > 0 && <div className="mt-4"><div className="flex items-center justify-between mb-1.5"><span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Zone completion</span><span className="text-xs font-black text-primary">{progress}%</span></div><div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${progress}%` }} /></div></div>}
+        </>}
       </div>
-
-      <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl w-fit">
-        <button
-          type="button"
-          onClick={() => setView("overview")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-        >
-          <LayoutDashboard className="w-4 h-4" /> Overview
-        </button>
-        <button
-          type="button"
-          onClick={() => setView("analytics")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${view === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-        >
-          <BarChart2 className="w-4 h-4" /> Analytics
-        </button>
-      </div>
-
-      {view === "analytics" && (
-        <section className="space-y-5" aria-label="Ward analytics">
-          <div className="bg-card rounded-3xl border border-border/50 p-6 shadow-sm">
-            <p className="text-sm font-bold text-muted-foreground">Your wards · read-only summary</p>
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: "Total reports", value: stats.total, icon: <LayoutList className="w-5 h-5" />, color: "text-foreground", bg: "bg-muted/60" },
-                { label: "Open backlog", value: stats.reported + stats.cleaning, icon: <AlertCircle className="w-5 h-5" />, color: "text-destructive", bg: "bg-destructive/8" },
-                { label: "In progress", value: stats.cleaning, icon: <Wrench className="w-5 h-5" />, color: "text-blue-500", bg: "bg-blue-50" },
-                { label: "Resolution rate", value: `${resolutionRate}%`, icon: <TrendingUp className="w-5 h-5" />, color: "text-primary", bg: "bg-primary/8" },
-              ].map((item) => (
-                <div key={item.label} className={`${item.bg} rounded-2xl px-4 py-3 flex items-center gap-3`}>
-                  <div className={item.color}>{item.icon}</div>
-                  <div><p className={`text-2xl font-black ${item.color}`}>{item.value}</p><p className="text-xs font-semibold text-muted-foreground">{item.label}</p></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-card rounded-3xl border border-border/50 overflow-hidden shadow-sm">
-            <div className="p-5 border-b border-border/50"><h2 className="font-black text-lg">Backlog by ward</h2><p className="text-sm text-muted-foreground">Only the wards assigned to you are shown.</p></div>
-            {wardBreakdown.length === 0 ? <p className="p-6 text-sm text-muted-foreground">No ward reports are available yet.</p> : (
-              <div className="divide-y divide-border/50">
-                {wardBreakdown.map((row) => (
-                  <div key={row.ward} className="p-4 flex items-center gap-4">
-                    <p className="font-bold text-sm min-w-0 flex-1">{formatWardLabel(row.ward)}</p>
-                    <span className="text-xs font-bold text-destructive">{row.open} open</span>
-                    <span className="text-xs font-bold text-primary">{row.cleaned} cleaned</span>
-                    <span className="text-xs text-muted-foreground w-14 text-right">{row.total} total</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Ward coverage map */}
-      {view === "overview" && wardGeoNames.length > 0 && (
-        <div ref={mapWrapperRef}>
-          <RoleMap
-            reports={mapReports}
-            wardGeoNames={wardGeoNames}
-            title="Your Ward Coverage"
-            subtitle={`${wardNames.length} ward${wardNames.length !== 1 ? "s" : ""} — tap any pin to see details`}
-            height="320px"
-            highlightBacklogWards
-            focusedWardGeoName={focusedWard ?? undefined}
-            onReportClick={openReportFromMap}
-          />
-        </div>
-      )}
+      {!isLoading && wardGeoNames.length > 0 && <UdupiSupervisorZoneMap reports={allReports} wardGeoNames={wardGeoNames} wardNames={wardNames} onReportClick={openReportFromMap} />}
 
       {/* Filters */}
-      {view === "overview" && <div className="flex flex-col gap-3">
-        <div className="relative">
+      <div className="flex flex-col gap-3"><div className="flex gap-2"><div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder="Search by address, description or ward…"
+            placeholder="Search by address or description…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9 rounded-xl border-border/60 bg-card h-11 text-sm font-medium"
-          />
+          /></div>
+          <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}><SelectTrigger className="w-[148px] rounded-xl border-border/60 bg-card h-11 text-sm font-bold shrink-0 gap-1.5"><ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="status">By status</SelectItem></SelectContent></Select>
         </div>
         <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
           <TabsList className="bg-background/50 backdrop-blur-sm border border-border shadow-sm rounded-2xl p-1.5 h-auto grid grid-cols-2 sm:flex sm:flex-nowrap gap-1.5 sm:gap-0 w-full">
@@ -683,41 +227,39 @@ export default function SupervisorDashboard() {
             <TabsTrigger value="cleaned" className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-primary py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1">Cleaned ({stats.cleaned})</TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>}
+      </div>
 
       {/* Report cards */}
-      {view === "overview" && (isLoading ? (
+      {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
-          <p className="font-bold text-lg">Loading ward reports…</p>
+          <p className="font-bold text-lg">Loading assigned reports…</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-card border border-dashed border-border rounded-[2.5rem] flex flex-col items-center justify-center py-20 px-4 text-center shadow-sm">
           <Search className="w-12 h-12 text-muted-foreground opacity-50 mb-4" />
           <h3 className="text-xl font-black text-foreground mb-1">No reports found</h3>
           <p className="text-muted-foreground font-medium">
-            {search ? `No results for "${search}"` : "All clear in your wards!"}
+            {search ? `No results for "${search}"` : statusFilter === "all" ? "Your zone is clear — great work!" : `No ${STATUS_LABEL[statusFilter].toLowerCase()} reports.`}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((report, i) => {
             const thumb = report.imageUrls?.[0]?.url ?? report.imageUrl;
-            return (
-              <Card
-                key={report.id}
-                className="overflow-hidden border-border/50 h-full flex flex-col rounded-3xl animate-in fade-in slide-in-from-bottom-4"
+            return <Link key={report.id} href={`/supervisor/report/${report.id}`}><Card
+                className="overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all border-border/50 cursor-pointer h-full flex flex-col group rounded-3xl animate-in fade-in slide-in-from-bottom-4"
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <div className="aspect-[4/3] w-full bg-muted relative overflow-hidden">
                   {thumb ? (
                     <button
                       type="button"
-                      onClick={() => openReport(report.id)}
-                      className="absolute inset-0 w-full h-full cursor-pointer"
-                      aria-label={`Open report ${report.id}`}
+                      onClick={(event) => { event.preventDefault(); event.stopPropagation(); openLightbox((report.imageUrls?.length ? report.imageUrls.map((photo) => photo.url) : [report.imageUrl!]), 0); }}
+                      className="absolute inset-0 w-full h-full cursor-zoom-in"
+                      aria-label="View report photo full screen"
                     >
-                      <img src={thumb} alt="Waste report" className="w-full h-full object-cover" />
+                      <img src={thumb} alt="Waste report" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     </button>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -732,71 +274,26 @@ export default function SupervisorDashboard() {
                   <div className="absolute top-3 right-3">
                     <span className="bg-black/70 backdrop-blur-md text-white text-xs font-black font-mono px-2.5 py-1 rounded-lg shadow-sm">#{report.id}</span>
                   </div>
-                  {report.wardName && (
-                    <div className="absolute bottom-3 left-3">
-                      <span className="bg-black/60 text-white text-xs font-bold px-2 py-1 rounded-lg">{formatWardLabel(report.wardName)}</span>
-                    </div>
-                  )}
                 </div>
 
-                <div className="p-5 flex-1 flex flex-col bg-card gap-3">
-                  <p className="font-bold text-foreground text-sm leading-snug flex items-start gap-2">
+                <div className="p-5 flex-1 flex flex-col bg-card">
+                  <p className="font-bold text-foreground text-base mb-2 line-clamp-2 leading-snug group-hover:text-primary transition-colors flex items-start gap-2">
                     <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{report.address || `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}</span>
+                    <span>{report.address || `${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}</span>
                   </p>
-
-                  {report.description && (
-                    <p className="text-xs text-muted-foreground italic font-medium bg-muted/50 p-2.5 rounded-xl line-clamp-2">"{report.description}"</p>
-                  )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-9 rounded-xl text-xs font-bold"
-                    onClick={() => openReport(report.id)}
-                  >
-                    View report
-                  </Button>
-
-                  {report.wasteTypes && report.wasteTypes.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {report.wasteTypes.slice(0, 3).map((wt) => (
-                        <span key={wt} className="bg-amber-50 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-200">{wt}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-auto space-y-2 pt-2 border-t border-border/50">
+                  <div className="mt-auto space-y-2">
+                    {report.description && <p className="text-xs text-muted-foreground line-clamp-2 italic font-medium bg-muted/50 p-2.5 rounded-xl">"{report.description}"</p>}
+                  <div className="flex items-center text-xs text-muted-foreground font-bold pt-2.5 border-t border-border/50">
                     <div className="flex items-center text-xs text-muted-foreground font-bold">
                       <Clock className="w-3.5 h-3.5 mr-1.5" />
                       {format(new Date(report.createdAt), "MMM d, h:mm a")}
                     </div>
 
-                    {/* Status update dropdown */}
-                    {report.status !== "cleaned" && (
-                      <Select
-                        value={report.status}
-                        onValueChange={(v) => {
-                          if (v === "cleaned") openCleanupEvidence(report);
-                          else updateStatus.mutate({ id: report.id, status: v });
-                        }}
-                      >
-                        <SelectTrigger className="h-9 rounded-xl text-xs font-bold border-border/60 bg-muted/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="reported">Mark as New</SelectItem>
-                          <SelectItem value="cleaning">Mark as In Progress</SelectItem>
-                          <SelectItem value="cleaned">Mark as Cleaned</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            );
+                  </div></div>
+                </div></Card></Link>;
           })}
         </div>
-      ))}
+      )}
     </div>
   );
 }

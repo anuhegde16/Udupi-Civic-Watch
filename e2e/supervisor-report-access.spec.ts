@@ -77,30 +77,34 @@ test.describe("supervisor dashboard → report detail", () => {
   test.beforeEach(async ({ page }) => {
     await loginAsSupervisor(page);
     await page.goto("/supervisor/dashboard", { waitUntil: "load" });
-    // Wait for the report list to settle — either a card or an empty-state message
+    // Wait for the report list to settle — either a card or an empty-state message.
+    // The dashboard now matches the Saligrama officer layout: each report is a
+    // link-wrapped card rather than a card with a "View report" button.
     await expect(
-      page.getByRole("button", { name: /view report/i }).first()
+      page.locator('a[href^="/supervisor/report/"]').first()
         .or(page.getByText(/no reports found/i).first()),
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("supervisor dashboard shows View report buttons for ward reports", async ({
+  test("supervisor dashboard shows report cards linking to ward reports", async ({
     page,
   }) => {
     // At least one in-ward report card must be present (the seeded fixture lives
     // inside Ward 1 / Kola, which is one of this supervisor's assigned wards).
-    const viewBtn = page.getByRole("button", { name: /view report/i }).first();
-    await expect(viewBtn).toBeVisible({ timeout: 10_000 });
+    const card = page.locator('a[href^="/supervisor/report/"]').first();
+    await expect(card).toBeVisible({ timeout: 10_000 });
   });
 
-  test("clicking View report navigates to /supervisor/report/:id", async ({
+  test("clicking a report card navigates to /supervisor/report/:id", async ({
     page,
   }) => {
-    // Click the first available card's "View report" button — any in-ward report
-    // works for this routing check.
-    const viewBtn = page.getByRole("button", { name: /view report/i }).first();
-    await expect(viewBtn).toBeVisible({ timeout: 10_000 });
-    await viewBtn.click();
+    // Click the first available report card — any in-ward report works for this
+    // routing check. The card's centre sits on the photo zoom button, which
+    // deliberately swallows the click to open the lightbox, so target the
+    // address line in the card body instead.
+    const card = page.locator('a[href^="/supervisor/report/"]').first();
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.locator("p").first().click();
 
     // Must land on the supervisor-specific report route (not /officer/report/…)
     await page.waitForURL(
@@ -110,21 +114,17 @@ test.describe("supervisor dashboard → report detail", () => {
     expect(page.url()).toMatch(/\/supervisor\/report\/\d+/);
   });
 
-  test("card image button for in-ward report also navigates to /supervisor/report/:id", async ({
+  test("the in-ward report card navigates to /supervisor/report/:id", async ({
     page,
   }) => {
-    // The image area of a card is also a button that calls openReport().
-    // Find a card that contains the seeded in-ward report ID and click its image.
-    const inWardIdSpan = page.locator(`span:has-text("#${IN_WARD_ID}")`).first();
-    await expect(inWardIdSpan).toBeVisible({ timeout: 15_000 });
-
-    // The image button sits directly inside the card image area and has an
-    // aria-label of "Open report {id}"
-    const imageBtn = page.getByRole("button", {
-      name: `Open report ${IN_WARD_ID}`,
-    });
-    await expect(imageBtn).toBeVisible({ timeout: 8_000 });
-    await imageBtn.click();
+    // Matches the Saligrama officer dashboard: the whole card is a link to the
+    // report workspace, so clicking the seeded in-ward card opens that report.
+    const inWardCard = page.locator(
+      `a[href="/supervisor/report/${IN_WARD_ID}"]`,
+    );
+    await expect(inWardCard).toBeVisible({ timeout: 15_000 });
+    // Avoid the photo zoom button that covers the card's centre point.
+    await inWardCard.locator("p").first().click();
 
     await page.waitForURL(
       (url) => url.pathname === `/supervisor/report/${IN_WARD_ID}`,
@@ -133,10 +133,29 @@ test.describe("supervisor dashboard → report detail", () => {
     expect(page.url()).toMatch(`/supervisor/report/${IN_WARD_ID}`);
   });
 
-  test("map report preview shows its status and keeps the In Progress action visible", async ({
+  test("card photo opens the lightbox instead of navigating", async ({
     page,
   }) => {
-    const markers = page.locator(".role-map-report-marker");
+    // Saligrama parity: the photo area is a zoom button that opens the shared
+    // lightbox and must not trigger the card's navigation link.
+    const photoBtn = page
+      .getByRole("button", { name: /view report photo full screen/i })
+      .first();
+    await expect(photoBtn).toBeVisible({ timeout: 15_000 });
+    await photoBtn.click();
+
+    await expect(page.getByRole("dialog").first()).toBeVisible({
+      timeout: 8_000,
+    });
+    expect(page.url()).toContain("/supervisor/dashboard");
+  });
+
+  test("map popup opens the seeded in-ward report workspace", async ({
+    page,
+  }) => {
+    // Saligrama parity: the zone map popup routes straight to the report
+    // workspace instead of opening an inline status-change preview dialog.
+    const markers = page.locator(".udupi-supervisor-report-marker");
     await expect(markers.first()).toBeVisible({ timeout: 15_000 });
 
     // Report pins overlap heavily inside a single ward, so a coordinate click can
@@ -162,55 +181,31 @@ test.describe("supervisor dashboard → report detail", () => {
     }
 
     expect(fixtureActionFound).toBe(true);
-    // CSS locator rather than getByRole: the dashboard's push-notification
-    // prompt can open as a second modal, and Radix then marks background
-    // content aria-hidden, so role-based queries stop matching this dialog.
-    const preview = page.locator(
-      '[role="dialog"]:has([data-testid="map-report-status"])',
+    await page.waitForURL(
+      (url) => url.pathname === `/supervisor/report/${IN_WARD_ID}`,
+      { timeout: 12_000 },
     );
-    await expect(preview.getByTestId("map-report-status")).toHaveText("New");
-    await expect(
-      preview.getByText(/dispatch the team and mark this report In Progress/i),
-    ).toBeVisible();
-    await expect(preview.getByTestId("map-report-progress-action")).toBeVisible();
+    expect(page.url()).toMatch(`/supervisor/report/${IN_WARD_ID}`);
   });
 
-  test("a cleaned report opened from the map shows no transition buttons", async ({
-    page,
-  }) => {
-    const markers = page.locator(".role-map-report-marker");
+  test("map popups expose only ward-scoped reports", async ({ page }) => {
+    // Access boundary on the map surface: the out-of-ward fixture must never
+    // appear as a pin popup action for this supervisor.
+    const markers = page.locator(".udupi-supervisor-report-marker");
     await expect(markers.first()).toBeVisible({ timeout: 15_000 });
 
     const markerCount = await markers.count();
-    let sawCleanedReport = false;
-
-    // A closing popup can linger in the DOM, so status and report id are read
-    // from the same button element rather than from separate popup nodes.
-    const cleanedAction = page.locator(
-      '.leaflet-popup-content button[data-report-id][data-report-status="cleaned"]',
-    );
-
     for (let index = 0; index < markerCount; index += 1) {
       await markers.nth(index).dispatchEvent("click");
       await expect(
         page.locator(".leaflet-popup-content button[data-report-id]").first(),
       ).toBeVisible({ timeout: 5_000 });
-
-      if ((await cleanedAction.count()) === 0) continue;
-
-      await cleanedAction.first().click();
-      const preview = page.locator(
-        '[role="dialog"]:has([data-testid="map-report-status"])',
-      );
-      await expect(preview.getByTestId("map-report-status")).toHaveText("Cleaned");
-      await expect(preview.getByText(/cleanup complete/i)).toBeVisible();
-      await expect(preview.getByTestId("map-report-progress-action")).toHaveCount(0);
-      await expect(preview.getByTestId("map-report-cleanup-action")).toHaveCount(0);
-      sawCleanedReport = true;
-      break;
+      await expect(
+        page.locator(
+          `.leaflet-popup-content button[data-report-id="${OUT_WARD_ID}"]`,
+        ),
+      ).toHaveCount(0);
     }
-
-    expect(sawCleanedReport).toBe(true);
   });
 });
 

@@ -35,3 +35,18 @@ pins and produce flaky passes/failures.
 status) on the popup's action button so a single selector identifies the pin
 atomically. Note the map renders non-report markers too (ward count badges);
 scope marker queries to the report-pin class rather than `.leaflet-marker-icon`.
+
+## Rule 3 — do not click a report card at its centre to test navigation
+
+Click a text node inside the card body (e.g. the address line) instead of the
+card/link element itself.
+
+**Why:** report cards are a link wrapping a large photo area, and that photo is
+its own button that calls `preventDefault`/`stopPropagation` to open the
+lightbox. Playwright's default click targets the element centre, which lands on
+the photo — so the lightbox opens, navigation never happens, and the failure
+surfaces as a confusing `waitForURL` timeout rather than a click error.
+
+**How to apply:** any test asserting that a media-topped card navigates. The
+inverse case (photo opens the lightbox and does *not* navigate) is worth
+asserting alongside it, since the two behaviours share one element.
