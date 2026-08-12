@@ -36,6 +36,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type StatusFilter = "all" | "reported" | "cleaning" | "cleaned";
+type WardFilter = "all" | string;
 
 type SupervisorProfile = {
   id: number;
@@ -105,6 +106,7 @@ export default function SupervisorDashboard() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [wardFilter, setWardFilter] = useState<WardFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest" | "status">("newest");
   const [lastRefreshed, setLastRefreshed] = useState(() => new Date());
@@ -134,6 +136,7 @@ export default function SupervisorDashboard() {
   }), [allReports]);
   const filtered = useMemo(() => {
     let list = statusFilter === "all" ? allReports : allReports.filter((r) => r.status === statusFilter);
+    if (wardFilter !== "all") list = list.filter((r) => r.wardName === wardFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((r) =>
@@ -144,7 +147,7 @@ export default function SupervisorDashboard() {
     else if (sort === "oldest") list = [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     else list = [...list].sort((a, b) => ({ reported: 0, cleaning: 1, cleaned: 2 }[a.status] ?? 9) - ({ reported: 0, cleaning: 1, cleaned: 2 }[b.status] ?? 9));
     return list;
-  }, [allReports, statusFilter, search, sort]);
+  }, [allReports, statusFilter, wardFilter, search, sort]);
 
   const wardNames: string[] = profile?.ward_names ?? [];
   const isLoading = profileLoading || reportsLoading;
@@ -219,6 +222,30 @@ export default function SupervisorDashboard() {
           /></div>
           <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}><SelectTrigger className="w-[148px] rounded-xl border-border/60 bg-card h-11 text-sm font-bold shrink-0 gap-1.5"><ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="status">By status</SelectItem></SelectContent></Select>
         </div>
+
+        {/* Ward filter — only shown for multi-ward supervisors */}
+        {wardGeoNames.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setWardFilter("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-150 ${wardFilter === "all" ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/60 hover:border-primary/40 hover:text-foreground"}`}
+            >
+              All wards
+            </button>
+            {wardGeoNames.map((geoName) => (
+              <button
+                key={geoName}
+                type="button"
+                onClick={() => setWardFilter(wardFilter === geoName ? "all" : geoName)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-150 ${wardFilter === geoName ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/60 hover:border-primary/40 hover:text-foreground"}`}
+              >
+                {formatWardLabel(geoName)}
+              </button>
+            ))}
+          </div>
+        )}
+
         <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
           <TabsList className="bg-background/50 backdrop-blur-sm border border-border shadow-sm rounded-2xl p-1.5 h-auto grid grid-cols-2 sm:flex sm:flex-nowrap gap-1.5 sm:gap-0 w-full">
             <TabsTrigger value="all" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground py-2 px-2 sm:px-5 font-bold text-xs sm:text-sm sm:flex-1">All ({stats.total})</TabsTrigger>
@@ -283,12 +310,16 @@ export default function SupervisorDashboard() {
                   </p>
                   <div className="mt-auto space-y-2">
                     {report.description && <p className="text-xs text-muted-foreground line-clamp-2 italic font-medium bg-muted/50 p-2.5 rounded-xl">"{report.description}"</p>}
-                  <div className="flex items-center text-xs text-muted-foreground font-bold pt-2.5 border-t border-border/50">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground font-bold pt-2.5 border-t border-border/50">
                     <div className="flex items-center text-xs text-muted-foreground font-bold">
                       <Clock className="w-3.5 h-3.5 mr-1.5" />
                       {format(new Date(report.createdAt), "MMM d, h:mm a")}
                     </div>
-
+                    {wardGeoNames.length > 1 && report.wardName && (
+                      <span className="bg-primary/8 text-primary border border-primary/20 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wide shrink-0">
+                        {formatWardLabel(report.wardName)}
+                      </span>
+                    )}
                   </div></div>
                 </div></Card></Link>;
           })}
