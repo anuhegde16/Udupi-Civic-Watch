@@ -132,6 +132,86 @@ test.describe("supervisor dashboard → report detail", () => {
     );
     expect(page.url()).toMatch(`/supervisor/report/${IN_WARD_ID}`);
   });
+
+  test("map report preview shows its status and keeps the In Progress action visible", async ({
+    page,
+  }) => {
+    const markers = page.locator(".role-map-report-marker");
+    await expect(markers.first()).toBeVisible({ timeout: 15_000 });
+
+    // Report pins overlap heavily inside a single ward, so a coordinate click can
+    // repeatedly land on whichever marker is on top. Dispatch the click straight
+    // at each marker element instead, and match the fixture by its popup button.
+    const fixtureAction = page.locator(
+      `.leaflet-popup-content button[data-report-id="${IN_WARD_ID}"]`,
+    );
+    const markerCount = await markers.count();
+    let fixtureActionFound = false;
+
+    for (let index = 0; index < markerCount; index += 1) {
+      await markers.nth(index).dispatchEvent("click");
+      await expect(
+        page.locator(".leaflet-popup-content button[data-report-id]").first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      if ((await fixtureAction.count()) > 0) {
+        fixtureActionFound = true;
+        await fixtureAction.click();
+        break;
+      }
+    }
+
+    expect(fixtureActionFound).toBe(true);
+    // CSS locator rather than getByRole: the dashboard's push-notification
+    // prompt can open as a second modal, and Radix then marks background
+    // content aria-hidden, so role-based queries stop matching this dialog.
+    const preview = page.locator(
+      '[role="dialog"]:has([data-testid="map-report-status"])',
+    );
+    await expect(preview.getByTestId("map-report-status")).toHaveText("New");
+    await expect(
+      preview.getByText(/dispatch the team and mark this report In Progress/i),
+    ).toBeVisible();
+    await expect(preview.getByTestId("map-report-progress-action")).toBeVisible();
+  });
+
+  test("a cleaned report opened from the map shows no transition buttons", async ({
+    page,
+  }) => {
+    const markers = page.locator(".role-map-report-marker");
+    await expect(markers.first()).toBeVisible({ timeout: 15_000 });
+
+    const markerCount = await markers.count();
+    let sawCleanedReport = false;
+
+    // A closing popup can linger in the DOM, so status and report id are read
+    // from the same button element rather than from separate popup nodes.
+    const cleanedAction = page.locator(
+      '.leaflet-popup-content button[data-report-id][data-report-status="cleaned"]',
+    );
+
+    for (let index = 0; index < markerCount; index += 1) {
+      await markers.nth(index).dispatchEvent("click");
+      await expect(
+        page.locator(".leaflet-popup-content button[data-report-id]").first(),
+      ).toBeVisible({ timeout: 5_000 });
+
+      if ((await cleanedAction.count()) === 0) continue;
+
+      await cleanedAction.first().click();
+      const preview = page.locator(
+        '[role="dialog"]:has([data-testid="map-report-status"])',
+      );
+      await expect(preview.getByTestId("map-report-status")).toHaveText("Cleaned");
+      await expect(preview.getByText(/cleanup complete/i)).toBeVisible();
+      await expect(preview.getByTestId("map-report-progress-action")).toHaveCount(0);
+      await expect(preview.getByTestId("map-report-cleanup-action")).toHaveCount(0);
+      sawCleanedReport = true;
+      break;
+    }
+
+    expect(sawCleanedReport).toBe(true);
+  });
 });
 
 // ── Suite: supervisor report detail page — in-ward report ────────────────────

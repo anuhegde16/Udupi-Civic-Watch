@@ -305,7 +305,7 @@ export function RoleMap({
 
         const icon = L.divIcon({
           html: iconHtml,
-          className: "",
+          className: "role-map-report-marker",
           iconSize:   isCleaned ? [13, 13] : [20, 20],
           iconAnchor: isCleaned ? [6, 6]   : [10, 10],
         });
@@ -379,6 +379,8 @@ export function RoleMap({
         if (onReportClick) {
           const action = document.createElement("button");
           action.type = "button";
+          action.dataset.reportId = String(r.id);
+          action.dataset.reportStatus = r.status;
           action.style.cssText = "display:block;width:100%;margin-top:9px;padding:7px 10px;border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:11px;font-weight:800;text-align:center;cursor:pointer;";
           action.textContent = "View Report";
           action.addEventListener("click", (event) => {

@@ -222,11 +222,25 @@ export default function SupervisorDashboard() {
         }),
         headers: { "Content-Type": "application/json" },
       }),
-    onSuccess: (updated: Partial<Report> & { id: number; status: string }) => {
+    onSuccess: (
+      updated: Partial<Report> & { id: number; status: string },
+      variables,
+    ) => {
       queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] });
       queryClient.invalidateQueries({ queryKey: ["sv-map-reports"] });
       setPreviewReport((current) =>
-        current?.id === updated.id ? { ...current, ...updated } : current
+        current?.id === updated.id
+          ? {
+              ...current,
+              ...updated,
+              ...(variables.cleanupImageUrls?.length
+                ? {
+                    cleanupImageUrl: variables.cleanupImageUrls[0].url,
+                    cleanupImageUrls: variables.cleanupImageUrls,
+                  }
+                : {}),
+            }
+          : current
       );
       setCleanupReport(null);
       setCleanupPhotos([]);
@@ -280,7 +294,6 @@ export default function SupervisorDashboard() {
   };
 
   const openCleanupEvidence = (report: Report) => {
-    setPreviewReport(null);
     setCleanupPhotos([]);
     setCleanupReport(report);
   };
@@ -375,35 +388,51 @@ export default function SupervisorDashboard() {
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
       {lightbox}
       <Dialog open={!!previewReport} onOpenChange={(open) => !open && setPreviewReport(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Report #{previewReport?.id}</DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[90dvh] grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-6 pb-4 pt-6 pr-14">
+            <div className="flex items-center gap-3">
+              <DialogTitle>Report #{previewReport?.id}</DialogTitle>
+              {previewReport && (
+                <Badge
+                  variant="outline"
+                  data-testid="map-report-status"
+                  className={STATUS_COLOR[previewReport.status] ?? "bg-muted text-muted-foreground border-border"}
+                >
+                  {STATUS_LABEL[previewReport.status] ?? previewReport.status}
+                </Badge>
+              )}
+            </div>
             <DialogDescription>
               {previewReport?.status === "reported"
                 ? "Step 1: dispatch the team and mark this report In Progress."
-                : "Step 2: upload cleanup photos once the dispatched team finishes the work."}
+                : previewReport?.status === "cleaning"
+                  ? "Step 2: upload cleanup photos once the dispatched team finishes the work."
+                  : "Cleanup complete. Confirmation photos are shown below."}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5">
-            <PhotoEvidenceSection
-              title="Complaint photos"
-              emptyLabel="No complaint photo was provided."
-              photos={previewOriginalPhotos}
-              onOpen={(index) => openLightbox(previewOriginalPhotos.map((photo) => photo.url), index)}
-            />
-            <PhotoEvidenceSection
-              title="Cleanup confirmation photos"
-              emptyLabel="No cleanup photo has been submitted yet."
-              photos={previewCleanupPhotos}
-              onOpen={(index) => openLightbox(previewCleanupPhotos.map((photo) => photo.url), index)}
-              complete
-            />
+          <div className="min-h-0 overflow-y-auto px-6 py-5">
+            <div className="space-y-5">
+              <PhotoEvidenceSection
+                title="Complaint photos"
+                emptyLabel="No complaint photo was provided."
+                photos={previewOriginalPhotos}
+                onOpen={(index) => openLightbox(previewOriginalPhotos.map((photo) => photo.url), index)}
+              />
+              <PhotoEvidenceSection
+                title="Cleanup confirmation photos"
+                emptyLabel="No cleanup photo has been submitted yet."
+                photos={previewCleanupPhotos}
+                onOpen={(index) => openLightbox(previewCleanupPhotos.map((photo) => photo.url), index)}
+                complete
+              />
+            </div>
           </div>
           {previewReport?.status !== "cleaned" && (
-            <DialogFooter>
+            <DialogFooter className="border-t border-border bg-background px-6 py-4 sm:justify-end">
               {previewReport?.status === "reported" && (
                 <Button
                   variant="outline"
+                  data-testid="map-report-progress-action"
                   onClick={() => updateStatus.mutate({ id: previewReport.id, status: "cleaning" })}
                   disabled={updateStatus.isPending}
                   className="rounded-xl"
@@ -413,7 +442,11 @@ export default function SupervisorDashboard() {
                 </Button>
               )}
               {previewReport?.status === "cleaning" && (
-                <Button onClick={() => previewReport && openCleanupEvidence(previewReport)} className="rounded-xl">
+                <Button
+                  data-testid="map-report-cleanup-action"
+                  onClick={() => previewReport && openCleanupEvidence(previewReport)}
+                  className="rounded-xl"
+                >
                   <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
                 </Button>
               )}
