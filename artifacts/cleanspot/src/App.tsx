@@ -62,7 +62,7 @@ function Router() {
           </AuthGuard>
         </Route>
         <Route path="/supervisor/report/:id">
-          <AuthGuard roles={["supervisor"]}>
+          <AuthGuard roles={["supervisor", "officer", "field_officer"]}>
             <OfficerReportDetail />
           </AuthGuard>
         </Route>
@@ -93,7 +93,7 @@ function Router() {
 
         {/* Udupi hierarchy role dashboards */}
         <Route path="/supervisor/dashboard">
-          <AuthGuard roles={["supervisor"]}>
+          <AuthGuard roles={["supervisor", "officer", "field_officer"]}>
             <SupervisorDashboard />
           </AuthGuard>
         </Route>

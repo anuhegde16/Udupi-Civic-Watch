@@ -4,7 +4,7 @@ import { getGreeting } from "@/lib/greeting";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { Card } from "@/components/ui/card";
@@ -41,6 +41,7 @@ type SortOption = "newest" | "oldest" | "status";
 
 export default function OfficerDashboard() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOption>("newest");
@@ -54,6 +55,13 @@ export default function OfficerDashboard() {
     () => new URLSearchParams(window.location.search).get("view") === "analytics",
   );
   const { lightbox, open: openLightbox } = useImageLightbox();
+  const isUdupiWardStaff = user?.panchayatName === "Udupi";
+
+  useEffect(() => {
+    if (isUdupiWardStaff) {
+      setLocation("/supervisor/dashboard", { replace: true });
+    }
+  }, [isUdupiWardStaff, setLocation]);
 
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   useEffect(() => {
@@ -86,7 +94,7 @@ export default function OfficerDashboard() {
     {
       query: {
         queryKey: getGetOfficerReportsQueryKey(officerId, { days: 90, limit: 500 }),
-        enabled: !!officerId,
+        enabled: !!officerId && !isUdupiWardStaff,
         staleTime: 60_000,
         refetchInterval: 120_000,
         refetchIntervalInBackground: false,
@@ -97,7 +105,7 @@ export default function OfficerDashboard() {
   const { data: officerData, dataUpdatedAt: officerUpdatedAt } = useGetOfficer(officerId, {
     query: {
       queryKey: getGetOfficerQueryKey(officerId),
-      enabled: !!officerId,
+      enabled: !!officerId && !isUdupiWardStaff,
       staleTime: 5 * 60_000,
       refetchInterval: 120_000,
       refetchIntervalInBackground: false,

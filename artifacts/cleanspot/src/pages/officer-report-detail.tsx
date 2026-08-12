@@ -246,7 +246,7 @@ export default function OfficerReportDetail() {
           <div>
             <h1 className="text-3xl font-black text-foreground tracking-tight">Report #{report.id}</h1>
           <p className="text-muted-foreground font-medium">
-            {isSupervisor ? "Assigned report in your ward" : "Assigned task in your coastal sector"}
+              {isSupervisor ? "Assigned report in your ward" : "Assigned task in your coastal sector"}
           </p>
           </div>
           <div className="self-start sm:self-auto">
@@ -442,8 +442,21 @@ export default function OfficerReportDetail() {
           {/* Action Area */}
           <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 space-y-4">
             <h3 className="font-black text-lg text-foreground mb-4">
-              {isSupervisor ? "Supervisor Actions" : "Officer Actions"}
+              {isSupervisor ? "Ward Staff Actions" : "Officer Actions"}
             </h3>
+            {isSupervisor && (
+              <div className="grid grid-cols-3 gap-2 text-xs font-bold">
+                <div className={`rounded-xl px-3 py-2 ${report.status === "reported" ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200" : "bg-primary/10 text-primary"}`}>
+                  {report.status === "reported" ? "1. Dispatch team" : "✓ Dispatched"}
+                </div>
+                <div className={`rounded-xl px-3 py-2 ${report.status === "cleaning" ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200" : report.status === "cleaned" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                  {report.status === "cleaned" ? "✓ Photos added" : "2. Add photos"}
+                </div>
+                <div className={`rounded-xl px-3 py-2 ${report.status === "cleaned" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                  {report.status === "cleaned" ? "✓ Completed" : "3. Complete"}
+                </div>
+              </div>
+            )}
             
             {report.status === 'reported' && (
               <Button 
@@ -460,7 +473,7 @@ export default function OfficerReportDetail() {
               </Button>
             )}
 
-            {(report.status === 'reported' || report.status === 'cleaning') && (
+            {report.status === 'cleaning' && (
               <div className="pt-2 space-y-3">
                 {/* Hidden file input — no capture attr so gallery + camera both work for officers */}
                 <input 

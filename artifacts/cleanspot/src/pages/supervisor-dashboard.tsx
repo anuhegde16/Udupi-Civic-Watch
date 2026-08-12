@@ -378,7 +378,11 @@ export default function SupervisorDashboard() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Report #{previewReport?.id}</DialogTitle>
-            <DialogDescription>Review the citizen’s complaint photos and update its status when work begins or is complete.</DialogDescription>
+            <DialogDescription>
+              {previewReport?.status === "reported"
+                ? "Step 1: dispatch the team and mark this report In Progress."
+                : "Step 2: upload cleanup photos once the dispatched team finishes the work."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
             <PhotoEvidenceSection
@@ -408,9 +412,11 @@ export default function SupervisorDashboard() {
                   <Wrench className="w-4 h-4 mr-2" /> Mark as In Progress
                 </Button>
               )}
-              <Button onClick={() => previewReport && openCleanupEvidence(previewReport)} className="rounded-xl">
-                <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
-              </Button>
+              {previewReport?.status === "cleaning" && (
+                <Button onClick={() => previewReport && openCleanupEvidence(previewReport)} className="rounded-xl">
+                  <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
+                </Button>
+              )}
             </DialogFooter>
           )}
         </DialogContent>
@@ -484,7 +490,7 @@ export default function SupervisorDashboard() {
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-1">{getGreeting(user?.name)}</p>
           <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full mb-3 border border-emerald-200">
-            <Users className="w-3.5 h-3.5" /> Supervisor
+            <Users className="w-3.5 h-3.5" /> Udupi Ward Staff
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-foreground tracking-tight mb-1">
             {profileLoading ? "Loading…" : (profile?.name ?? user?.name)}

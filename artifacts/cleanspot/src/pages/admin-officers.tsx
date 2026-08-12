@@ -111,6 +111,12 @@ const createStaffSchema = z
     if (type === "community_mobiliser" && d.wardKeys.length !== 1) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wardKeys"], message: "Select exactly one ward" });
     }
+    // Udupi field officers see reports by ward, so one without a ward would
+    // log in to a permanently empty dashboard. Saligrama field officers work
+    // from per-report assignments and may be created without one.
+    if (type === "field_officer" && d.panchayatName === "Udupi" && d.wardKeys.length !== 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["wardKeys"], message: "Select the ward this officer covers" });
+    }
   });
 
 type CreateStaffValues = z.infer<typeof createStaffSchema>;

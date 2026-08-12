@@ -191,6 +191,48 @@ export async function requireSupervisor(req: Request, res: Response, next: NextF
   next();
 }
 
+/**
+ * Udupi calls its ward-level operational staff both "supervisors" and "field
+ * officers". Both titles run the same dispatch→cleaned workflow, but their
+ * ward assignment lives in a different table, and `users.officer_id` is a
+ * per-role foreign key: `supervisors.id` for a supervisor, `officers.id` for a
+ * field officer.
+ *
+ * The profile is therefore resolved here — against the table matching the
+ * session's role — and attached as `req.udupiWardStaff`. Route handlers must
+ * use that resolved profile and never re-read `officer_id` themselves, which
+ * is what previously allowed one title's ID to select the other title's row.
+ */
+export async function requireUdupiWardStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const user = getSessionUser(req);
+  if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }
+  if (await denyIfPasswordResetRequired(user, res)) return;
+  if (!isSupervisorRole(user.role) && !isFieldOfficerRole(user.role)) {
+    res.status(403).json({ error: "Udupi ward staff access required" });
+    return;
+  }
+
+  const { resolveUdupiWardStaff } = await import("./udupi-ward-staff");
+  const resolved = await resolveUdupiWardStaff(user);
+  if (!resolved.ok) {
+    // A profile belonging to another municipality is a real authorization
+    // denial, but a missing profile row is a data gap for an otherwise
+    // permitted role — reporting that as 403 would misattribute it to the
+    // auth guard. Either way access stops here rather than falling through
+    // to an unscoped ward list.
+    if (resolved.reason === "not_udupi") {
+      res.status(403).json({ error: "Udupi ward staff access required" });
+    } else {
+      res.status(404).json({ error: "Profile not found" });
+    }
+    return;
+  }
+
+  (req as any).user = user;
+  (req as any).udupiWardStaff = resolved.staff;
+  next();
+}
+
 export async function requireHealthInspector(req: Request, res: Response, next: NextFunction): Promise<void> {
   const user = getSessionUser(req);
   if (!user) { res.status(401).json({ error: "Not authenticated" }); return; }

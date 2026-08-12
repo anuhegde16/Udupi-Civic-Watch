@@ -39,7 +39,17 @@ let app: Express;
 const createdSupervisorIds: number[] = [];
 const createdOfficerIds: number[] = [];
 const TEST_PHONES = ["9000000101", "9000000102", "9000000103"];
-const TEST_EMAILS = ["cc-staff-test-officer@example.com"];
+/** Udupi field officer created by the ward-validation suite. */
+const UDUPI_FO_EMAIL = "cc-staff-udupi-fo@example.com";
+/** Udupi field officer used by the ward-edit test. */
+const UDUPI_FO_EDIT_EMAIL = "cc-staff-udupi-fo-edit@example.com";
+const TEST_EMAILS = [
+  "cc-staff-test-officer@example.com",
+  UDUPI_FO_EMAIL,
+  UDUPI_FO_EDIT_EMAIL,
+  "cc-staff-udupi-wardless-fo@example.com",
+  "cc-staff-udupi-crossed-fo@example.com",
+];
 
 async function cleanup() {
   for (const id of createdSupervisorIds) {
@@ -337,16 +347,91 @@ describe("staff type, panchayat and ward validation", () => {
     expect(res.status).toBe(400);
   });
 
-  it("refuses a field officer in Udupi, which uses the hierarchy roles instead", async () => {
+  /**
+   * Udupi uses "supervisor" and "field officer" as interchangeable titles for
+   * the same ward-level job, so both must be creatable there. The field
+   * officer's ward is stored as the canonical geofence key, which is what the
+   * ward-scoped report views match against.
+   */
+  it("creates a field officer in Udupi and assigns them a Udupi ward", async () => {
     const res = await post({
       staffType: "field_officer",
       name: "CC Test Udupi FO",
       panchayatName: "Udupi",
-      email: "cc-staff-udupi-fo@example.com",
+      email: UDUPI_FO_EMAIL,
       password: "initial123",
       wardNames: ["Udupi Ward 1"],
     });
+    expect(res.status).toBe(201);
+    createdOfficerIds.push(res.body.id);
+
+    const row = await db.execute(sql`
+      SELECT area_name AS "areaName", panchayat_name AS "panchayatName"
+      FROM officers WHERE id = ${res.body.id} LIMIT 1
+    `);
+    expect(row.rows[0]).toMatchObject({
+      areaName: "Udupi Ward 1",
+      panchayatName: "Udupi",
+    });
+
+    // The login must point at officers.id, which is how the ward-staff
+    // endpoints resolve a field officer's wards.
+    const login = await db.execute(sql`
+      SELECT role, officer_id AS "officerId" FROM users WHERE email = ${UDUPI_FO_EMAIL} LIMIT 1
+    `);
+    expect(login.rows[0]).toMatchObject({
+      role: "field_officer",
+      officerId: String(res.body.id),
+    });
+  });
+
+  it("refuses a Udupi field officer with no ward, who could never see a report", async () => {
+    const res = await post({
+      staffType: "field_officer",
+      name: "CC Test Wardless Udupi FO",
+      panchayatName: "Udupi",
+      email: "cc-staff-udupi-wardless-fo@example.com",
+      password: "initial123",
+      wardNames: [],
+    });
     expect(res.status).toBe(400);
+  });
+
+  it("refuses a Udupi field officer assigned a Saligrama ward", async () => {
+    const res = await post({
+      staffType: "field_officer",
+      name: "CC Test Crossed FO",
+      panchayatName: "Udupi",
+      email: "cc-staff-udupi-crossed-fo@example.com",
+      password: "initial123",
+      wardNames: ["Ward 1"], // a Saligrama ward
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses to clear the ward of an existing Udupi field officer", async () => {
+    const created = await post({
+      staffType: "field_officer",
+      name: "CC Test Udupi FO Edit",
+      panchayatName: "Udupi",
+      email: UDUPI_FO_EDIT_EMAIL,
+      password: "initial123",
+      wardNames: ["Udupi Ward 2"],
+    });
+    expect(created.status).toBe(201);
+    createdOfficerIds.push(created.body.id);
+
+    const cleared = await request(app)
+      .patch(`/api/control-center/staff/field_officer/${created.body.id}`)
+      .set("Cookie", CC())
+      .send({ wardNames: [] });
+    expect(cleared.status).toBe(400);
+
+    // The stored assignment must survive the rejected edit.
+    const row = await db.execute(sql`
+      SELECT area_name AS "areaName" FROM officers WHERE id = ${created.body.id} LIMIT 1
+    `);
+    expect((row.rows[0] as any).areaName).toBe("Udupi Ward 2");
   });
 
   it("refuses to assign wards directly to a health inspector", async () => {

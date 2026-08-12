@@ -52,6 +52,20 @@ let app: Express;
 let eeId: number;
 let hiId: number;
 let svId: number;
+/**
+ * A real Udupi field officer: a row in `officers` plus its login in `users`.
+ *
+ * This must never be faked by pointing a field-officer session at `svId`.
+ * `users.officer_id` means `officers.id` for a field officer and
+ * `supervisors.id` for a supervisor — two unrelated sequences — so a forged
+ * session would exercise a lookup path that cannot occur in production and
+ * would hide the mis-scoping bug these tests exist to catch.
+ */
+let fieldOfficerId: number;
+/** A field officer belonging to Saligrama, not Udupi. */
+let saligramaOfficerId: number;
+/** An officers.id that does not exist — models a broken profile link. */
+let missingOfficerId: number;
 
 /** IDs of test reports created by this suite — cleaned up in afterAll. */
 const createdReportIds: number[] = [];
@@ -59,6 +73,8 @@ const createdReportIds: number[] = [];
 const createdSvIds: number[] = [];
 const createdHiIds: number[] = [];
 const createdEeIds: number[] = [];
+const createdOfficerIds: number[] = [];
+const createdUserEmails: string[] = [];
 
 // Coordinates of the "inside" report
 let insideReportId: number;
@@ -69,6 +85,7 @@ let insideCleaningReportId: number;
 // Dedicated report for supervisor status-transition tests so the shared filter
 // fixtures keep their original statuses for later hierarchy test suites.
 let supervisorTransitionReportId: number;
+let fieldOfficerTransitionReportId: number;
 
 beforeAll(async () => {
   // Load the Express app
@@ -111,6 +128,49 @@ beforeAll(async () => {
   svId = (svResult.rows[0] as any).id as number;
   createdSvIds.push(svId);
 
+  // ── 3b. Insert a real Udupi field officer covering the same Ward 1 ──────────
+  // Field officers store their ward as the canonical geofence key in
+  // officers.area_name, while the supervisor above stores "Ward 1/Town".
+  // Both must resolve to the same polygon.
+  const foEmail = `zone-test-fo-${ts}@example.test`;
+  const foResult = await db.execute(sql`
+    INSERT INTO officers (name, email, password_hash, phone, area_name, panchayat_name)
+    VALUES (
+      ${"Zone Test FO " + ts},
+      ${foEmail},
+      ${"x"},
+      ${"6" + String(ts).slice(-9)},
+      ${"Udupi Ward 1"},
+      ${"Udupi"}
+    )
+    RETURNING id
+  `);
+  fieldOfficerId = (foResult.rows[0] as any).id as number;
+  createdOfficerIds.push(fieldOfficerId);
+
+  // The login row: officer_id points at officers.id, exactly as the
+  // staff-management API creates it.
+  await db.execute(sql`
+    INSERT INTO users (email, password_hash, name, role, officer_id, panchayat_name)
+    VALUES (${foEmail}, ${"x"}, ${"Zone Test FO " + ts}, ${"field_officer"},
+            ${String(fieldOfficerId)}, ${"Udupi"})
+  `);
+  createdUserEmails.push(foEmail);
+
+  // ── 3c. A Saligrama field officer — must never reach the Udupi ward views ───
+  const salEmail = `zone-test-sal-fo-${ts}@example.test`;
+  const salResult = await db.execute(sql`
+    INSERT INTO officers (name, email, password_hash, area_name, panchayat_name)
+    VALUES (${"Zone Test Saligrama FO " + ts}, ${salEmail}, ${"x"}, ${"Ward 1"}, ${"Saligrama"})
+    RETURNING id
+  `);
+  saligramaOfficerId = (salResult.rows[0] as any).id as number;
+  createdOfficerIds.push(saligramaOfficerId);
+
+  // An officers id guaranteed not to exist, for the broken-link case.
+  const maxOfficer = await db.execute(sql`SELECT COALESCE(MAX(id), 0) AS max FROM officers`);
+  missingOfficerId = Number((maxOfficer.rows[0] as any).max) + 1000;
+
   // ── 4. Insert reports ────────────────────────────────────────────────────────
 
   // Inside Ward 1, status="reported"
@@ -147,6 +207,14 @@ beforeAll(async () => {
   `);
   supervisorTransitionReportId = (r4.rows[0] as any).id as number;
   createdReportIds.push(supervisorTransitionReportId);
+
+  const r5 = await db.execute(sql`
+    INSERT INTO reports (latitude, longitude, status, address, description)
+    VALUES (${INSIDE_LAT}, ${INSIDE_LNG}, ${"reported"}, ${"Field officer transition test"}, ${"ward-staff equivalence test"})
+    RETURNING id
+  `);
+  fieldOfficerTransitionReportId = (r5.rows[0] as any).id as number;
+  createdReportIds.push(fieldOfficerTransitionReportId);
 });
 
 afterAll(async () => {
@@ -154,6 +222,15 @@ afterAll(async () => {
   if (createdReportIds.length) {
     await db.execute(
       sql`DELETE FROM reports WHERE id IN (${sql.raw(createdReportIds.join(","))})`
+    );
+  }
+  // Login rows first — they reference the officers row via officer_id.
+  for (const email of createdUserEmails) {
+    await db.execute(sql`DELETE FROM users WHERE email = ${email}`);
+  }
+  if (createdOfficerIds.length) {
+    await db.execute(
+      sql`DELETE FROM officers WHERE id IN (${sql.raw(createdOfficerIds.join(","))})`
     );
   }
   if (createdSvIds.length) {
@@ -320,6 +397,132 @@ describe("PATCH /api/supervisor/reports/:id — Udupi cleanup evidence", () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/not in your wards/i);
+  });
+});
+
+describe("Udupi ward-staff equivalence — supervisor and field officer", () => {
+  const supervisorCookie = () =>
+    `session=${sessionCookie({ role: "supervisor", officerId: svId, panchayatName: "Udupi" })}`;
+  // Resolves against officers.id — the same linkage a real login produces.
+  const fieldOfficerCookie = () =>
+    `session=${sessionCookie({ role: "field_officer", officerId: fieldOfficerId, panchayatName: "Udupi" })}`;
+
+  it("gives a field officer the same in-ward report visibility as a supervisor", async () => {
+    const [supervisorRes, fieldOfficerRes] = await Promise.all([
+      request(app).get("/api/supervisor/reports").set("Cookie", supervisorCookie()),
+      request(app).get("/api/supervisor/reports").set("Cookie", fieldOfficerCookie()),
+    ]);
+
+    expect(supervisorRes.status).toBe(200);
+    expect(fieldOfficerRes.status).toBe(200);
+    expect(fieldOfficerRes.body.reports.map((report: any) => report.id)).toEqual(
+      supervisorRes.body.reports.map((report: any) => report.id),
+    );
+    expect(fieldOfficerRes.body.reports.map((report: any) => report.id)).toContain(fieldOfficerTransitionReportId);
+    expect(fieldOfficerRes.body.reports.map((report: any) => report.id)).not.toContain(outsideReportId);
+  });
+
+  it("lets a field officer dispatch, add evidence, and complete an in-ward report", async () => {
+    const dispatch = await request(app)
+      .patch(`/api/supervisor/reports/${fieldOfficerTransitionReportId}`)
+      .set("Cookie", fieldOfficerCookie())
+      .send({ status: "cleaning" });
+    expect(dispatch.status).toBe(200);
+    expect(dispatch.body).toMatchObject({
+      id: fieldOfficerTransitionReportId,
+      status: "cleaning",
+    });
+    expect(dispatch.body.cleaningStartedAt).toBeTruthy();
+
+    const completion = await request(app)
+      .patch(`/api/supervisor/reports/${fieldOfficerTransitionReportId}`)
+      .set("Cookie", fieldOfficerCookie())
+      .send({
+        status: "cleaned",
+        cleanupImageUrls: [{ url: "https://example.test/field-officer-cleanup.jpg" }],
+      });
+    expect(completion.status).toBe(200);
+    expect(completion.body).toMatchObject({
+      id: fieldOfficerTransitionReportId,
+      status: "cleaned",
+      cleanupImageUrl: "https://example.test/field-officer-cleanup.jpg",
+    });
+    expect(completion.body.cleaningStartedAt).toBeTruthy();
+    expect(completion.body.cleanedAt).toBeTruthy();
+  });
+
+  it("keeps a field officer blocked from a report outside their wards", async () => {
+    const res = await request(app)
+      .patch(`/api/supervisor/reports/${outsideReportId}`)
+      .set("Cookie", fieldOfficerCookie())
+      .send({ status: "cleaning" });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/not in your wards/i);
+  });
+
+  it("reports the officer's own identity, not a same-numbered supervisor's", async () => {
+    const res = await request(app)
+      .get("/api/supervisor/me")
+      .set("Cookie", fieldOfficerCookie());
+
+    expect(res.status).toBe(200);
+    expect(res.body.staff_kind).toBe("field_officer");
+    expect(res.body.id).toBe(fieldOfficerId);
+    expect(res.body.name).toMatch(/Zone Test FO/);
+  });
+
+  /**
+   * Regression: `users.officer_id` addresses a different table per role, so a
+   * field-officer session must be resolved against `officers` only. If it were
+   * ever resolved against `supervisors`, this session would silently inherit
+   * whatever supervisor happens to share its number.
+   */
+  it("does not resolve a field-officer id against the supervisors table", async () => {
+    const collidingSupervisor = await db.execute(sql`
+      SELECT id, name FROM supervisors WHERE id = ${fieldOfficerId} LIMIT 1
+    `);
+
+    const res = await request(app)
+      .get("/api/supervisor/me")
+      .set("Cookie", fieldOfficerCookie());
+
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(fieldOfficerId);
+    if (collidingSupervisor.rows.length) {
+      // A supervisor with this number exists; we must not have returned it.
+      expect(res.body.name).not.toBe((collidingSupervisor.rows[0] as any).name);
+      expect(res.body.staff_kind).toBe("field_officer");
+    }
+  });
+
+  it("denies a field officer whose profile link is broken", async () => {
+    const res = await request(app)
+      .get("/api/supervisor/reports")
+      .set(
+        "Cookie",
+        `session=${sessionCookie({ role: "field_officer", officerId: missingOfficerId, panchayatName: "Udupi" })}`,
+      );
+
+    // A missing profile row is a data gap, not a role denial.
+    expect(res.status).toBe(404);
+    expect(res.body.reports).toBeUndefined();
+  });
+
+  /**
+   * Saligrama field officers keep their assignment-based workflow; the Udupi
+   * ward views are geographic and must stay closed to them even if their
+   * session claims the Udupi panchayat.
+   */
+  it("keeps a Saligrama field officer out of the Udupi ward views", async () => {
+    const res = await request(app)
+      .get("/api/supervisor/reports")
+      .set(
+        "Cookie",
+        `session=${sessionCookie({ role: "field_officer", officerId: saligramaOfficerId, panchayatName: "Udupi" })}`,
+      );
+
+    expect(res.status).toBe(403);
   });
 });
 

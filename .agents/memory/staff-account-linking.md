@@ -19,6 +19,26 @@ happened to return first, so the bug is invisible until someone can't log in.
 staff member must look the account up by role + linked profile id before writing. If the
 lookup returns nothing, fail loudly rather than falling back to a looser match.
 
+# `users.officer_id` is a per-role foreign key, not a shared id
+
+`users.officer_id` addresses a **different table depending on `users.role`**: `officers.id`
+for a field officer, `supervisors.id` for a supervisor, and the matching hierarchy table for
+the other roles. Always read it against the table that matches the session's role, and
+re-check the stored row's panchayat instead of trusting the session's claim.
+
+**Why:** those id sequences are independent, so the same number is a valid row in several
+tables at once. Middleware that accepts two roles and then queries one table will silently
+hand a caller of the other role whichever unrelated profile shares its number — a real
+cross-account read/write, not a 404. It passes every test that fakes a session by reusing
+another role's id, because the forged session exercises a lookup that cannot occur in
+production.
+
+**How to apply:** when one endpoint serves multiple roles, resolve the profile once in the
+guard, attach the resolved record to the request, and let handlers use only that. Fixtures
+must create the real profile row plus its `users` row rather than pointing a session at a
+convenient id. Distinguish "no profile row" (data gap → 404) from "profile belongs
+elsewhere" (denial → 403); collapsing both into 403 makes a valid role look unauthorized.
+
 # Validate role/panchayat/ward pairings on the server
 
 A staff management API must reject mismatched combinations itself — a hierarchy role in a

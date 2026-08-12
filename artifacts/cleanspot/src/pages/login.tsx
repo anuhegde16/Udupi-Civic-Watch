@@ -90,7 +90,12 @@ export default function LoginPage({ portalType }: LoginProps) {
           } else if (role === "commissioner") {
             setLocation("/commissioner/dashboard", { replace: true });
           } else if (role === "officer" || role === "field_officer") {
-            setLocation("/officer/dashboard", { replace: true });
+            setLocation(
+              body?.user?.panchayatName === "Udupi"
+                ? "/supervisor/dashboard"
+                : "/officer/dashboard",
+              { replace: true },
+            );
           } else if (role === "supervisor") {
             setLocation("/supervisor/dashboard", { replace: true });
           } else if (role === "health_inspector") {

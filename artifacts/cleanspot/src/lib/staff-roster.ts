@@ -120,10 +120,17 @@ export const PANCHAYAT_WARDS: Record<string, string[]> = (() => {
 
 export const PANCHAYAT_NAMES: string[] = Object.keys(PANCHAYAT_WARDS).sort();
 
-/** Which staff types make sense for a given municipality. */
+/**
+ * Which staff types make sense for a given municipality.
+ *
+ * Udupi includes "field officer" because the municipality uses that title
+ * interchangeably with "supervisor" for the same ward-level job. A Udupi field
+ * officer is ward-scoped like a supervisor, unlike a Saligrama field officer
+ * who works from per-report assignments.
+ */
 export function staffTypesForPanchayat(panchayat: string): StaffType[] {
   return panchayat === "Udupi"
-    ? ["environmental_engineer", "health_inspector", "supervisor", "community_mobiliser"]
+    ? ["environmental_engineer", "health_inspector", "supervisor", "field_officer", "community_mobiliser"]
     : ["field_officer"];
 }
 

@@ -105,8 +105,13 @@ function wardKeyToNumber(key: string): number | null {
 
 /**
  * Which staff types belong to which municipality. The Udupi hierarchy roles
- * only exist for Udupi; legacy field officers only exist for the Saligrama-style
- * panchayats.
+ * (health inspector, engineer, …) only exist for Udupi, and the Saligrama-style
+ * panchayats only use field officers.
+ *
+ * Udupi accepts BOTH "supervisor" and "field officer" because the municipality
+ * uses the two titles interchangeably for the same ward-level job. A Udupi
+ * field officer is ward-scoped like a supervisor rather than assignment-scoped
+ * like a Saligrama field officer.
  *
  * This must be enforced here and not only in the roster UI: this is a
  * management API, so hiding a role in a dropdown does not stop a request that
@@ -114,7 +119,7 @@ function wardKeyToNumber(key: string): number | null {
  * no role-scoped view can see or clean up.
  */
 function staffTypeAllowedForPanchayat(staffType: StaffType, panchayat: string): boolean {
-  return panchayat === "Udupi" ? staffType !== "field_officer" : staffType === "field_officer";
+  return panchayat === "Udupi" ? true : staffType === "field_officer";
 }
 
 const wardNamesByPanchayat = new Map<string, Set<string>>();
@@ -489,6 +494,14 @@ router.post("/control-center/staff", requireControlCenter, async (req, res): Pro
       }
       const areaName = body.wardNames?.[0] ?? null;
 
+      // Udupi field officers are scoped to reports geographically rather than
+      // by assignment, so an officer without a ward would log in to a
+      // permanently empty dashboard. Refuse instead of creating that account.
+      if (body.panchayatName === "Udupi" && !areaName) {
+        res.status(400).json({ error: "A Udupi field officer must be assigned a ward" });
+        return;
+      }
+
       const clash = await db.execute(sql`
         SELECT 1 FROM officers WHERE email = ${body.email} AND deleted_at IS NULL
         UNION ALL
@@ -857,6 +870,13 @@ router.patch("/control-center/staff/:staffType/:id", requireControlCenter, async
         const wardError = validateWardAssignment("field_officer", existing.panchayatName, body.wardNames);
         if (wardError) {
           res.status(400).json({ error: wardError });
+          return;
+        }
+        // Mirrors the create-time rule: a Udupi field officer is scoped to
+        // reports by ward, so clearing the ward would leave them logging in to
+        // an empty dashboard with no indication why.
+        if (existing.panchayatName === "Udupi" && !body.wardNames.length) {
+          res.status(400).json({ error: "A Udupi field officer must be assigned a ward" });
           return;
         }
         areaName = body.wardNames[0] ?? null;

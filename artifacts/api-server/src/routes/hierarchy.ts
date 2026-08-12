@@ -8,7 +8,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import {
-  requireSupervisor,
+  requireUdupiWardStaff,
   requireHealthInspector,
   requireEnvEngineer,
   requireCommissioner,
@@ -19,6 +19,7 @@ import {
 } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { udupiWardRings, udupiBox, pointInPolygon as pip } from "../lib/geo";
+import type { UdupiWardStaff } from "../lib/udupi-ward-staff";
 
 const router: IRouter = Router();
 
@@ -145,30 +146,24 @@ router.get("/control-center/udupi-operations", requireControlCenter, async (_req
 });
 
 // ── GET /api/supervisor/me ─────────────────────────────────────────────────────
-router.get("/supervisor/me", requireSupervisor, async (req, res): Promise<void> => {
-  const user = (req as any).user as SessionUser;
-  if (!user.officerId) {
-    res.status(404).json({ error: "Supervisor profile not found" });
-    return;
-  }
+router.get("/supervisor/me", requireUdupiWardStaff, async (req, res): Promise<void> => {
+  const staff = (req as any).udupiWardStaff as UdupiWardStaff;
   try {
-    const result = await db.execute(sql`
-      SELECT sv.id, sv.name, sv.phone, sv.panchayat_name, sv.ward_names,
-             hi.id   AS health_inspector_id,
-             hi.name AS health_inspector_name,
-             hi.phone AS health_inspector_phone
-      FROM   supervisors sv
-      LEFT JOIN health_inspectors hi ON hi.id = sv.health_inspector_id
-      WHERE  sv.id = ${Number(user.officerId)}
-      LIMIT  1
-    `);
-    if (!result.rows.length) {
-      res.status(404).json({ error: "Supervisor not found" });
-      return;
-    }
-    res.json(result.rows[0]);
+    // Both Udupi titles return the same profile shape so the ward-staff
+    // dashboard renders identically for either account type.
+    res.json({
+      id: staff.id,
+      name: staff.name,
+      phone: staff.phone,
+      panchayat_name: "Udupi",
+      ward_names: staff.wardNames,
+      staff_kind: staff.kind,
+      health_inspector_id: staff.healthInspectorId,
+      health_inspector_name: staff.healthInspectorName,
+      health_inspector_phone: staff.healthInspectorPhone,
+    });
   } catch (err) {
-    logger.error({ err }, "Error fetching supervisor profile");
+    logger.error({ err }, "Error fetching Udupi ward staff profile");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -292,30 +287,13 @@ router.get("/commissioner/me", requireCommissioner, async (req, res): Promise<vo
 });
 
 // ── GET /api/supervisor/reports ────────────────────────────────────────────────
-// Returns all active (non-archived) reports for the wards the supervisor manages.
-// Ward matching: supervisor.ward_names stores "Ward N/Town"; field officers have
-// area_name = "Ward N" so we strip the locality suffix for the JOIN.
-router.get("/supervisor/reports", requireSupervisor, async (req, res): Promise<void> => {
-  const user = (req as any).user as SessionUser;
-  if (!user.officerId) {
-    res.status(404).json({ error: "Supervisor profile not found" });
-    return;
-  }
+// Returns all active (non-archived) reports inside the wards this ward-staff
+// member covers. Both Udupi titles resolve to the same ward rings, so a
+// supervisor and a field officer covering a ward see exactly the same list.
+router.get("/supervisor/reports", requireUdupiWardStaff, async (req, res): Promise<void> => {
+  const staff = (req as any).udupiWardStaff as UdupiWardStaff;
   try {
-    const profRow = await db.execute(sql`
-      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
-    `);
-    if (!profRow.rows.length) { res.json({ reports: [], total: 0 }); return; }
-    const wardNames: string[] = (profRow.rows[0] as any).ward_names as string[];
-
-    // Convert "Ward N/Town" → Udupi ward rings for PiP filtering
-    const rings: { name: string; ring: [number, number][] }[] = [];
-    for (const wn of wardNames) {
-      const m = wn.match(/^Ward (\d+)/);
-      if (!m) continue;
-      const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
-      if (entry) rings.push(entry);
-    }
+    const rings = staff.rings;
     if (!rings.length) { res.json({ reports: [], total: 0 }); return; }
 
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
@@ -347,10 +325,10 @@ router.get("/supervisor/reports", requireSupervisor, async (req, res): Promise<v
 });
 
 // ── PATCH /api/supervisor/reports/:id ─────────────────────────────────────────
-// Supervisors can update report status for reports in their wards (same as field officer).
-router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Promise<void> => {
-  const user = (req as any).user as SessionUser;
-  if (!user.officerId) { res.status(403).json({ error: "No supervisor profile" }); return; }
+// Udupi ward staff (either title) advance a report through dispatch → cleaned
+// for reports located inside their own wards.
+router.patch("/supervisor/reports/:id", requireUdupiWardStaff, async (req, res): Promise<void> => {
+  const staff = (req as any).udupiWardStaff as UdupiWardStaff;
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid report ID" }); return; }
@@ -377,7 +355,7 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
     return;
   }
   try {
-    // Verify the report is in one of this supervisor's wards (PiP)
+    // Verify the report sits inside one of this staff member's own wards (PiP)
     const reportRow = await db.execute(sql`
       SELECT id, latitude, longitude FROM reports
       WHERE id = ${id} AND deleted_at IS NULL LIMIT 1
@@ -388,17 +366,7 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
     }
     const rpt = reportRow.rows[0] as any;
 
-    const svRow = await db.execute(sql`
-      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
-    `);
-    const wardNames: string[] = (svRow.rows[0] as any)?.ward_names ?? [];
-    const svRings = wardNames.flatMap((wn: string) => {
-      const m = wn.match(/^Ward (\d+)/);
-      if (!m) return [];
-      const entry = udupiWardRings.find(w => w.name === `Udupi Ward ${m[1]}`);
-      return entry ? [entry] : [];
-    });
-    const inWard = svRings.some(r => pip(Number(rpt.latitude), Number(rpt.longitude), r.ring));
+    const inWard = staff.rings.some(r => pip(Number(rpt.latitude), Number(rpt.longitude), r.ring));
     if (!inWard) {
       res.status(403).json({ error: "Report not in your wards" });
       return;
@@ -415,7 +383,9 @@ router.patch("/supervisor/reports/:id", requireSupervisor, async (req, res): Pro
           updated_at = NOW()
       WHERE id = ${id} AND deleted_at IS NULL
       RETURNING id, status, cleanup_image_url AS "cleanupImageUrl",
-        cleanup_image_urls AS "cleanupImageUrls", updated_at AS "updatedAt"
+        cleanup_image_urls AS "cleanupImageUrls",
+        cleaning_started_at AS "cleaningStartedAt", cleaned_at AS "cleanedAt",
+        updated_at AS "updatedAt"
     `);
     res.json(updated.rows[0] ?? { id, status });
   } catch (err) {
@@ -1664,28 +1634,13 @@ router.get("/community-mobiliser/map-reports", requireCommunityMobiliser, async 
 });
 
 // ── GET /api/supervisor/map-reports ───────────────────────────────────────────
-router.get("/supervisor/map-reports", requireSupervisor, async (req, res): Promise<void> => {
-  const user = (req as any).user as SessionUser;
-  if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+router.get("/supervisor/map-reports", requireUdupiWardStaff, async (req, res): Promise<void> => {
+  const staff = (req as any).udupiWardStaff as UdupiWardStaff;
   try {
-    const profRow = await db.execute(sql`
-      SELECT ward_names FROM supervisors WHERE id = ${Number(user.officerId)} LIMIT 1
-    `);
-    if (!profRow.rows.length) { res.status(404).json({ error: "Profile not found" }); return; }
-    const wardNames: string[] = (profRow.rows[0] as any).ward_names as string[];
-
-    // Convert "Ward N/Town" → "Udupi Ward N", gather rings
-    const rings: { name: string; ring: [number, number][] }[] = [];
-    for (const wn of wardNames) {
-      const m = wn.match(/^Ward (\d+)/);
-      if (!m) continue;
-      const geoName = `Udupi Ward ${m[1]}`;
-      const entry = udupiWardRings.find(w => w.name === geoName);
-      if (entry) rings.push(entry);
-    }
+    const rings = staff.rings;
     if (!rings.length) { res.json({ reports: [] }); return; }
 
-    // Tight bbox scoped to supervisor's own wards — no global cutoff
+    // Tight bbox scoped to this staff member's own wards — no global cutoff
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
