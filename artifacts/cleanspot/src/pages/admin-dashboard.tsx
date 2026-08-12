@@ -126,7 +126,7 @@ const ZONE_PALETTE = [
   "#0ea5e9",
 ];
 
-function useAnalytics() {
+function useAnalytics(enabled: boolean) {
   return useQuery({
     queryKey: ["admin-analytics"],
     queryFn: () =>
@@ -135,6 +135,7 @@ function useAnalytics() {
         byStatus: { total: number; reported: number; cleaning: number; cleaned: number };
         officers: { name: string; pending: number; resolved: number }[];
       }>("/api/admin/reports/analytics"),
+    enabled,
     retry: false,
     staleTime: 5 * 60_000,
     refetchInterval: 120_000,
@@ -151,10 +152,11 @@ type PanchayatAdminItem = {
   createdAt: string;
 };
 
-function usePanchayatAdmins() {
+function usePanchayatAdmins(enabled: boolean) {
   return useQuery<{ admins: PanchayatAdminItem[]; total: number }>({
     queryKey: ["panchayat-admins"],
     queryFn: () => customFetch("/api/admin/panchayat-admins"),
+    enabled,
     retry: false,
     staleTime: 5 * 60_000,
   });
@@ -235,7 +237,9 @@ export default function AdminDashboard() {
   const [selectedWardName, setSelectedWardName] = useState<string | null>(null);
   const [panchayatOverviewOpen, setPanchayatOverviewOpen] = useState(false);
   const [performanceOpen, setPerformanceOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [adminsOpen, setAdminsOpen] = useState(false);
+  const [reportDataEnabled, setReportDataEnabled] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const now = new Date();
     const from = new Date(now);
@@ -283,7 +287,7 @@ export default function AdminDashboard() {
       refetchIntervalInBackground: false,
     },
   });
-  const { data: analytics, isLoading: isLoadingAnalytics, dataUpdatedAt: analyticsUpdatedAt } = useAnalytics();
+  const { data: analytics, dataUpdatedAt: analyticsUpdatedAt } = useAnalytics(analyticsOpen);
   const { data: allReportsData, isLoading: isLoadingReports, dataUpdatedAt: reportsUpdatedAt } = useAdminListReports(
     { limit: 200 },
     {
@@ -292,18 +296,34 @@ export default function AdminDashboard() {
         staleTime: 60_000,
         refetchInterval: 120_000,
         refetchIntervalInBackground: false,
+        enabled: reportDataEnabled,
       },
     },
   );
-  const { data: panchayatAdminsData } = usePanchayatAdmins();
-  const { data: udupiOperations, dataUpdatedAt: udupiUpdatedAt } = useQuery<UdupiOperations>({
+  const needsPanchayatAdmins = adminsOpen || selectedPanchayat !== null;
+  const { data: panchayatAdminsData, isLoading: isLoadingPanchayatAdmins } = usePanchayatAdmins(needsPanchayatAdmins);
+  const needsUdupiOperations = panchayatOverviewOpen || selectedPanchayat === "Udupi";
+  const {
+    data: udupiOperations,
+    isLoading: isLoadingUdupiOperations,
+    dataUpdatedAt: udupiUpdatedAt,
+  } = useQuery<UdupiOperations>({
     queryKey: ["control-center-udupi-operations"],
     queryFn: () => customFetch("/api/control-center/udupi-operations"),
+    enabled: needsUdupiOperations,
     retry: false,
     staleTime: 60_000,
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
   });
+
+  // The map needs report markers, but the Command Center should paint its headline
+  // counts and staffing controls before starting that larger request.
+  useEffect(() => {
+    if (isLoadingSummary || isLoadingOfficers) return;
+    const frame = requestAnimationFrame(() => setReportDataEnabled(true));
+    return () => cancelAnimationFrame(frame);
+  }, [isLoadingSummary, isLoadingOfficers]);
 
   useEffect(() => {
     const latest = Math.max(
@@ -391,7 +411,7 @@ export default function AdminDashboard() {
     setPaEditOpen(true);
   }
 
-  const isLoading = isLoadingSummary || isLoadingOfficers || isLoadingAnalytics || isLoadingReports;
+  const isLoading = isLoadingSummary || isLoadingOfficers;
 
   const panchayatAdmins = panchayatAdminsData?.admins ?? [];
 
@@ -710,7 +730,9 @@ export default function AdminDashboard() {
                 const isSelected = selectedPanchayat === snapshot.name;
                 const completion = snapshot.total > 0 ? Math.round((snapshot.cleaned / snapshot.total) * 100) : 0;
                 const needsAttention = snapshot.reported + snapshot.unassignedZones;
-                const staffingLabel = snapshot.udupiOperations
+                const staffingLabel = snapshot.name === "Udupi" && isLoadingUdupiOperations
+                  ? "Loading municipal hierarchy…"
+                  : snapshot.udupiOperations
                   ? `${snapshot.udupiOperations.healthInspectors.reduce((count, hi) => count + hi.supervisors.length, 0)} supervisors · ${snapshot.udupiOperations.healthInspectors.length} inspectors`
                   : `${snapshot.officers.length} officer${snapshot.officers.length !== 1 ? "s" : ""} · ${snapshot.admins.length} admin${snapshot.admins.length !== 1 ? "s" : ""}`;
 
@@ -1004,6 +1026,11 @@ export default function AdminDashboard() {
             <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-0.5">
               Click a zone circle to filter · colour = status
             </p>
+            {(!reportDataEnabled || isLoadingReports) && (
+              <p className="text-xs font-semibold text-primary mt-1">
+                Loading report markers…
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3 text-[10px] sm:text-xs font-bold">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500" />New</span>
@@ -1070,7 +1097,9 @@ export default function AdminDashboard() {
                       : `${selectedPanchayatSnapshot.officers.length} assigned`}
                   </span>
                 </div>
-                {selectedPanchayatSnapshot.udupiOperations ? (
+                {selectedPanchayatSnapshot.name === "Udupi" && (isLoadingUdupiOperations || !udupiOperations) ? (
+                  <EmptyOperationsState icon={Loader2} message="Loading municipal hierarchy and ward workload…" />
+                ) : selectedPanchayatSnapshot.udupiOperations ? (
                   <div className="space-y-3">
                     {selectedPanchayatSnapshot.udupiOperations.environmentalEngineer && (
                       <div className="rounded-xl bg-primary/25 border border-primary/30 px-3 py-2.5">
@@ -1149,7 +1178,9 @@ export default function AdminDashboard() {
                   <UserRoundCog className="w-4 h-4 text-primary-foreground" />
                   <h3 className="font-black text-sm">Panchayat administrator</h3>
                 </div>
-                {selectedPanchayatSnapshot.admins.length ? (
+                {isLoadingPanchayatAdmins ? (
+                  <EmptyOperationsState icon={Loader2} message="Loading panchayat administrator…" />
+                ) : selectedPanchayatSnapshot.admins.length ? (
                   <div className="space-y-2">
                     {selectedPanchayatSnapshot.admins.map((admin) => (
                       <div key={admin.id} className="rounded-xl bg-white/10 px-3 py-3">
@@ -1176,8 +1207,29 @@ export default function AdminDashboard() {
         </section>
       )}
 
-      {/* ── Charts row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-5 sm:mb-8">
+      {/* ── Analytics ── */}
+      <Collapsible open={analyticsOpen} onOpenChange={setAnalyticsOpen} className="mb-5 sm:mb-8">
+        <div className="bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-4 sm:p-6">
+          <CollapsibleTrigger asChild>
+            <button type="button" className="w-full flex items-center justify-between text-left">
+              <div>
+                <h2 className="text-base sm:text-xl font-black text-foreground flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-primary" /> Analytics
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-0.5">
+                  Trends and status breakdown · {analyticsOpen ? "hide to collapse" : "open to load"}
+                </p>
+              </div>
+              <ChevronDown className={`w-5 h-5 text-primary transition-transform ${analyticsOpen ? "rotate-180" : ""}`} />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-5">
+          {!analytics ? (
+            <div className="h-40 flex items-center justify-center text-muted-foreground font-medium text-sm">
+              <Loader2 className="w-5 h-5 animate-spin mr-2 text-primary" /> Loading analytics…
+            </div>
+          ) : (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="lg:col-span-2 bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-4 sm:p-6">
           <h2 className="text-base sm:text-xl font-black text-foreground mb-0.5 sm:mb-1 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-primary" /> Reports — Last 14 Days
@@ -1255,6 +1307,10 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+          )}
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       {/* ── Zone performance cards ── */}
       <div className="mb-5 sm:mb-8">
