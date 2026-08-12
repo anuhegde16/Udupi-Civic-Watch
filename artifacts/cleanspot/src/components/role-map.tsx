@@ -48,6 +48,8 @@ export interface RoleMapProps {
   highlightBacklogWards?: boolean;
   /** Called when a user taps a ward polygon — receives the geo name e.g. "Udupi Ward 5" */
   onWardTap?: (wardGeoName: string) => void;
+  /** Called when a user opens a report from its map-pin popup. */
+  onReportClick?: (report: RoleMapReport) => void;
   /** Highlight one ward and dim all others; also flies the map to that ward's bounds */
   focusedWardGeoName?: string;
 }
@@ -92,6 +94,7 @@ export function RoleMap({
   height = "320px",
   highlightBacklogWards,
   onWardTap,
+  onReportClick,
   focusedWardGeoName,
 }: RoleMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -373,6 +376,19 @@ export function RoleMap({
           popup.appendChild(dateEl);
         }
 
+        if (onReportClick) {
+          const action = document.createElement("button");
+          action.type = "button";
+          action.style.cssText = "display:block;width:100%;margin-top:9px;padding:7px 10px;border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:11px;font-weight:800;text-align:center;cursor:pointer;";
+          action.textContent = "View Report";
+          action.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onReportClick(r);
+          });
+          popup.appendChild(action);
+        }
+
         L.marker([r.latitude, r.longitude], { icon })
           .bindPopup(popup)
           .addTo(map);
@@ -382,7 +398,7 @@ export function RoleMap({
     return () => cancelAnimationFrame(rafId);
   }, [reports, wardGeoNames, wardGroups, mapReady, activeLayer,
       wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards, onWardTap,
-      focusedWardGeoName]);
+       onReportClick, focusedWardGeoName]);
 
   // ── Fly to focused ward ───────────────────────────────────────────────────
   useEffect(() => {

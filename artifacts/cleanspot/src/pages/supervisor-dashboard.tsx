@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { formatWardLabel } from "@/lib/ward-names";
@@ -220,8 +220,12 @@ export default function SupervisorDashboard() {
         }),
         headers: { "Content-Type": "application/json" },
       }),
-    onSuccess: () => {
+    onSuccess: (updated: Partial<Report> & { id: number; status: string }) => {
       queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["sv-map-reports"] });
+      setPreviewReport((current) =>
+        current?.id === updated.id ? { ...current, ...updated } : current
+      );
       setCleanupReport(null);
       setCleanupPhotos([]);
       toast({ title: "Status updated" });
@@ -349,6 +353,18 @@ export default function SupervisorDashboard() {
     : [];
   const hasPendingCleanupUploads = isProcessingImage || cleanupPhotos.some((photo) => !photo.url && !photo.error);
   const hasUploadErrors = cleanupPhotos.some((photo) => !!photo.error);
+  const openReportFromMap = useCallback((mapReport: RoleMapReport) => {
+    const report = allReports.find((item) => item.id === mapReport.id);
+    if (report) {
+      setPreviewReport(report);
+      return;
+    }
+    toast({
+      title: "Report unavailable",
+      description: "This report is no longer available in your assigned wards.",
+      variant: "destructive",
+    });
+  }, [allReports, toast]);
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
@@ -356,8 +372,8 @@ export default function SupervisorDashboard() {
       <Dialog open={!!previewReport} onOpenChange={(open) => !open && setPreviewReport(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Report #{previewReport?.id} photo evidence</DialogTitle>
-            <DialogDescription>Review the citizen’s complaint photos and, once available, cleanup confirmation photos.</DialogDescription>
+            <DialogTitle>Report #{previewReport?.id}</DialogTitle>
+            <DialogDescription>Review the citizen’s complaint photos and update its status when work begins or is complete.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
             <PhotoEvidenceSection
@@ -376,6 +392,17 @@ export default function SupervisorDashboard() {
           </div>
           {previewReport?.status !== "cleaned" && (
             <DialogFooter>
+              {previewReport?.status === "reported" && (
+                <Button
+                  variant="outline"
+                  onClick={() => updateStatus.mutate({ id: previewReport.id, status: "cleaning" })}
+                  disabled={updateStatus.isPending}
+                  className="rounded-xl"
+                >
+                  {updateStatus.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  <Wrench className="w-4 h-4 mr-2" /> Mark as In Progress
+                </Button>
+              )}
               <Button onClick={() => previewReport && openCleanupEvidence(previewReport)} className="rounded-xl">
                 <Camera className="w-4 h-4 mr-2" /> Add cleanup evidence
               </Button>
@@ -588,6 +615,7 @@ export default function SupervisorDashboard() {
             height="320px"
             highlightBacklogWards
             focusedWardGeoName={focusedWard ?? undefined}
+            onReportClick={openReportFromMap}
           />
         </div>
       )}
