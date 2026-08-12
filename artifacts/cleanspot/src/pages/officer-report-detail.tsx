@@ -1,11 +1,11 @@
 import { useRoute, useLocation } from "wouter";
 import { useState, useRef, useMemo } from "react";
-import { useGetReport, useUpdateReport, getGetOfficerReportsQueryKey, getGetReportQueryKey } from "@workspace/api-client-react";
+import { customFetch, getGetOfficerReportsQueryKey, getGetReportQueryKey } from "@workspace/api-client-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, MapPin, Clock, ArrowLeft, Camera, CheckCircle2, HardHat, FileWarning, Info, ArrowUpRight, X, Plus, Images, AlertTriangle, RefreshCw, Cpu, Tag } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { ReportLocationMap } from "@/components/report-location-map";
@@ -15,18 +15,83 @@ import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
 import { useImageLightbox } from "@/components/image-lightbox";
 
 type CleanupPhoto = { id: string; preview: string; url: string; uploadedAt: string; progress: number; error: string | null };
+type ReportDetails = {
+  id: number;
+  imageUrl: string | null;
+  imageUploadedAt?: string | null;
+  imageUrls: { url: string; uploadedAt?: string | null }[] | null;
+  cleanupImageUrl: string | null;
+  cleanupImageUrls: { url: string; uploadedAt?: string | null }[] | null;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+  description: string | null;
+  status: "reported" | "cleaning" | "cleaned";
+  createdAt: string;
+  updatedAt: string;
+  wasteTypes?: string[] | null;
+  brandNames?: string[] | null;
+  wasteSeverity?: string | null;
+  photoAiAnalysedAt?: string | null;
+};
 const MAX_CLEANUP_PHOTOS = 5;
 
 export default function OfficerReportDetail() {
-  const [, params] = useRoute("/officer/report/:id");
+  const [, officerParams] = useRoute("/officer/report/:id");
+  const [, supervisorParams] = useRoute("/supervisor/report/:id");
+  const isSupervisor = !!supervisorParams;
+  const params = supervisorParams ?? officerParams;
   const id = params?.id ? parseInt(params.id, 10) : 0;
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
-  const { data: report, isLoading } = useGetReport(id, { query: { queryKey: getGetReportQueryKey(id), enabled: !!id } });
-  const updateReport = useUpdateReport();
+  const reportQueryKey = isSupervisor
+    ? ["/api/supervisor/report", id]
+    : getGetReportQueryKey(id);
+  const {
+    data: report,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<ReportDetails>({
+    queryKey: reportQueryKey,
+    queryFn: async () => {
+      if (isSupervisor) {
+        const result = await customFetch<{ reports: ReportDetails[] }>("/api/supervisor/reports");
+        const matchingReport = result.reports.find((candidate) => candidate.id === id);
+        if (!matchingReport) {
+          throw new Error("This report is not available in your assigned wards.");
+        }
+        return matchingReport;
+      }
+      return customFetch<ReportDetails>(`/api/reports/${id}`);
+    },
+    enabled: !!id,
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+  const updateReport = useMutation({
+    mutationFn: ({ reportId, status, cleanupImageUrl, cleanupImageUrls }: {
+      reportId: number;
+      status: "reported" | "cleaning" | "cleaned";
+      cleanupImageUrl?: string;
+      cleanupImageUrls?: { url: string; uploadedAt: string }[];
+    }) =>
+      customFetch<Partial<ReportDetails> & { id: number }>(
+        isSupervisor ? `/api/supervisor/reports/${reportId}` : `/api/reports/${reportId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status,
+            ...(cleanupImageUrl ? { cleanupImageUrl } : {}),
+            ...(cleanupImageUrls?.length ? { cleanupImageUrls } : {}),
+          }),
+        },
+      ),
+  });
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [cleanupPhotos, setCleanupPhotos] = useState<CleanupPhoto[]>([]);
@@ -35,11 +100,26 @@ export default function OfficerReportDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { lightbox, open: openLightbox } = useImageLightbox();
 
-  if (isLoading || !report) {
+  if (isLoading || (!report && !isError)) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground h-full animate-in fade-in duration-500">
         <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
         <p className="font-bold text-lg text-foreground">Loading report details...</p>
+      </div>
+    );
+  }
+
+  if (isError || !report) {
+    return (
+      <div className="max-w-xl mx-auto w-full py-24 px-6 text-center">
+        <FileWarning className="w-12 h-12 mx-auto mb-4 text-destructive" />
+        <h1 className="text-2xl font-black text-foreground mb-2">Report unavailable</h1>
+        <p className="text-muted-foreground font-medium mb-6">
+          {error instanceof Error ? error.message : "This report could not be loaded."}
+        </p>
+        <Button variant="outline" className="rounded-xl" onClick={() => setLocation(isSupervisor ? "/supervisor/dashboard" : "/officer/dashboard")}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back to dashboard
+        </Button>
       </div>
     );
   }
@@ -50,7 +130,7 @@ export default function OfficerReportDetail() {
     cleanupImageUrls?: { url: string; uploadedAt: string }[]
   ) => {
     updateReport.mutate(
-      { id, data: { status, cleanupImageUrl, cleanupImageUrls } },
+      { reportId: id, status, cleanupImageUrl, cleanupImageUrls },
       {
         onSuccess: (updatedReport) => {
           const quoteDescription = status === "cleaning"
@@ -60,8 +140,12 @@ export default function OfficerReportDetail() {
             title: "Status Updated",
             description: quoteDescription ?? `Report is now marked as ${status}`,
           });
-          queryClient.setQueryData(getGetReportQueryKey(id), updatedReport);
-          if (user?.officerId) {
+          const currentReport = queryClient.getQueryData<ReportDetails>(reportQueryKey);
+          queryClient.setQueryData(reportQueryKey, { ...currentReport, ...updatedReport });
+          if (isSupervisor) {
+            queryClient.invalidateQueries({ queryKey: ["supervisor-reports"] });
+            queryClient.invalidateQueries({ queryKey: ["sv-map-reports"] });
+          } else if (user?.officerId) {
             queryClient.invalidateQueries({ queryKey: getGetOfficerReportsQueryKey(user.officerId) });
           }
         },
@@ -161,7 +245,9 @@ export default function OfficerReportDetail() {
         <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black text-foreground tracking-tight">Report #{report.id}</h1>
-            <p className="text-muted-foreground font-medium">Assigned task in your coastal sector</p>
+          <p className="text-muted-foreground font-medium">
+            {isSupervisor ? "Assigned report in your ward" : "Assigned task in your coastal sector"}
+          </p>
           </div>
           <div className="self-start sm:self-auto">
             {getStatusBadge()}
@@ -355,7 +441,9 @@ export default function OfficerReportDetail() {
 
           {/* Action Area */}
           <div className="bg-card rounded-3xl shadow-sm border border-border/50 p-6 space-y-4">
-            <h3 className="font-black text-lg text-foreground mb-4">Officer Actions</h3>
+            <h3 className="font-black text-lg text-foreground mb-4">
+              {isSupervisor ? "Supervisor Actions" : "Officer Actions"}
+            </h3>
             
             {report.status === 'reported' && (
               <Button 

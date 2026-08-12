@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useAuth } from "@/hooks/use-auth";
 import { getGreeting } from "@/lib/greeting";
@@ -185,6 +186,7 @@ export default function SupervisorDashboard() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [view, setView] = useState<"overview" | "analytics">("overview");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -365,6 +367,9 @@ export default function SupervisorDashboard() {
       variant: "destructive",
     });
   }, [allReports, toast]);
+  const openReport = useCallback((reportId: number) => {
+    setLocation(`/supervisor/report/${reportId}`);
+  }, [setLocation]);
 
   return (
     <div className="w-full pb-10 animate-in fade-in duration-500 space-y-6">
@@ -669,9 +674,9 @@ export default function SupervisorDashboard() {
                   {thumb ? (
                     <button
                       type="button"
-                      onClick={() => setPreviewReport(report)}
+                      onClick={() => openReport(report.id)}
                       className="absolute inset-0 w-full h-full cursor-pointer"
-                      aria-label={`Open report ${report.id} preview`}
+                      aria-label={`Open report ${report.id}`}
                     >
                       <img src={thumb} alt="Waste report" className="w-full h-full object-cover" />
                     </button>
@@ -708,9 +713,9 @@ export default function SupervisorDashboard() {
                     type="button"
                     variant="outline"
                     className="w-full h-9 rounded-xl text-xs font-bold"
-                    onClick={() => setPreviewReport(report)}
+                    onClick={() => openReport(report.id)}
                   >
-                    View photos & details
+                    View report
                   </Button>
 
                   {report.wasteTypes && report.wasteTypes.length > 0 && (

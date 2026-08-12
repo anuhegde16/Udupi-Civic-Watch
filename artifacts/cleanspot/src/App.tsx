@@ -61,6 +61,11 @@ function Router() {
             <OfficerReportDetail />
           </AuthGuard>
         </Route>
+        <Route path="/supervisor/report/:id">
+          <AuthGuard roles={["supervisor"]}>
+            <OfficerReportDetail />
+          </AuthGuard>
+        </Route>
 
         {/* Protected Panchayat Admin Routes */}
         <Route path="/master/dashboard">
