@@ -1802,6 +1802,7 @@ router.get("/commissioner/map-reports", requireCommissioner, async (req, res): P
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
              image_url AS "imageUrl", image_urls AS "imageUrls",
+             cleanup_image_url AS "cleanupImageUrl", cleanup_image_urls AS "cleanupImageUrls",
              waste_types AS "wasteTypes", created_at AS "createdAt"
       FROM reports
       WHERE deleted_at IS NULL

@@ -18,6 +18,8 @@ export interface RoleMapReport {
   wasteTypes?: string[] | null;
   imageUrl?: string | null;
   imageUrls?: { url: string }[] | null;
+  cleanupImageUrl?: string | null;
+  cleanupImageUrls?: { url: string }[] | null;
   officerName?: string | null;
   officerPhone?: string | null;
   supervisorName?: string | null;
@@ -314,14 +316,88 @@ export function RoleMap({
         const popup = document.createElement("div");
         popup.style.cssText = "font-family:system-ui,sans-serif;min-width:170px;max-width:230px;padding:4px 0;";
 
-        const thumbUrl = r.imageUrls?.[0]?.url ?? r.imageUrl;
-        if (thumbUrl) {
+        // Resolve before/after photo arrays
+        const beforeUrls: string[] =
+          r.imageUrls && r.imageUrls.length > 0
+            ? r.imageUrls.map(i => i.url)
+            : r.imageUrl ? [r.imageUrl] : [];
+        const afterUrls: string[] =
+          r.status === "cleaned"
+            ? r.cleanupImageUrls && r.cleanupImageUrls.length > 0
+              ? r.cleanupImageUrls.map(i => i.url)
+              : r.cleanupImageUrl ? [r.cleanupImageUrl] : []
+            : [];
+
+        // Helper to build a single thumbnail with optional pill label
+        const buildThumb = (
+          src: string,
+          alt: string,
+          pill: string | null,
+          wrapStyle: string,
+        ): HTMLElement => {
           const wrap = document.createElement("div");
-          wrap.style.cssText = "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:90px;";
+          wrap.style.cssText = wrapStyle;
           const img = document.createElement("img");
-          img.src = thumbUrl; img.alt = "Waste photo";
+          img.src = src;
+          img.alt = alt;
           img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
-          wrap.appendChild(img); popup.appendChild(wrap);
+          wrap.appendChild(img);
+          if (pill) {
+            const tag = document.createElement("span");
+            tag.style.cssText =
+              "position:absolute;bottom:3px;left:3px;font-size:9px;font-weight:800;" +
+              "letter-spacing:0.04em;text-transform:uppercase;color:#fff;" +
+              "background:rgba(0,0,0,0.55);padding:1px 5px;border-radius:99px;";
+            tag.textContent = pill;
+            wrap.appendChild(tag);
+          }
+          return wrap;
+        };
+
+        // Photo section — mirrors the public map layout
+        if (beforeUrls.length > 0 || afterUrls.length > 0) {
+          const photoSection = document.createElement("div");
+
+          if (beforeUrls.length === 1 && afterUrls.length === 0) {
+            // Single complaint photo — full-width
+            photoSection.style.cssText =
+              "margin:-4px -4px 8px -4px;border-radius:8px 8px 0 0;overflow:hidden;height:110px;";
+            photoSection.appendChild(
+              buildThumb(beforeUrls[0], "Waste photo", null,
+                "width:100%;height:100%;")
+            );
+          } else if (beforeUrls.length === 1 && afterUrls.length === 1) {
+            // Side-by-side before/after
+            photoSection.style.cssText = "display:flex;gap:3px;margin:-4px -4px 8px -4px;";
+            photoSection.appendChild(
+              buildThumb(beforeUrls[0], "Before", "Before",
+                "flex:1;position:relative;border-radius:8px 0 0 8px;overflow:hidden;height:110px;")
+            );
+            photoSection.appendChild(
+              buildThumb(afterUrls[0], "After", "After",
+                "flex:1;position:relative;border-radius:0 8px 8px 0;overflow:hidden;height:110px;")
+            );
+          } else {
+            // Scrollable strip for multiple photos
+            photoSection.style.cssText =
+              "display:flex;gap:3px;margin:-4px -4px 8px -4px;" +
+              "overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;";
+            beforeUrls.forEach((url, i) => {
+              photoSection.appendChild(
+                buildThumb(url, `Photo ${i + 1}`,
+                  afterUrls.length > 0 ? "Before" : null,
+                  "flex-shrink:0;width:70px;position:relative;border-radius:6px;overflow:hidden;height:100px;")
+              );
+            });
+            afterUrls.forEach((url, i) => {
+              photoSection.appendChild(
+                buildThumb(url, `After ${i + 1}`, "After",
+                  "flex-shrink:0;width:70px;position:relative;border-radius:6px;overflow:hidden;height:100px;")
+              );
+            });
+          }
+
+          popup.appendChild(photoSection);
         }
 
         // Status chip
@@ -389,6 +465,15 @@ export function RoleMap({
             onReportClick(r);
           });
           popup.appendChild(action);
+        } else {
+          // No sheet callback — render a direct navigation link (e.g. commissioner map)
+          const link = document.createElement("a");
+          link.href = `/track/${r.id}`;
+          link.style.cssText =
+            "display:inline-block;margin-top:8px;font-size:12px;font-weight:700;" +
+            "color:#0f766e;text-decoration:none;background:#f0fdf4;padding:4px 10px;border-radius:6px;";
+          link.textContent = "View Report →";
+          popup.appendChild(link);
         }
 
         L.marker([r.latitude, r.longitude], { icon })
