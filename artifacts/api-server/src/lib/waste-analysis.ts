@@ -50,7 +50,7 @@ export async function analyseWastePhoto(imageUrl: string): Promise<WasteAnalysis
     try {
       response = await openai.chat.completions.create(
         {
-          model: "gpt-5.6-luna",
+          model: process.env.AI_MODEL_CHAT ?? "gpt-5.6-luna",
           max_completion_tokens: 256,
           messages: [
             {

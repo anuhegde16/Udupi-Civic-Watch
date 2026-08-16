@@ -1,16 +1,29 @@
 import { Router, type IRouter } from "express";
 import { UploadImageBody } from "@workspace/api-zod";
-import { objectStorageClient } from "../lib/objectStorage";
+import { getStorageDriver } from "../lib/storageDriver";
 
 const router: IRouter = Router();
 
-function getBucket() {
-  const bucketId = process.env.DEFAULT_OBJECT_STORAGE_BUCKET_ID;
-  if (!bucketId) {
-    throw new Error("DEFAULT_OBJECT_STORAGE_BUCKET_ID is not set");
-  }
-  return objectStorageClient.bucket(bucketId);
-}
+// ─── Validation constants ─────────────────────────────────────────────────────
+
+/** Only image MIME types are accepted. */
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/avif",
+  "image/tiff",
+  "image/bmp",
+]);
+
+/** Maximum raw (decoded) file size: 10 MB. */
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+
+// ─── POST /uploads/image ─────────────────────────────────────────────────────
 
 router.post("/uploads/image", async (req, res): Promise<void> => {
   const parsed = UploadImageBody.safeParse(req.body);
@@ -28,41 +41,56 @@ router.post("/uploads/image", async (req, res): Promise<void> => {
   }
 
   const [, mimeType, base64Data] = match;
-  const ext = mimeType.split("/")[1] || "jpg";
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const gcsPath = `uploads/${filename}`;
+
+  // MIME type whitelist — reject non-image uploads early.
+  if (!ALLOWED_MIME_TYPES.has(mimeType.toLowerCase())) {
+    res.status(400).json({
+      error: "Unsupported file type",
+      message: `Only image uploads are allowed. Received: ${mimeType}`,
+    });
+    return;
+  }
 
   const buffer = Buffer.from(base64Data, "base64");
 
-  const bucket = getBucket();
-  const file = bucket.file(gcsPath);
-  await file.save(buffer, { contentType: mimeType, resumable: false });
+  // File size guard on decoded bytes.
+  if (buffer.length > MAX_FILE_BYTES) {
+    res.status(400).json({
+      error: "File too large",
+      message: `Maximum upload size is ${MAX_FILE_BYTES / 1024 / 1024} MB per image`,
+    });
+    return;
+  }
+
+  // Build a safe filename: timestamp + random suffix + extension from MIME type.
+  const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") || "jpg";
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const driver = getStorageDriver();
+  await driver.save(filename, buffer, mimeType);
 
   const uploadedAt = new Date().toISOString();
   res.json({ url: `/api/uploads/files/${filename}`, uploadedAt });
 });
 
+// ─── GET /uploads/files/:filename ────────────────────────────────────────────
+
 router.get("/uploads/files/:filename", async (req, res): Promise<void> => {
+  // Sanitise: allow only alphanumeric, dot, hyphen, underscore.
   const raw = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename;
   const filename = raw.replace(/[^a-zA-Z0-9.\-_]/g, "");
-  const gcsPath = `uploads/${filename}`;
 
   try {
-    const bucket = getBucket();
-    const file = bucket.file(gcsPath);
-    const [exists] = await file.exists();
-    if (!exists) {
+    const driver = getStorageDriver();
+    const result = await driver.read(filename);
+    if (!result) {
       res.status(404).json({ error: "File not found" });
       return;
     }
 
-    const [metadata] = await file.getMetadata();
-    const contentType = (metadata.contentType as string) || "application/octet-stream";
-
-    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Type", result.contentType);
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-
-    file.createReadStream().pipe(res);
+    res.send(result.buffer);
   } catch {
     res.status(500).json({ error: "Failed to retrieve file" });
   }

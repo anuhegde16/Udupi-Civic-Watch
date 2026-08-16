@@ -50,7 +50,7 @@ Example: ["Waste reports surged 40% this week due to monsoon debris near Kundapu
     try {
       response = await openai.chat.completions.create(
         {
-          model: "gpt-5.6-luna",
+          model: process.env.AI_MODEL_CHAT ?? "gpt-5.6-luna",
           max_completion_tokens: 512,
           messages: [{ role: "user", content: prompt }],
         },
