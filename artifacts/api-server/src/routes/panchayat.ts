@@ -89,23 +89,35 @@ router.get("/panchayat/officers", requirePanchayatAdmin, async (req, res): Promi
     .where(and(eq(officersTable.panchayatName, user.panchayatName), isNull(officersTable.deletedAt)))
     .orderBy(officersTable.createdAt);
 
-  const withCounts = await Promise.all(
-    officers.map(async (officer) => {
-      const [total] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, officer.id), isNull(reportsTable.deletedAt)));
-      const [pending] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(reportsTable)
-        .where(and(eq(reportsTable.assignedOfficerId, officer.id), isNull(reportsTable.deletedAt), sql`${reportsTable.status} != 'cleaned'`));
-      return {
-        ...officer,
-        reportCount: total.count,
-        pendingCount: pending.count,
-      };
-    })
-  );
+  // One GROUP BY instead of 2N parallel COUNT queries — collapses from 20 DB
+  // round-trips (for 10 officers) to a single aggregation.
+  if (officers.length === 0) {
+    res.json({ officers: [], total: 0 });
+    return;
+  }
+  const officerIds = officers.map((o) => o.id);
+  const countRows = await db.execute(sql`
+    SELECT
+      assigned_officer_id,
+      COUNT(*)::int                                        AS total_count,
+      COUNT(*) FILTER (WHERE status != 'cleaned')::int     AS pending_count
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND assigned_officer_id = ANY(ARRAY[${sql.join(officerIds.map((id) => sql`${id}`), sql`, `)}]::int[])
+    GROUP BY assigned_officer_id
+  `);
+  const countMap = new Map<number, { total: number; pending: number }>();
+  for (const row of countRows.rows as any[]) {
+    countMap.set(Number(row.assigned_officer_id), {
+      total:   row.total_count,
+      pending: row.pending_count,
+    });
+  }
+
+  const withCounts = officers.map((officer) => {
+    const counts = countMap.get(officer.id) ?? { total: 0, pending: 0 };
+    return { ...officer, reportCount: counts.total, pendingCount: counts.pending };
+  });
 
   res.json({ officers: withCounts, total: withCounts.length });
 });

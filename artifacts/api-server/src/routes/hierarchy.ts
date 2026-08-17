@@ -297,6 +297,8 @@ router.get("/supervisor/reports", requireUdupiWardStaff, async (req, res): Promi
     if (!rings.length) { res.json({ reports: [], total: 0 }); return; }
 
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
+    // LIMIT 2000 caps the rows that cross the DB↔Node boundary before the JS
+    // polygon filter runs — prevents unbounded memory growth as report volume grows.
     const rawRows = await db.execute(sql`
       SELECT
         r.id, r.status, r.address, r.description, r.latitude, r.longitude,
@@ -310,6 +312,7 @@ router.get("/supervisor/reports", requireUdupiWardStaff, async (req, res): Promi
         AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
         AND r.longitude BETWEEN ${minLng} AND ${maxLng}
       ORDER BY r.created_at DESC
+      LIMIT 2000
     `);
 
     const reports = (rawRows.rows as any[]).flatMap(r => {

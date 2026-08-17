@@ -648,11 +648,60 @@ async function ensurePushSubscriptionsColumns() {
   }
 }
 
+async function ensureIndexes() {
+  // All statements use CONCURRENTLY + IF NOT EXISTS — safe to run on a live
+  // production DB: no table lock is held while the index builds.
+  // Note: CONCURRENTLY cannot run inside a transaction; each call is its own statement.
+  try {
+    const { db } = await import("@workspace/db");
+    const { sql } = await import("drizzle-orm");
+
+    // Partial index for active reports — the single most common predicate across
+    // every dashboard and report list (deleted_at IS NULL).
+    await db.execute(sql`
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS reports_active_idx
+        ON reports (created_at DESC)
+        WHERE deleted_at IS NULL
+    `);
+
+    // Status filter — used by status-count widgets and board views.
+    await db.execute(sql`
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS reports_status_idx
+        ON reports (status)
+        WHERE deleted_at IS NULL
+    `);
+
+    // Officer assignment — used by field officer and panchayat dashboards.
+    await db.execute(sql`
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS reports_officer_idx
+        ON reports (assigned_officer_id, created_at DESC)
+        WHERE deleted_at IS NULL
+    `);
+
+    // Geo bbox pre-filter — used by supervisor, HI, and panchayat geographic queries.
+    await db.execute(sql`
+      CREATE INDEX CONCURRENTLY IF NOT EXISTS reports_geo_idx
+        ON reports (latitude, longitude)
+        WHERE deleted_at IS NULL
+    `);
+
+    // Phone login lookup — users.email already has a UNIQUE index; phone had none.
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS users_phone_idx ON users (phone)
+    `);
+
+    logger.info("DB indexes verified");
+  } catch (err) {
+    logger.warn({ err }, "Could not ensure DB indexes — continuing startup");
+  }
+}
+
 async function start() {
   // Must run before any Drizzle query — adds phone column if missing
   await bootstrapPhoneColumn();
   await ensureAdminExists();
   await ensureReportsColumns();
+  await ensureIndexes();
   await ensurePushSubscriptionsColumns();
   await migrateRoles();
   await ensurePanchayatAdmin();

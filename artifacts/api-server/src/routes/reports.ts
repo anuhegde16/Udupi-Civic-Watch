@@ -32,24 +32,26 @@ const RATE_LIMIT_HOURS = 1;
 const RATE_LIMIT_MAX = 5;
 
 router.get("/reports/stats/summary", async (req, res): Promise<void> => {
-  const now = new Date();
-  const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-  const [total] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(isNull(reportsTable.deletedAt));
-  const [reported] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "reported")));
-  const [cleaning] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "cleaning")));
-  const [cleaned] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), eq(reportsTable.status, "cleaned")));
-  const [last24hCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), gte(reportsTable.createdAt, last24h)));
-  const [last7dCount] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(isNull(reportsTable.deletedAt), gte(reportsTable.createdAt, last7d)));
-
+  // One aggregate query instead of six sequential COUNTs — 6x fewer round-trips.
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*)::int                                                                     AS total,
+      COUNT(*) FILTER (WHERE status = 'reported')::int                                 AS reported,
+      COUNT(*) FILTER (WHERE status = 'cleaning')::int                                 AS cleaning,
+      COUNT(*) FILTER (WHERE status = 'cleaned')::int                                  AS cleaned,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int           AS last_24h,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int             AS last_7d
+    FROM reports
+    WHERE deleted_at IS NULL
+  `);
+  const row = result.rows[0] as any;
   res.json({
-    total: total.count,
-    reported: reported.count,
-    cleaning: cleaning.count,
-    cleaned: cleaned.count,
-    last24h: last24hCount.count,
-    last7d: last7dCount.count,
+    total:    row.total,
+    reported: row.reported,
+    cleaning: row.cleaning,
+    cleaned:  row.cleaned,
+    last24h:  row.last_24h,
+    last7d:   row.last_7d,
   });
 });
 
