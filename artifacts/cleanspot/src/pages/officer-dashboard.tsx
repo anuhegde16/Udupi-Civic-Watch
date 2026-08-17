@@ -2,8 +2,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useRelativeTime } from "@/hooks/use-relative-time";
 import { getGreeting } from "@/lib/greeting";
 import { formatWardLabel } from "@/lib/ward-names";
-import { useGetOfficerReports, useGetOfficer, getGetOfficerReportsQueryKey, getGetOfficerQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useGetOfficer, getGetOfficerQueryKey, customFetch, type Report } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 import { Link, useLocation } from "wouter";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { format } from "date-fns";
@@ -79,11 +80,14 @@ export default function OfficerDashboard() {
     };
   }, []);
 
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+
   async function handleRefresh() {
     setIsRefreshing(true);
     try {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getGetOfficerReportsQueryKey(officerId) }),
+        queryClient.invalidateQueries({ queryKey: ["officer-reports", officerId] }),
         queryClient.invalidateQueries({ queryKey: getGetOfficerQueryKey(officerId) }),
       ]);
       setLastRefreshed(new Date());
@@ -92,19 +96,20 @@ export default function OfficerDashboard() {
     }
   }
 
-  const { data: allData, isLoading, dataUpdatedAt: reportsUpdatedAt } = useGetOfficerReports(
-    officerId,
-    { days: 90, limit: 500 },
-    {
-      query: {
-        queryKey: getGetOfficerReportsQueryKey(officerId, { days: 90, limit: 500 }),
-        enabled: !!officerId && !isUdupiWardStaff,
-        staleTime: 60_000,
-        refetchInterval: 120_000,
-        refetchIntervalInBackground: false,
-      },
+  const { data: allData, isLoading, dataUpdatedAt: reportsUpdatedAt } = useQuery<{ reports: Report[]; total: number }>({
+    queryKey: ["officer-reports", officerId, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams({ limit: "500" });
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      return customFetch(`/api/officers/${officerId}/reports?${qs}`);
     },
-  );
+    enabled: !!officerId && !isUdupiWardStaff,
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
+    placeholderData: (prev: any) => prev,
+  });
 
   const { data: officerData, dataUpdatedAt: officerUpdatedAt } = useGetOfficer(officerId, {
     query: {
@@ -339,6 +344,7 @@ export default function OfficerDashboard() {
 
       {/* Filters row: search + sort + status tabs */}
       <div className="flex flex-col gap-3">
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -461,7 +467,7 @@ export default function OfficerDashboard() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        const urls = (report.imageUrls?.length ? report.imageUrls.map((p) => p.url) : [report.imageUrl!]);
+                        const urls = (report.imageUrls?.length ? report.imageUrls.map((p: { url: string }) => p.url) : [report.imageUrl!]);
                         openLightbox(urls, 0);
                       }}
                       className="absolute inset-0 w-full h-full cursor-zoom-in"

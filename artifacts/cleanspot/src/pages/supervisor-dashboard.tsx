@@ -34,6 +34,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 
 type StatusFilter = "all" | "reported" | "cleaning" | "cleaned";
 type WardFilter = "all" | string;
@@ -74,10 +75,16 @@ function useProfile() {
   });
 }
 
-function useReports() {
+function useReports(dateFrom?: string, dateTo?: string) {
   return useQuery<{ reports: Report[]; total: number }>({
-    queryKey: ["supervisor-reports"],
-    queryFn: () => customFetch("/api/supervisor/reports"),
+    queryKey: ["supervisor-reports", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/supervisor/reports${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
@@ -114,6 +121,7 @@ export default function SupervisorDashboard() {
   const relativeLastRefreshed = useRelativeTime(lastRefreshed);
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const { lightbox, open: openLightbox } = useImageLightbox();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     const online = () => setIsOffline(false);
@@ -124,7 +132,8 @@ export default function SupervisorDashboard() {
   }, []);
 
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: reportsData, isLoading: reportsLoading } = useReports();
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+  const { data: reportsData, isLoading: reportsLoading } = useReports(dateFrom, dateTo);
 
   const allReports = reportsData?.reports ?? [];
 
@@ -222,6 +231,8 @@ export default function SupervisorDashboard() {
           /></div>
           <Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}><SelectTrigger className="w-[148px] rounded-xl border-border/60 bg-card h-11 text-sm font-bold shrink-0 gap-1.5"><ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Newest first</SelectItem><SelectItem value="oldest">Oldest first</SelectItem><SelectItem value="status">By status</SelectItem></SelectContent></Select>
         </div>
+
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
 
         {/* Ward filter — only shown for multi-ward supervisors */}
         {wardGeoNames.length > 1 && (

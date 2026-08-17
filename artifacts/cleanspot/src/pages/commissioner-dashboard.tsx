@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatWardLabel, formatWardChartLabel } from "@/lib/ward-names";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
@@ -93,20 +94,32 @@ function useProfile() {
   });
 }
 
-function useHierarchy() {
+function useHierarchy(dateFrom?: string, dateTo?: string) {
   return useQuery<CommissionerHierarchy>({
-    queryKey: ["commissioner-hierarchy"],
-    queryFn: () => customFetch("/api/commissioner/hierarchy"),
+    queryKey: ["commissioner-hierarchy", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/commissioner/hierarchy${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
   });
 }
 
-function useMapReports() {
+function useMapReports(dateFrom?: string, dateTo?: string) {
   return useQuery<{ reports: RoleMapReport[] }>({
-    queryKey: ["commissioner-map-reports"],
-    queryFn: () => customFetch("/api/commissioner/map-reports"),
+    queryKey: ["commissioner-map-reports", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/commissioner/map-reports${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 180_000,
     refetchIntervalInBackground: false,
@@ -320,17 +333,27 @@ function SupervisorRow({
 function HiCard({
   hi,
   onEdit,
+  dateFrom,
+  dateTo,
 }: {
   hi: HealthInspector;
   onEdit: (t: EditTarget) => void;
+  dateFrom?: string;
+  dateTo?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   // HI-level pill drill (badges on the HI card header)
   const [pillDrill, setPillDrill] = useState<string | null>(null);
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["comm-hi-pill-drill", hi.id, pillDrill],
-    queryFn: () => customFetch(`/api/commissioner/reports?hiId=${hi.id}&status=${pillDrill}`),
+    queryKey: ["comm-hi-pill-drill", hi.id, pillDrill, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams({ hiId: String(hi.id) });
+      if (pillDrill) qs.set("status", pillDrill);
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      return customFetch(`/api/commissioner/reports?${qs}`);
+    },
     enabled: pillDrill !== null,
     staleTime: 60_000,
   });
@@ -429,7 +452,7 @@ function HiCard({
 
 // ── Environmental Engineer card (expandable to HI cards) ──────────────────────
 
-function EeCard({ ee }: { ee: EnvironmentalEngineer }) {
+function EeCard({ ee, dateFrom, dateTo }: { ee: EnvironmentalEngineer; dateFrom?: string; dateTo?: string }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<EditTarget | null>(null);
 
@@ -505,7 +528,7 @@ function EeCard({ ee }: { ee: EnvironmentalEngineer }) {
               Health Inspectors
             </p>
             {ee.healthInspectors.map((hi) => (
-              <HiCard key={hi.id} hi={hi} onEdit={(t) => setEditing(t)} />
+              <HiCard key={hi.id} hi={hi} onEdit={(t) => setEditing(t)} dateFrom={dateFrom} dateTo={dateTo} />
             ))}
           </div>
         )}
@@ -743,7 +766,19 @@ function CommissionerAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoNam
 export default function CommissionerDashboard() {
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: hierarchy, isLoading: hierarchyLoading } = useHierarchy();
+
+  const [tab, setTab] = useState<"overview" | "analytics">(() =>
+    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
+  );
+  const [drillStatus, setDrillStatus] = useState<string | null>(null);
+  const [drillWard, setDrillWard] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const drillOpen = drillStatus !== null || drillWard !== null;
+
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+
+  const { data: hierarchy, isLoading: hierarchyLoading } = useHierarchy(dateFrom, dateTo);
 
   const ee = hierarchy?.environmentalEngineer ?? null;
 
@@ -759,22 +794,15 @@ export default function CommissionerDashboard() {
   }, [ee]);
 
   const resolutionRate = totals.total > 0 ? Math.round((totals.cleaned / totals.total) * 100) : 0;
-
-  const [tab, setTab] = useState<"overview" | "analytics">(() =>
-    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
-  );
-  const [drillStatus, setDrillStatus] = useState<string | null>(null);
-  const [drillWard, setDrillWard] = useState<string | null>(null);
-
-  const drillOpen = drillStatus !== null || drillWard !== null;
-
   const drillParams = new URLSearchParams();
   if (drillStatus) drillParams.set("status", drillStatus);
   if (drillWard)   drillParams.set("wardName", drillWard);
+  if (dateFrom)    drillParams.set("from", dateFrom);
+  if (dateTo)      drillParams.set("to", dateTo);
   const drillQs = drillParams.toString();
 
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["commissioner-drill", drillStatus, drillWard],
+    queryKey: ["commissioner-drill", drillStatus, drillWard, dateFrom, dateTo],
     queryFn: () => customFetch(`/api/commissioner/reports${drillQs ? `?${drillQs}` : ""}`),
     enabled: drillOpen,
     staleTime: 60_000,
@@ -799,7 +827,7 @@ export default function CommissionerDashboard() {
     return [...seen].sort();
   }, [ee]);
 
-  const { data: mapData } = useMapReports();
+  const { data: mapData } = useMapReports(dateFrom, dateTo);
   const mapReports = mapData?.reports ?? [];
   const wardGroups = useMemo((): WardGroup[] =>
     (ee?.healthInspectors ?? []).map(hi => ({
@@ -873,16 +901,19 @@ export default function CommissionerDashboard() {
         </div>
       </div>
 
-      {/* Tab switcher */}
-      <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl w-fit">
-        <button type="button" onClick={() => setTab("overview")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          <LayoutDashboard className="w-4 h-4" /> Overview
-        </button>
-        <button type="button" onClick={() => setTab("analytics")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          <BarChart2 className="w-4 h-4" /> Analytics
-        </button>
+      {/* Tab switcher + date filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl">
+          <button type="button" onClick={() => setTab("overview")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <LayoutDashboard className="w-4 h-4" /> Overview
+          </button>
+          <button type="button" onClick={() => setTab("analytics")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <BarChart2 className="w-4 h-4" /> Analytics
+          </button>
+        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
       {tab === "overview" && (
@@ -918,7 +949,7 @@ export default function CommissionerDashboard() {
           ) : (
             <div className="space-y-4">
               <h2 className="text-lg font-black text-foreground">Field Hierarchy</h2>
-              <EeCard ee={ee} />
+              <EeCard ee={ee} dateFrom={dateFrom} dateTo={dateTo} />
             </div>
           )}
         </>

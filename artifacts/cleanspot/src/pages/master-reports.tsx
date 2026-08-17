@@ -16,6 +16,7 @@ import {
 import { useImageLightbox } from "@/components/image-lightbox";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 
 type PanchayatReportStatus = "reported" | "cleaning" | "cleaned";
 
@@ -78,11 +79,17 @@ function usePanchayatOfficersList() {
   });
 }
 
-function usePanchayatReportsFiltered(status: string) {
+function usePanchayatReportsFiltered(status: string, dateFrom?: string, dateTo?: string) {
   return useQuery<{ reports: PanchayatReport[]; total: number }>({
-    queryKey: ["panchayat-reports-list", status],
-    queryFn: () =>
-      customFetch(`/api/panchayat/reports${status !== "all" ? `?status=${status}` : ""}`),
+    queryKey: ["panchayat-reports-list", status, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (status !== "all") qs.set("status", status);
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/panchayat/reports${q ? `?${q}` : ""}`);
+    },
     retry: false,
     staleTime: 30_000,
   });
@@ -99,8 +106,10 @@ export default function MasterReports() {
   const [wardFilter, setWardFilter] = useState<string>("all");
   const [officerFilter, setOfficerFilter] = useState<string>("all");
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
-  const { data: reportsData, isLoading: isLoadingReports } = usePanchayatReportsFiltered(statusFilter);
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+  const { data: reportsData, isLoading: isLoadingReports } = usePanchayatReportsFiltered(statusFilter, dateFrom, dateTo);
   const { data: officersData } = usePanchayatOfficersList();
   const updateReport = useUpdateReport();
 
@@ -202,6 +211,7 @@ export default function MasterReports() {
 
       {/* Filters */}
       <div className="bg-card rounded-2xl sm:rounded-3xl shadow-sm border border-border/50 p-4 sm:p-6 mb-5 sm:mb-8 flex flex-col gap-4">
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 flex-wrap">
           <div className="flex-1 min-w-[150px]">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Status</label>

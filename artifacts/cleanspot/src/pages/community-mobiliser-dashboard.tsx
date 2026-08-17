@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { useImageLightbox } from "@/components/image-lightbox";
 import { RoleMap, type RoleMapReport } from "@/components/role-map";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 import {
   Loader2,
   Search,
@@ -66,15 +67,17 @@ const SEVERITY_COLOR: Record<string, string> = {
   critical: "bg-red-100 text-red-800 border-red-300",
 };
 
-function useReports(ward?: string, status?: string, wasteType?: string) {
+function useReports(ward?: string, status?: string, wasteType?: string, dateFrom?: string, dateTo?: string) {
   const params = new URLSearchParams();
   if (ward && ward !== "all") params.set("ward", ward);
   if (status && status !== "all") params.set("status", status);
   if (wasteType && wasteType !== "all") params.set("wasteType", wasteType);
+  if (dateFrom) params.set("from", dateFrom);
+  if (dateTo) params.set("to", dateTo);
   const qs = params.toString();
 
   return useQuery<{ reports: Report[]; total: number }>({
-    queryKey: ["cm-reports", ward, status, wasteType],
+    queryKey: ["cm-reports", ward, status, wasteType, dateFrom, dateTo],
     queryFn: () => customFetch(`/api/community-mobiliser/reports${qs ? `?${qs}` : ""}`),
     staleTime: 60_000,
     refetchInterval: 180_000,
@@ -82,10 +85,16 @@ function useReports(ward?: string, status?: string, wasteType?: string) {
   });
 }
 
-function useMapReports() {
+function useMapReports(dateFrom?: string, dateTo?: string) {
   return useQuery<{ reports: RoleMapReport[]; geoWardName: string }>({
-    queryKey: ["cm-map-reports"],
-    queryFn: () => customFetch("/api/community-mobiliser/map-reports"),
+    queryKey: ["cm-map-reports", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/community-mobiliser/map-reports${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 180_000,
     refetchIntervalInBackground: false,
@@ -99,15 +108,17 @@ export default function CommunityMobiliserDashboard() {
   const [wardFilter, setWardFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [wasteTypeFilter, setWasteTypeFilter] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const { lightbox, open: openLightbox } = useImageLightbox();
-  const { data: mapData } = useMapReports();
 
   useEffect(() => {
     setView(new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview");
   }, []);
 
-  const { data: reportsData, isLoading } = useReports(wardFilter, statusFilter, wasteTypeFilter);
-  const { data: analyticsData } = useReports();
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+  const { data: mapData } = useMapReports(dateFrom, dateTo);
+  const { data: reportsData, isLoading } = useReports(wardFilter, statusFilter, wasteTypeFilter, dateFrom, dateTo);
+  const { data: analyticsData } = useReports(undefined, undefined, undefined, dateFrom, dateTo);
   const allReports = reportsData?.reports ?? [];
   const analyticsReports = analyticsData?.reports ?? [];
   const analytics = useMemo(() => {
@@ -238,6 +249,8 @@ export default function CommunityMobiliserDashboard() {
             className="pl-9 rounded-xl border-border/60 bg-muted/30 h-11 text-sm"
           />
         </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <Select value={wardFilter} onValueChange={setWardFilter}>
             <SelectTrigger className="rounded-xl border-border/60 bg-muted/30 h-10 text-sm font-medium">

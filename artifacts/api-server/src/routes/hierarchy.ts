@@ -296,6 +296,9 @@ router.get("/supervisor/reports", requireUdupiWardStaff, async (req, res): Promi
     const rings = staff.rings;
     if (!rings.length) { res.json({ reports: [], total: 0 }); return; }
 
+    const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+    const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
+
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(rings);
     // LIMIT 2000 caps the rows that cross the DB↔Node boundary before the JS
     // polygon filter runs — prevents unbounded memory growth as report volume grows.
@@ -311,6 +314,8 @@ router.get("/supervisor/reports", requireUdupiWardStaff, async (req, res): Promi
       WHERE r.deleted_at IS NULL
         AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
         AND r.longitude BETWEEN ${minLng} AND ${maxLng}
+        ${fromDate && !isNaN(fromDate.getTime()) ? sql`AND r.created_at >= ${fromDate}` : sql``}
+        ${toDate   && !isNaN(toDate.getTime())   ? sql`AND r.created_at <= ${toDate}`   : sql``}
       ORDER BY r.created_at DESC
       LIMIT 2000
     `);
@@ -402,6 +407,8 @@ router.patch("/supervisor/reports/:id", requireUdupiWardStaff, async (req, res):
 router.get("/health-inspector/supervisor-stats", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "HI profile not found" }); return; }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     // Load all supervisors under this HI
     const svRows = await db.execute(sql`
@@ -431,12 +438,10 @@ router.get("/health-inspector/supervisor-stats", requireHealthInspector, async (
 
     if (wardEntries.length) {
       const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-      const rawRows = await db.execute(sql`
-        SELECT latitude, longitude, status FROM reports
-        WHERE deleted_at IS NULL
-          AND latitude  BETWEEN ${minLat} AND ${maxLat}
-          AND longitude BETWEEN ${minLng} AND ${maxLng}
-      `);
+      let dateWhere = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+      if (fromDate && !isNaN(fromDate.getTime())) dateWhere = sql`${dateWhere} AND created_at >= ${fromDate}`;
+      if (toDate   && !isNaN(toDate.getTime()))   dateWhere = sql`${dateWhere} AND created_at <= ${toDate}`;
+      const rawRows = await db.execute(sql`SELECT latitude, longitude, status FROM reports WHERE ${dateWhere}`);
       for (const r of rawRows.rows as any[]) {
         const lat = Number(r.latitude), lng = Number(r.longitude);
         const match = wardEntries.find(e => pip(lat, lng, e.ring));
@@ -470,6 +475,8 @@ router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthIn
   if (statusFilter && !["reported", "cleaning", "cleaned"].includes(statusFilter)) {
     res.status(400).json({ error: "Invalid status" }); return;
   }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     // Verify supervisor belongs to this HI and fetch name + ward names
     const svRow = await db.execute(sql`
@@ -492,7 +499,7 @@ router.get("/health-inspector/supervisor/:supervisorId/reports", requireHealthIn
     }
     if (!wardEntries.length) { res.json({ reports: [] }); return; }
 
-    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, dateFrom: fromDate, dateTo: toDate });
     res.json({ reports });
   } catch (err) {
     logger.error({ err }, "Error fetching supervisor reports for HI");
@@ -774,6 +781,8 @@ router.patch("/health-inspector/supervisor/:id/credentials", requireHealthInspec
 router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "EE profile not found" }); return; }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     // Load HI list (supervisor count only — no officer join)
     const hiRows = await db.execute(sql`
@@ -819,12 +828,10 @@ router.get("/env-engineer/full-hierarchy", requireEnvEngineer, async (req, res):
 
     if (wardEntries.length) {
       const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-      const rawRows = await db.execute(sql`
-        SELECT latitude, longitude, status FROM reports
-        WHERE deleted_at IS NULL
-          AND latitude  BETWEEN ${minLat} AND ${maxLat}
-          AND longitude BETWEEN ${minLng} AND ${maxLng}
-      `);
+      let dateWhere = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+      if (fromDate && !isNaN(fromDate.getTime())) dateWhere = sql`${dateWhere} AND created_at >= ${fromDate}`;
+      if (toDate   && !isNaN(toDate.getTime()))   dateWhere = sql`${dateWhere} AND created_at <= ${toDate}`;
+      const rawRows = await db.execute(sql`SELECT latitude, longitude, status FROM reports WHERE ${dateWhere}`);
       const bump = (c: Counts, s: string) => {
         if (s === "reported") c.reportedCount++;
         else if (s === "cleaning") c.cleaningCount++;
@@ -1116,6 +1123,8 @@ router.get("/community-mobiliser/reports", requireCommunityMobiliser, async (req
   const user = (req as any).user as SessionUser;
   const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
   const wasteTypeFilter = typeof req.query.wasteType === "string" ? req.query.wasteType : undefined;
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     if (!user.officerId) { res.status(404).json({ error: "CM profile not found" }); return; }
 
@@ -1131,10 +1140,12 @@ router.get("/community-mobiliser/reports", requireCommunityMobiliser, async (req
 
     const { minLat, maxLat, minLng, maxLng } = ringsBbox([wardEntry]);
 
-    // Build optional SQL filters for status / waste type
+    // Build optional SQL filters for status / waste type / date range
     let extraWhere = sql``;
     if (statusFilter) extraWhere = sql`${extraWhere} AND r.status = ${statusFilter}`;
     if (wasteTypeFilter) extraWhere = sql`${extraWhere} AND r.waste_types @> ${JSON.stringify([wasteTypeFilter])}::jsonb`;
+    if (fromDate && !isNaN(fromDate.getTime())) extraWhere = sql`${extraWhere} AND r.created_at >= ${fromDate}`;
+    if (toDate   && !isNaN(toDate.getTime()))   extraWhere = sql`${extraWhere} AND r.created_at <= ${toDate}`;
 
     const rawRows = await db.execute(sql`
       SELECT
@@ -1195,6 +1206,8 @@ router.get("/commissioner/all-officers", requireCommissioner, async (req, res): 
 router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   const panchayat = user.panchayatName ?? "Udupi";
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     // Resolve EE for this panchayat
     const eeRows = await db.execute(sql`
@@ -1252,12 +1265,10 @@ router.get("/commissioner/hierarchy", requireCommissioner, async (req, res): Pro
 
     if (wardEntries.length) {
       const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-      const rawRows = await db.execute(sql`
-        SELECT latitude, longitude, status FROM reports
-        WHERE deleted_at IS NULL
-          AND latitude  BETWEEN ${minLat} AND ${maxLat}
-          AND longitude BETWEEN ${minLng} AND ${maxLng}
-      `);
+      let dateWhere = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+      if (fromDate && !isNaN(fromDate.getTime())) dateWhere = sql`${dateWhere} AND created_at >= ${fromDate}`;
+      if (toDate   && !isNaN(toDate.getTime()))   dateWhere = sql`${dateWhere} AND created_at <= ${toDate}`;
+      const rawRows = await db.execute(sql`SELECT latitude, longitude, status FROM reports WHERE ${dateWhere}`);
       const bump = (c: Counts, s: string) => {
         if (s === "reported") c.reportedCount++;
         else if (s === "cleaning") c.cleaningCount++;
@@ -1555,37 +1566,30 @@ function ringsBbox(rings: { ring: [number, number][] }[]): {
  */
 async function fetchReportsInWardEntries(
   wardEntries: { ring: [number, number][]; wardName: string; svName: string; hiName?: string }[],
-  options: { statusFilter?: string; wardFilter?: string },
+  options: { statusFilter?: string; wardFilter?: string; dateFrom?: Date; dateTo?: Date },
 ): Promise<any[]> {
   if (!wardEntries.length) return [];
-  const { statusFilter, wardFilter } = options;
+  const { statusFilter, wardFilter, dateFrom, dateTo } = options;
   const { minLat, maxLat, minLng, maxLng } = ringsBbox(wardEntries.map(e => ({ ring: e.ring })));
-  const rawRows = await db.execute(
-    statusFilter
-      ? sql`
-          SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                 r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                 r.created_at AS "createdAt",
-                 r.cleaning_started_at AS "cleaningStartedAt",
-                 r.cleaned_at AS "cleanedAt"
-          FROM reports r
-          WHERE r.deleted_at IS NULL
-            AND r.status = ${statusFilter}
-            AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-            AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-          ORDER BY r.created_at DESC`
-      : sql`
-          SELECT r.id, r.status, r.address, r.latitude, r.longitude,
-                 r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
-                 r.created_at AS "createdAt",
-                 r.cleaning_started_at AS "cleaningStartedAt",
-                 r.cleaned_at AS "cleanedAt"
-          FROM reports r
-          WHERE r.deleted_at IS NULL
-            AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
-            AND r.longitude BETWEEN ${minLng} AND ${maxLng}
-          ORDER BY r.created_at DESC`
-  );
+
+  // Build WHERE incrementally so each optional filter is one composable fragment.
+  let where = sql`r.deleted_at IS NULL
+    AND r.latitude  BETWEEN ${minLat} AND ${maxLat}
+    AND r.longitude BETWEEN ${minLng} AND ${maxLng}`;
+  if (statusFilter) where = sql`${where} AND r.status = ${statusFilter}`;
+  if (dateFrom && !isNaN(dateFrom.getTime())) where = sql`${where} AND r.created_at >= ${dateFrom}`;
+  if (dateTo   && !isNaN(dateTo.getTime()))   where = sql`${where} AND r.created_at <= ${dateTo}`;
+
+  const rawRows = await db.execute(sql`
+    SELECT r.id, r.status, r.address, r.latitude, r.longitude,
+           r.image_url AS "imageUrl", r.image_urls AS "imageUrls",
+           r.created_at AS "createdAt",
+           r.cleaning_started_at AS "cleaningStartedAt",
+           r.cleaned_at AS "cleanedAt"
+    FROM reports r
+    WHERE ${where}
+    ORDER BY r.created_at DESC
+  `);
   return (rawRows.rows as any[]).flatMap(r => {
     const match = wardEntries.find(e => pip(Number(r.latitude), Number(r.longitude), e.ring));
     if (!match) return [];
@@ -1603,6 +1607,8 @@ async function fetchReportsInWardEntries(
 router.get("/community-mobiliser/map-reports", requireCommunityMobiliser, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const profRow = await db.execute(sql`
       SELECT ward_number FROM community_mobilisers WHERE id = ${Number(user.officerId)} LIMIT 1
@@ -1613,18 +1619,16 @@ router.get("/community-mobiliser/map-reports", requireCommunityMobiliser, async 
     const wardEntry = udupiWardRings.find(w => w.name === geoWardName);
     if (!wardEntry) { res.json({ reports: [], geoWardName }); return; }
 
-    // Tight bbox scoped to this mobiliser's single ward — no global cutoff
     const { minLat, maxLat, minLng, maxLng } = ringsBbox([wardEntry]);
+    let where = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+    if (fromDate && !isNaN(fromDate.getTime())) where = sql`${where} AND created_at >= ${fromDate}`;
+    if (toDate   && !isNaN(toDate.getTime()))   where = sql`${where} AND created_at <= ${toDate}`;
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
              image_url AS "imageUrl", image_urls AS "imageUrls",
              waste_types AS "wasteTypes", waste_severity AS "wasteSeverity",
              created_at AS "createdAt"
-      FROM reports
-      WHERE deleted_at IS NULL
-        AND latitude  BETWEEN ${minLat} AND ${maxLat}
-        AND longitude BETWEEN ${minLng} AND ${maxLng}
-      ORDER BY created_at DESC
+      FROM reports WHERE ${where} ORDER BY created_at DESC
     `);
     const reports = (rawRows.rows as any[])
       .filter(r => pip(Number(r.latitude), Number(r.longitude), wardEntry.ring))
@@ -1671,6 +1675,8 @@ router.get("/supervisor/map-reports", requireUdupiWardStaff, async (req, res): P
 router.get("/health-inspector/map-reports", requireHealthInspector, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT id, name, ward_names FROM supervisors
@@ -1687,18 +1693,16 @@ router.get("/health-inspector/map-reports", requireHealthInspector, async (req, 
     }
     if (!wardToSv.size) { res.json({ reports: [] }); return; }
 
-    // Tight bbox scoped to this HI's wards only — no global cutoff
     const relevantRings = udupiWardRings.filter(w => wardToSv.has(w.name));
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    let where = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+    if (fromDate && !isNaN(fromDate.getTime())) where = sql`${where} AND created_at >= ${fromDate}`;
+    if (toDate   && !isNaN(toDate.getTime()))   where = sql`${where} AND created_at <= ${toDate}`;
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
              image_url AS "imageUrl", image_urls AS "imageUrls",
              waste_types AS "wasteTypes", created_at AS "createdAt"
-      FROM reports
-      WHERE deleted_at IS NULL
-        AND latitude  BETWEEN ${minLat} AND ${maxLat}
-        AND longitude BETWEEN ${minLng} AND ${maxLng}
-      ORDER BY created_at DESC
+      FROM reports WHERE ${where} ORDER BY created_at DESC
     `);
     const reports = (rawRows.rows as any[]).flatMap(r => {
       const match = relevantRings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
@@ -1717,6 +1721,8 @@ router.get("/health-inspector/map-reports", requireHealthInspector, async (req, 
 router.get("/env-engineer/map-reports", requireEnvEngineer, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   if (!user.officerId) { res.status(404).json({ error: "Profile not found" }); return; }
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT sv.id AS sv_id, sv.name AS sv_name, sv.ward_names,
@@ -1739,18 +1745,16 @@ router.get("/env-engineer/map-reports", requireEnvEngineer, async (req, res): Pr
     }
     if (!wardToCtx.size) { res.json({ reports: [] }); return; }
 
-    // Tight bbox scoped to this EE's wards only — no global cutoff
     const relevantRings = udupiWardRings.filter(w => wardToCtx.has(w.name));
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    let where = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+    if (fromDate && !isNaN(fromDate.getTime())) where = sql`${where} AND created_at >= ${fromDate}`;
+    if (toDate   && !isNaN(toDate.getTime()))   where = sql`${where} AND created_at <= ${toDate}`;
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
              image_url AS "imageUrl", image_urls AS "imageUrls",
              waste_types AS "wasteTypes", created_at AS "createdAt"
-      FROM reports
-      WHERE deleted_at IS NULL
-        AND latitude  BETWEEN ${minLat} AND ${maxLat}
-        AND longitude BETWEEN ${minLng} AND ${maxLng}
-      ORDER BY created_at DESC
+      FROM reports WHERE ${where} ORDER BY created_at DESC
     `);
     const reports = (rawRows.rows as any[]).flatMap(r => {
       const match = relevantRings.find(ring => pip(Number(r.latitude), Number(r.longitude), ring.ring));
@@ -1773,6 +1777,8 @@ router.get("/env-engineer/map-reports", requireEnvEngineer, async (req, res): Pr
 router.get("/commissioner/map-reports", requireCommissioner, async (req, res): Promise<void> => {
   const user = (req as any).user as SessionUser;
   const panchayat = user.panchayatName ?? "Udupi";
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT sv.id AS sv_id, sv.name AS sv_name, sv.ward_names,
@@ -1802,16 +1808,15 @@ router.get("/commissioner/map-reports", requireCommissioner, async (req, res): P
 
     // Tight bbox derived from the panchayat's own ward set — no global cutoff
     const { minLat, maxLat, minLng, maxLng } = ringsBbox(relevantRings);
+    let where = sql`deleted_at IS NULL AND latitude BETWEEN ${minLat} AND ${maxLat} AND longitude BETWEEN ${minLng} AND ${maxLng}`;
+    if (fromDate && !isNaN(fromDate.getTime())) where = sql`${where} AND created_at >= ${fromDate}`;
+    if (toDate   && !isNaN(toDate.getTime()))   where = sql`${where} AND created_at <= ${toDate}`;
     const rawRows = await db.execute(sql`
       SELECT id, latitude, longitude, status,
              image_url AS "imageUrl", image_urls AS "imageUrls",
              cleanup_image_url AS "cleanupImageUrl", cleanup_image_urls AS "cleanupImageUrls",
              waste_types AS "wasteTypes", created_at AS "createdAt"
-      FROM reports
-      WHERE deleted_at IS NULL
-        AND latitude  BETWEEN ${minLat} AND ${maxLat}
-        AND longitude BETWEEN ${minLng} AND ${maxLng}
-      ORDER BY created_at DESC
+      FROM reports WHERE ${where} ORDER BY created_at DESC
     `);
     const reports = (rawRows.rows as any[]).flatMap(r => {
       // PiP against only the assigned rings — never leaks other-panchayat coordinates
@@ -1847,6 +1852,8 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
   }
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   const supervisorNameFilter = typeof req.query.supervisorName === "string" ? req.query.supervisorName.trim() : undefined;
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const svRows = await db.execute(sql`
       SELECT id, name, ward_names AS "wardNames"
@@ -1873,7 +1880,7 @@ router.get("/health-inspector/reports", requireHealthInspector, async (req, res)
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter, dateFrom: fromDate, dateTo: toDate });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching HI flat reports");
@@ -1897,6 +1904,8 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   const hiIdFilter = typeof req.query.hiId === "string" ? parseInt(req.query.hiId, 10) : undefined;
   const svIdFilter = typeof req.query.supervisorId === "string" ? parseInt(req.query.supervisorId, 10) : undefined;
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     const hiRows = await db.execute(sql`
       SELECT id, name FROM health_inspectors
@@ -1932,7 +1941,7 @@ router.get("/env-engineer/reports", requireEnvEngineer, async (req, res): Promis
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter, dateFrom: fromDate, dateTo: toDate });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching EE flat reports");
@@ -1956,6 +1965,8 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
   const wardFilter = typeof req.query.wardName === "string" ? req.query.wardName.trim() : undefined;
   const hiIdFilter = typeof req.query.hiId === "string" ? parseInt(req.query.hiId, 10) : undefined;
   const svIdFilter = typeof req.query.supervisorId === "string" ? parseInt(req.query.supervisorId, 10) : undefined;
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
   try {
     // Resolve EE for this panchayat
     const eeRow = await db.execute(sql`
@@ -1997,7 +2008,7 @@ router.get("/commissioner/reports", requireCommissioner, async (req, res): Promi
     }
     if (!wardEntries.length) { res.json({ reports: [], total: 0 }); return; }
 
-    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter });
+    const reports = await fetchReportsInWardEntries(wardEntries, { statusFilter, wardFilter, dateFrom: fromDate, dateTo: toDate });
     res.json({ reports, total: reports.length });
   } catch (err) {
     logger.error({ err }, "Error fetching commissioner flat reports");

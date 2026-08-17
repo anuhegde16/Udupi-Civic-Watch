@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
-import { eq, sql, and, isNull, isNotNull, lt } from "drizzle-orm";
+import { eq, sql, and, isNull, isNotNull, lt, gte, lte } from "drizzle-orm";
 import { ReassignReportBody, AdminListReportsQueryParams } from "@workspace/api-zod";
 import { requireAdmin, requireControlCenter, hashPassword } from "../lib/auth";
 import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
@@ -49,6 +49,8 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const archived = req.query.archived === "true";
   const panchayat = queryParsed.success ? queryParsed.data.panchayat?.trim() : undefined;
   const wardName = queryParsed.success ? queryParsed.data.wardName?.trim() : undefined;
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
 
   // Udupi Municipality assigns work geographically (ward polygons), not through the
   // legacy officers table, so its filtering runs as point-in-polygon rather than SQL joins.
@@ -98,6 +100,9 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
       );
     }
   }
+
+  if (fromDate && !isNaN(fromDate.getTime())) conditions.push(gte(reportsTable.createdAt, fromDate));
+  if (toDate   && !isNaN(toDate.getTime()))   conditions.push(lte(reportsTable.createdAt, toDate));
 
   const baseQuery = db
     .select({ report: reportsTable, officer: officersTable })

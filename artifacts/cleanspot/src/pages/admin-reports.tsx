@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { formatWardLabel } from "@/lib/ward-names";
 import {
-  useAdminListReports,
   useListOfficers,
   useReassignReport,
   useGetBulkArchivePreview,
@@ -9,10 +8,10 @@ import {
   useBulkArchiveReports,
   usePurgeAllArchivedReports,
   usePermanentDeleteReport,
-  getAdminListReportsQueryKey,
   customFetch,
 } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -124,19 +123,31 @@ export default function AdminReports() {
   const [officerFilter, setOfficerFilter] = useState<string>(initialParams.get("officerId") ?? "all");
   const [zoneFilter, setZoneFilter] = useState<string>(initialParams.get("wardName") ?? "all");
   const [showArchived, setShowArchived] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
   const [bulkArchiveDays, setBulkArchiveDays] = useState(30);
   const [purgeAllOpen, setPurgeAllOpen] = useState(false);
   const [permanentDeleteId, setPermanentDeleteId] = useState<number | null>(null);
 
-  const { data: reportsData, isLoading: isLoadingReports } = useAdminListReports({
-    status: showArchived ? undefined : (statusFilter === "all" ? undefined : statusFilter as AdminListReportsStatus),
-    officerId: showArchived ? undefined : (officerFilter === "all" ? undefined : parseInt(officerFilter, 10)),
-    panchayat: showArchived || panchayatFilter === "all" ? undefined : panchayatFilter,
-    wardName: showArchived || zoneFilter === "all" ? undefined : zoneFilter,
-    limit: 200,
-    archived: showArchived ? true : undefined,
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+  const { data: reportsData, isLoading: isLoadingReports } = useQuery<{ reports: Report[]; total: number }>({
+    queryKey: ["admin-reports", showArchived, statusFilter, officerFilter, panchayatFilter, zoneFilter, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams({ limit: "200" });
+      if (showArchived) { qs.set("archived", "true"); }
+      else {
+        if (statusFilter !== "all") qs.set("status", statusFilter);
+        if (officerFilter !== "all") qs.set("officerId", officerFilter);
+        if (panchayatFilter !== "all") qs.set("panchayat", panchayatFilter);
+        if (zoneFilter !== "all") qs.set("wardName", zoneFilter);
+        if (dateFrom) qs.set("from", dateFrom);
+        if (dateTo) qs.set("to", dateTo);
+      }
+      return customFetch(`/api/admin/reports?${qs}`);
+    },
+    staleTime: 60_000,
+    placeholderData: (prev: any) => prev,
   });
 
   const { data: officersData } = useListOfficers();
@@ -180,7 +191,7 @@ export default function AdminReports() {
     onSuccess: () => {
       toast({ title: "Report archived", description: "The report was moved to the archive." });
       setDeleteReportId(null);
-      queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
       queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
     },
     onError: (err: any) =>
@@ -192,7 +203,7 @@ export default function AdminReports() {
       onSuccess: (data: any) => {
         toast({ title: `${data.archivedCount} report${data.archivedCount !== 1 ? "s" : ""} archived successfully` });
         setBulkArchiveOpen(false);
-        queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
         queryClient.invalidateQueries({ queryKey: ["admin-analytics"] });
       },
       onError: (err: any) =>
@@ -205,7 +216,7 @@ export default function AdminReports() {
       onSuccess: () => {
         toast({ title: "Report permanently deleted" });
         setPermanentDeleteId(null);
-        queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
       },
       onError: (err: any) =>
         toast({ title: "Failed to delete", description: err.message, variant: "destructive" }),
@@ -217,7 +228,7 @@ export default function AdminReports() {
       onSuccess: (data: any) => {
         toast({ title: `${data.deletedCount} archived report${data.deletedCount !== 1 ? "s" : ""} permanently deleted` });
         setPurgeAllOpen(false);
-        queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
       },
       onError: (err: any) =>
         toast({ title: "Purge failed", description: err.message, variant: "destructive" }),
@@ -232,7 +243,7 @@ export default function AdminReports() {
         onSuccess: () => {
           toast({ title: "Report dispatched successfully" });
           setReassignModalOpen(false);
-          queryClient.invalidateQueries({ queryKey: getAdminListReportsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: ["admin-reports"] });
         },
         onError: (err) => toast({ title: "Failed to dispatch", description: err.message, variant: "destructive" }),
       }
@@ -364,6 +375,7 @@ export default function AdminReports() {
       {/* Filters (only for active view) */}
       {!showArchived && (
         <div className="bg-card rounded-2xl sm:rounded-3xl shadow-sm border border-border/50 p-4 sm:p-6 mb-5 sm:mb-8 flex flex-col gap-4">
+          <DateRangePicker value={dateRange} onChange={setDateRange} />
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-6 flex-wrap">
             {panchayatOptions.length > 0 && (
               <div className="flex-1 min-w-[150px]">

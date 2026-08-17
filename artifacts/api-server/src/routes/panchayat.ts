@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable } from "@workspace/db";
-import { eq, sql, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, sql, and, isNull, isNotNull, gte, lte } from "drizzle-orm";
 import { requirePanchayatAdmin } from "../lib/auth";
 import geofencesData from "../data/geofences.json";
 import { logger } from "../lib/logger";
@@ -131,6 +131,8 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
 
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const archived = req.query.archived === "true";
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
 
   // Udupi: reports aren't assigned to officers — use geographic bounding-box + PiP filter
   if (user.panchayatName === "Udupi") {
@@ -145,6 +147,8 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
       boxConds.push(isNull(reportsTable.deletedAt));
       if (status) boxConds.push(eq(reportsTable.status, status));
     }
+    if (fromDate && !isNaN(fromDate.getTime())) boxConds.push(gte(reportsTable.createdAt, fromDate));
+    if (toDate   && !isNaN(toDate.getTime()))   boxConds.push(lte(reportsTable.createdAt, toDate));
     const rawRows = await db
       .select({ report: reportsTable })
       .from(reportsTable)
@@ -185,6 +189,8 @@ router.get("/panchayat/reports", requirePanchayatAdmin, async (req, res): Promis
     conditions.push(isNull(reportsTable.deletedAt));
     if (status) conditions.push(eq(reportsTable.status, status));
   }
+  if (fromDate && !isNaN(fromDate.getTime())) conditions.push(gte(reportsTable.createdAt, fromDate));
+  if (toDate   && !isNaN(toDate.getTime()))   conditions.push(lte(reportsTable.createdAt, toDate));
 
   const reports = await db
     .select({ report: reportsTable, officer: officersTable })

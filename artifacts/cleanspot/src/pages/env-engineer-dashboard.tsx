@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatWardLabel, formatWardChartLabel } from "@/lib/ward-names";
 import { StatusDrilldownSheet, type DrilldownReport } from "@/components/status-drilldown-sheet";
@@ -70,10 +71,16 @@ type EeHierarchy = {
 
 // ─── Data hooks ───────────────────────────────────────────────────────────────
 
-function useHierarchy() {
+function useHierarchy(dateFrom?: string, dateTo?: string) {
   return useQuery<EeHierarchy>({
-    queryKey: ["ee-hierarchy"],
-    queryFn: () => customFetch("/api/env-engineer/full-hierarchy"),
+    queryKey: ["ee-hierarchy", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/env-engineer/full-hierarchy${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
@@ -187,10 +194,16 @@ function EditCredentialsModal({
   );
 }
 
-function useMapReports() {
+function useMapReports(dateFrom?: string, dateTo?: string) {
   return useQuery<{ reports: RoleMapReport[] }>({
-    queryKey: ["ee-map-reports"],
-    queryFn: () => customFetch("/api/env-engineer/map-reports"),
+    queryKey: ["ee-map-reports", dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      const q = qs.toString();
+      return customFetch(`/api/env-engineer/map-reports${q ? `?${q}` : ""}`);
+    },
     staleTime: 60_000,
     refetchInterval: 180_000,
     refetchIntervalInBackground: false,
@@ -217,15 +230,21 @@ function ResolutionPill({ cleaned, total }: { cleaned: number; total: number }) 
 
 // ─── HI card ─────────────────────────────────────────────────────────────────
 
-function HiCard({ hi }: { hi: HealthInspector }) {
+function HiCard({ hi, dateFrom, dateTo }: { hi: HealthInspector; dateFrom?: string; dateTo?: string }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState<EditTarget | null>(null);
 
   // HI-level pill drill (badges on the HI card header)
   const [hiPillDrill, setHiPillDrill] = useState<string | null>(null);
   const { data: hiDrillData, isLoading: hiDrillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["ee-hi-pill-drill", hi.id, hiPillDrill],
-    queryFn: () => customFetch(`/api/env-engineer/reports?hiId=${hi.id}&status=${hiPillDrill}`),
+    queryKey: ["ee-hi-pill-drill", hi.id, hiPillDrill, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams({ hiId: String(hi.id) });
+      if (hiPillDrill) qs.set("status", hiPillDrill);
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      return customFetch(`/api/env-engineer/reports?${qs}`);
+    },
     enabled: hiPillDrill !== null,
     staleTime: 60_000,
   });
@@ -238,8 +257,13 @@ function HiCard({ hi }: { hi: HealthInspector }) {
   // Supervisor-level pill drill (badges on supervisor sub-cards)
   const [svPillDrill, setSvPillDrill] = useState<{ svId: number; svName: string; status: string } | null>(null);
   const { data: svDrillData, isLoading: svDrillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["ee-sv-pill-drill", svPillDrill?.svId, svPillDrill?.status],
-    queryFn: () => customFetch(`/api/env-engineer/reports?supervisorId=${svPillDrill!.svId}&status=${svPillDrill!.status}`),
+    queryKey: ["ee-sv-pill-drill", svPillDrill?.svId, svPillDrill?.status, dateFrom, dateTo],
+    queryFn: () => {
+      const qs = new URLSearchParams({ supervisorId: String(svPillDrill!.svId), status: svPillDrill!.status });
+      if (dateFrom) qs.set("from", dateFrom);
+      if (dateTo) qs.set("to", dateTo);
+      return customFetch(`/api/env-engineer/reports?${qs}`);
+    },
     enabled: svPillDrill !== null,
     staleTime: 60_000,
   });
@@ -685,7 +709,20 @@ function EEAnalyticsPanel({ onWardClick }: { onWardClick?: (wardGeoName: string)
 export default function EnvEngineerDashboard() {
   const { user } = useAuth();
   const { data: profile, isLoading: profileLoading } = useProfile();
-  const { data: hierarchy, isLoading: hierarchyLoading } = useHierarchy();
+
+  const [tab, setTab] = useState<"overview" | "analytics">(() =>
+    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
+  );
+  const [drillStatus, setDrillStatus] = useState<string | null>(null);
+  const [drillWard, setDrillWard] = useState<string | null>(null);
+  const [selectedSearchReport, setSelectedSearchReport] = useState<ReportDetail | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
+  const drillOpen = drillStatus !== null || drillWard !== null;
+
+  const { from: dateFrom, to: dateTo } = dateRangeToParams(dateRange);
+
+  const { data: hierarchy, isLoading: hierarchyLoading } = useHierarchy(dateFrom, dateTo);
 
   const his = hierarchy?.healthInspectors ?? [];
 
@@ -698,23 +735,15 @@ export default function EnvEngineerDashboard() {
     const resolutionRate = total > 0 ? Math.round((cleaned / total) * 100) : 0;
     return { reported, cleaning, cleaned, total, supervisors, resolutionRate };
   }, [his]);
-
-  const [tab, setTab] = useState<"overview" | "analytics">(() =>
-    new URLSearchParams(window.location.search).get("view") === "analytics" ? "analytics" : "overview",
-  );
-  const [drillStatus, setDrillStatus] = useState<string | null>(null);
-  const [drillWard, setDrillWard] = useState<string | null>(null);
-  const [selectedSearchReport, setSelectedSearchReport] = useState<ReportDetail | null>(null);
-
-  const drillOpen = drillStatus !== null || drillWard !== null;
-
   const drillParams = new URLSearchParams();
   if (drillStatus) drillParams.set("status", drillStatus);
   if (drillWard)   drillParams.set("wardName", drillWard);
+  if (dateFrom)    drillParams.set("from", dateFrom);
+  if (dateTo)      drillParams.set("to", dateTo);
   const drillQs = drillParams.toString();
 
   const { data: drillData, isLoading: drillLoading } = useQuery<{ reports: DrilldownReport[]; total: number }>({
-    queryKey: ["ee-drill", drillStatus, drillWard],
+    queryKey: ["ee-drill", drillStatus, drillWard, dateFrom, dateTo],
     queryFn: () => customFetch(`/api/env-engineer/reports${drillQs ? `?${drillQs}` : ""}`),
     enabled: drillOpen,
     staleTime: 60_000,
@@ -739,7 +768,7 @@ export default function EnvEngineerDashboard() {
     return [...seen].sort();
   }, [his]);
 
-  const { data: mapData } = useMapReports();
+  const { data: mapData } = useMapReports(dateFrom, dateTo);
   const mapReports = mapData?.reports ?? [];
   const wardGroups = useMemo((): WardGroup[] =>
     his.map(hi => ({
@@ -819,16 +848,19 @@ export default function EnvEngineerDashboard() {
         </div>
       </div>
 
-      {/* Tab switcher */}
-      <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl w-fit">
-        <button type="button" onClick={() => setTab("overview")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          <LayoutDashboard className="w-4 h-4" /> Overview
-        </button>
-        <button type="button" onClick={() => setTab("analytics")}
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-          <BarChart2 className="w-4 h-4" /> Analytics
-        </button>
+      {/* Tab switcher + date filter */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2 bg-muted/50 p-1 rounded-2xl">
+          <button type="button" onClick={() => setTab("overview")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "overview" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <LayoutDashboard className="w-4 h-4" /> Overview
+          </button>
+          <button type="button" onClick={() => setTab("analytics")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === "analytics" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <BarChart2 className="w-4 h-4" /> Analytics
+          </button>
+        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
       </div>
 
       {tab === "overview" && (
@@ -861,7 +893,7 @@ export default function EnvEngineerDashboard() {
             <div className="space-y-4">
               <h2 className="text-lg font-black text-foreground">Health Inspectors</h2>
               {his.map((hi) => (
-                <HiCard key={hi.id} hi={hi} />
+                <HiCard key={hi.id} hi={hi} dateFrom={dateFrom} dateTo={dateTo} />
               ))}
             </div>
           )}

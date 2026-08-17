@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, officersTable, reportsTable, usersTable } from "@workspace/db";
-import { eq, sql, and, isNull, gte } from "drizzle-orm";
+import { eq, sql, and, isNull, gte, lte } from "drizzle-orm";
 import { CreateOfficerBody, UpdateOfficerBody, GetOfficerReportsQueryParams } from "@workspace/api-zod";
 import { requireAuth, requireAdmin, requirePanchayatOrControlCenter, hashPassword } from "../lib/auth";
 import { sendWelcomeEmail } from "../lib/email";
@@ -326,13 +326,20 @@ router.get("/officers/:id/reports", requireAuth, async (req, res): Promise<void>
   const limit = queryParsed.success && queryParsed.data.limit ? queryParsed.data.limit : 500;
   const days = queryParsed.success ? queryParsed.data.days : undefined;
 
+  const fromDate = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const toDate   = typeof req.query.to   === "string" ? new Date(req.query.to)   : undefined;
+
   let conditions: any[] = [eq(reportsTable.assignedOfficerId, id), isNull(reportsTable.deletedAt)];
   if (status) conditions.push(eq(reportsTable.status, status));
-  if (days && days > 0) {
+  // from/to take precedence over the legacy `days` window
+  if (fromDate && !isNaN(fromDate.getTime())) {
+    conditions.push(gte(reportsTable.createdAt, fromDate));
+  } else if (days && days > 0) {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     conditions.push(gte(reportsTable.createdAt, cutoff));
   }
+  if (toDate && !isNaN(toDate.getTime())) conditions.push(lte(reportsTable.createdAt, toDate));
 
   const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(...conditions));
 
