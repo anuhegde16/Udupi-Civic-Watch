@@ -12,7 +12,7 @@ import {
   ListReportsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth, getSessionUser } from "../lib/auth";
-import { findOfficerForLocation, isWithinServiceArea } from "../lib/geo";
+import { findOfficerForLocation, isWithinServiceArea, udupiWardRings, pointInPolygon as pip, inUdupi } from "../lib/geo";
 import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
 import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
 import { getTestMode } from "../lib/test-mode";
@@ -132,10 +132,49 @@ router.get("/reports", requireAuth, async (req, res): Promise<void> => {
 
   const [countRow] = await db.select({ count: sql<number>`count(*)::int` }).from(reportsTable).where(and(...conditions));
 
-  const formatted = reports.map(({ report, officer }) => ({
-    ...sanitizeReport(report),
-    assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
-  }));
+  // Udupi Municipality reports are never linked via assignedOfficerId (that FK only
+  // covers Saligrama's officers table) - they're assigned live by ward geofence instead.
+  // Resolve ward + supervisor here too, so this list (the master/control-center report
+  // view) doesn't show genuinely-assigned Udupi reports as "Unassigned".
+  let udupiSupervisorByWard: Map<string, { name: string; phone: string | null }> | null = null;
+  if (reports.some(({ officer, report }) => !officer && inUdupi(Number(report.latitude), Number(report.longitude)))) {
+    const svRows = await db.execute(sql`
+      SELECT name, phone, ward_names AS "wardNames"
+      FROM supervisors
+      WHERE panchayat_name = 'Udupi'
+    `);
+    udupiSupervisorByWard = new Map();
+    for (const row of svRows.rows as any[]) {
+      const wardNames: string[] = Array.isArray(row.wardNames) ? row.wardNames : JSON.parse(row.wardNames ?? "[]");
+      for (const wardName of wardNames) {
+        const match = wardName.match(/^Ward (\d+)/);
+        if (!match) continue;
+        udupiSupervisorByWard.set(`Udupi Ward ${match[1]}`, { name: row.name, phone: row.phone });
+      }
+    }
+  }
+
+  const formatted = reports.map(({ report, officer }) => {
+    let assignedOfficer: { id: number | null; name: string | null; email: string | null; phone: string | null; areaName: string | null; wardName: string | null } | null =
+      officer
+        ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName }
+        : null;
+    if (!assignedOfficer && udupiSupervisorByWard) {
+      const ward = udupiWardRings.find(({ ring }) => pip(Number(report.latitude), Number(report.longitude), ring));
+      if (ward) {
+        const supervisor = udupiSupervisorByWard.get(ward.name);
+        assignedOfficer = {
+          id: null,
+          name: supervisor?.name ?? null,
+          email: null,
+          phone: supervisor?.phone ?? null,
+          areaName: ward.name,
+          wardName: ward.name,
+        };
+      }
+    }
+    return { ...sanitizeReport(report), assignedOfficer };
+  });
 
   res.json({ reports: formatted, total: countRow.count });
 });
