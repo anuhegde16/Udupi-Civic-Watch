@@ -135,11 +135,47 @@ router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
 
   const page = geographic ? scoped.slice(offset, offset + limit) : scoped;
 
+  // Udupi Municipality reports are never linked via assignedOfficerId (that FK only
+  // covers Saligrama's officers table) - they're assigned live by ward geofence instead,
+  // and geoWardName above already resolves the ward. Look up the ward's supervisor here
+  // too, so this list doesn't show genuinely-assigned Udupi reports as "Unassigned".
+  let udupiSupervisorByWard: Map<string, { name: string; phone: string | null }> | null = null;
+  if (page.some(({ officer, geoWardName }) => !officer && geoWardName)) {
+    const svRows = await db.execute(sql`
+      SELECT name, phone, ward_names AS "wardNames"
+      FROM supervisors
+      WHERE panchayat_name = 'Udupi'
+    `);
+    udupiSupervisorByWard = new Map();
+    for (const row of svRows.rows as any[]) {
+      const wardNames: string[] = Array.isArray(row.wardNames) ? row.wardNames : JSON.parse(row.wardNames ?? "[]");
+      for (const wardName of wardNames) {
+        const match = wardName.match(/^Ward (\d+)/);
+        if (!match) continue;
+        udupiSupervisorByWard.set(`Udupi Ward ${match[1]}`, { name: row.name, phone: row.phone });
+      }
+    }
+  }
+
   const formatted = page.map(({ report, officer, geoWardName }) => {
     const { reporterIp: _ri, ...safeReport } = report;
+    let assignedOfficer: { id: number | null; name: string | null; email: string | null; phone: string | null; areaName: string | null; wardName: string | null } | null = officer
+      ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName }
+      : null;
+    if (!assignedOfficer && geoWardName && udupiSupervisorByWard) {
+      const supervisor = udupiSupervisorByWard.get(geoWardName);
+      assignedOfficer = {
+        id: null,
+        name: supervisor?.name ?? null,
+        email: null,
+        phone: supervisor?.phone ?? null,
+        areaName: geoWardName,
+        wardName: geoWardName,
+      };
+    }
     return {
       ...safeReport,
-      assignedOfficer: officer ? { id: officer.id, name: officer.name, email: officer.email, phone: officer.phone, areaName: officer.areaName, wardName: officer.areaName } : null,
+      assignedOfficer,
       geoWardName,
     };
   });
