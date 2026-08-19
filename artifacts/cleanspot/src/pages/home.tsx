@@ -36,7 +36,7 @@ export default function Home() {
           </p>
 
           <p className="text-[10px] sm:text-xs text-white/65 font-medium tracking-wide">
-            Created Conceptualized and Owned by Anudeep Hegde
+            Created by Anudeep Hegde
           </p>
           
           <div className="pt-4 flex flex-col sm:flex-row gap-4 flex-wrap">
