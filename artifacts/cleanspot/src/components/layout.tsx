@@ -384,6 +384,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
           Powered by Trip Nirvigna
         </p>
+        <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
+          Created Conceptualized and Owned by Anudeep Hegde
+        </p>
       </footer>
 
       {/* One-time push notification permission modal */}

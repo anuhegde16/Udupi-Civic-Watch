@@ -34,6 +34,10 @@ export default function Home() {
             Udupi's beaches are the lifeblood of our community. 
             Snap a photo of waste. Drop a pin. We'll send a team to clean it up.
           </p>
+
+          <p className="text-[10px] sm:text-xs text-white/65 font-medium tracking-wide">
+            Created Conceptualized and Owned by Anudeep Hegde
+          </p>
           
           <div className="pt-4 flex flex-col sm:flex-row gap-4 flex-wrap">
             <Link href="/report" className="block">
