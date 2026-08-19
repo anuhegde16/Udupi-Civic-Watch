@@ -237,7 +237,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <NotificationBell />
             <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-foreground hover:bg-primary/5 hover:text-primary rounded-full">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-foreground hover:bg-primary/5 hover:text-primary rounded-full"
+                  aria-label="Open navigation menu"
+                  data-testid="nav-menu-trigger"
+                >
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -316,6 +322,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <Link href="/" onClick={closeMenu} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
                       <Home className="w-4 h-4" />
                       Home
+                    </Link>
+                    <Link href="/about" onClick={closeMenu} data-testid="nav-about" className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/about" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
+                      <Anchor className="w-4 h-4" />
+                      About
                     </Link>
                     <Link href="/report" onClick={closeMenu} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-colors ${location === "/report" ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted"}`}>
                       <Camera className="w-4 h-4" />

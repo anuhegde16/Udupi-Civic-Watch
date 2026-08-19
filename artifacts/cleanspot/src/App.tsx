@@ -7,6 +7,7 @@ import { Layout } from "@/components/layout";
 import { AuthGuard } from "@/components/auth-guard";
 
 import Home from "@/pages/home";
+import About from "@/pages/about";
 import Report from "@/pages/report";
 import Track from "@/pages/track";
 import TrackSearch from "@/pages/track-search";
@@ -36,6 +37,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/about" component={About} />
         <Route path="/report" component={Report} />
         <Route path="/track" component={TrackSearch} />
         <Route path="/track/:id" component={Track} />
