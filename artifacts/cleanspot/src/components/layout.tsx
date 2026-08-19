@@ -395,7 +395,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           Powered by Trip Nirvigna
         </p>
         <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
-          Created Conceptualized and Owned by Anudeep Hegde
+          Conceptualized by Anudeep Hegde and developed by in collaboration with Udupi District Administration
         </p>
       </footer>
 
