@@ -156,7 +156,7 @@ export default function About() {
             <h2 className="text-3xl md:text-4xl font-black text-foreground">A Collaborative Vision</h2>
             <div className="space-y-6 text-lg text-muted-foreground leading-relaxed font-medium">
               <p data-testid="about-conceptualization">
-                A civic technology initiative conceptualized & developed by Anudeep Hegde in collaboration with Udupi District Administration, Saligrama Gram Panchayat, with the shared vision of making waste management more transparent, responsive, and community-driven.
+                A civic technology initiative conceptualized by Anudeep Hegde and developed in close collaboration with Udupi District Administration with the shared vision of making waste management more transparent, responsive, and community-driven.
               </p>
               <p data-testid="about-evolution">
                 What began as an idea to simplify waste reporting has evolved into a collaborative civic platform that empowers citizens to actively participate in keeping their surroundings clean.
