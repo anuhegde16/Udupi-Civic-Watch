@@ -226,7 +226,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
                 Udupi District Administration
               </span>
-              <span className="text-[9px] font-medium tracking-wide hidden sm:block opacity-[0.95] text-[#212a2bde]">
+              <span className="text-[9px] font-medium tracking-wide block opacity-[0.95] text-[#212a2bde]">
                 by Trip Nirvigna
               </span>
             </div>
@@ -259,7 +259,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                       Udupi District Administration
                     </p>
-                    <p className="text-[9px] text-muted-foreground/45 font-medium tracking-wide mt-0.5">
+                    <p className="text-[9px] font-medium tracking-wide mt-0.5 opacity-[0.95] text-[#212a2bde]">
                       by Trip Nirvigna
                     </p>
                   </div>
@@ -306,7 +306,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div>
                       <p className="font-black text-foreground text-base leading-none">Udupi Civic Watch</p>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">Citizen Menu</p>
-                      <p className="text-[9px] text-muted-foreground/45 font-medium tracking-wide mt-0.5">by Trip Nirvigna</p>
+                      <p className="text-[9px] font-medium tracking-wide mt-0.5 opacity-[0.95] text-[#212a2bde]">by Trip Nirvigna</p>
                     </div>
                   </div>
 
