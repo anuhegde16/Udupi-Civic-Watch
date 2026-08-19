@@ -170,7 +170,7 @@ export default function Home() {
             </span>
           </Link>
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-6">Udupi Civic Watch • Protecting the Arabian Sea</p>
+        <p className="text-center text-xs text-muted-foreground mt-6">Udupi Civic Watch • Together for a Cleaner Tomorrow</p>
       </div>
     </div>
   );
