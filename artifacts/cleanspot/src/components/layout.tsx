@@ -223,7 +223,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex flex-col leading-none gap-px">
               <span className="text-base font-black text-primary tracking-tight">Udupi Civic Watch</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
                 Udupi District Administration
               </span>
               <span className="text-[9px] font-medium tracking-wide block opacity-[0.95] text-[#212a2bde]">
