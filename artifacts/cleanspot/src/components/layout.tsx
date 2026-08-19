@@ -226,7 +226,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest hidden sm:block">
                 Udupi District Administration
               </span>
-              <span className="text-[9px] text-muted-foreground/45 font-medium tracking-wide hidden sm:block">
+              <span className="text-[9px] font-medium tracking-wide hidden sm:block opacity-[0.95] text-[#212a2bde]">
                 by Trip Nirvigna
               </span>
             </div>
