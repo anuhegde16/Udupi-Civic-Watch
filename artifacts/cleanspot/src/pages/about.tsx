@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Camera, Anchor, Waves, Users, ShieldCheck, HeartHandshake, AlertCircle, Sparkles, MapPin, Droplets, Fish, ShieldAlert, Sun } from "lucide-react";
+import { Camera, Anchor, Waves, Users, ShieldCheck, HeartHandshake, AlertCircle, Sparkles, MapPin, Droplets, Fish, ShieldAlert, Sun, Lightbulb, Landmark, ClipboardCheck, Rocket } from "lucide-react";
 
 export default function About() {
   useEffect(() => {
@@ -70,6 +70,130 @@ export default function About() {
         </div>
       </section>
 
+      {/* The Story - Split Layout */}
+      <section className="py-16 mb-16 rounded-[3rem] bg-card border border-border shadow-sm px-6 md:px-12 relative overflow-hidden" data-testid="about-story-section">
+        <div className="absolute top-0 right-0 w-full h-full bg-texture-noise opacity-5" />
+        
+        <div className="relative z-10 max-w-6xl mx-auto flex flex-col lg:flex-row gap-16 items-center">
+          <div className="flex-1 w-full relative">
+            <div className="absolute -inset-4 bg-primary/5 rounded-[2.5rem] transform -rotate-3 transition-transform hover:rotate-0 duration-500"></div>
+            <img 
+              src="/plastic-water.png" 
+              alt="Plastic pollution affecting water bodies" 
+              className="relative rounded-[2rem] object-cover aspect-square w-full shadow-lg"
+              data-testid="about-story-img"
+            />
+          </div>
+          
+          <div className="flex-1 space-y-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-2">
+              <Sparkles className="w-7 h-7" />
+            </div>
+            <h2 className="text-3xl md:text-4xl font-black text-foreground">A Collaborative Vision</h2>
+            <div className="space-y-6 text-lg text-muted-foreground leading-relaxed font-medium">
+              <p data-testid="about-conceptualization">
+                Udupi Civic Watch was conceptualized, designed and developed by Anudeep Hegde as a citizen-led civic technology initiative. The platform was later adopted by the Udupi District Administration for pilot implementation, bringing together the original citizen-led initiative with the administration’s institutional framework and field-level teams with the shared vision of making waste management more transparent, responsive, and community-driven.
+              </p>
+              <p data-testid="about-evolution">
+                What began as an idea to simplify waste reporting has evolved into a collaborative civic platform that empowers citizens to actively participate in keeping their surroundings clean.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* The Journey of Udupi Civic Watch */}
+      <section className="relative py-16 md:py-20 mb-16 overflow-hidden" data-testid="about-journey">
+        <div className="max-w-5xl mx-auto px-6 md:px-12">
+          <div className="max-w-3xl mx-auto text-center space-y-4">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-primary">A living civic story</p>
+            <h2 className="text-3xl md:text-5xl font-black text-foreground">The Journey of Udupi Civic Watch</h2>
+            <p className="text-lg text-muted-foreground font-medium leading-relaxed">
+              From a citizen-led idea to a working platform shaped alongside the people who use it.
+            </p>
+          </div>
+
+          <div className="relative mt-12">
+            <div
+              className="absolute left-5 top-5 bottom-8 w-px bg-gradient-to-b from-secondary via-primary/30 to-primary md:left-1/2 md:-translate-x-1/2"
+              aria-hidden="true"
+            />
+            <div className="space-y-6 md:space-y-8">
+              <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-2025">
+                <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-secondary ring-8 ring-background md:left-1/2" aria-hidden="true" />
+                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/15 text-secondary-foreground">
+                      <Lightbulb className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-widest text-secondary-foreground">2025</p>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground mb-3">The Idea</h3>
+                  <p className="text-muted-foreground leading-relaxed font-medium">
+                    The concept of Udupi Civic Watch was first conceived as a citizen-led initiative to make waste reporting simpler, more transparent and more responsive by connecting citizens directly with the officials responsible for addressing local issues.
+                  </p>
+                </article>
+              </div>
+
+              <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-april-2026">
+                <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-primary ring-8 ring-background md:left-1/2" aria-hidden="true" />
+                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <Landmark className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-widest text-primary">April 2026</p>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground mb-3">Presented to the Udupi District Administration</h3>
+                  <p className="text-muted-foreground leading-relaxed font-medium">
+                    The concept and proposed platform were presented to the Udupi Deputy Commissioner and District Administration, with the vision of developing it into a practical civic technology solution that could work within the existing administrative system.
+                  </p>
+                </article>
+              </div>
+
+              <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-june-2026">
+                <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-primary ring-8 ring-background md:left-1/2" aria-hidden="true" />
+                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-widest text-primary">June 2026</p>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground mb-3">Trial Implementation in Saligrama</h3>
+                  <p className="text-muted-foreground leading-relaxed font-medium">
+                    Following discussions with the administration, Udupi Civic Watch entered its trial phase in Saligrama Panchayat. The platform was tested in a real-world environment, with officials being trained to use the system and feedback from field-level implementation being incorporated.
+                  </p>
+                </article>
+              </div>
+
+              <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-august-2026">
+                <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-secondary ring-8 ring-background md:left-1/2" aria-hidden="true" />
+                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/15 text-secondary-foreground">
+                      <Rocket className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-widest text-secondary-foreground">15 August 2026</p>
+                  </div>
+                  <h3 className="text-xl font-black text-foreground mb-3">District-Level Pilot Launch</h3>
+                  <p className="text-muted-foreground leading-relaxed font-medium">
+                    Udupi Civic Watch was officially launched on India's 80th Independence Day, marking its adoption for pilot implementation with the Udupi District Administration. The launch brought the citizen-developed platform into a broader administrative framework, with the objective of evaluating its potential for wider deployment.
+                  </p>
+                </article>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 rounded-3xl bg-primary p-7 md:p-9 text-primary-foreground shadow-xl shadow-primary/15" data-testid="journey-conclusion">
+            <h3 className="text-2xl md:text-3xl font-black mb-3">From an Idea to a Working Civic Platform</h3>
+            <p className="text-primary-foreground/80 leading-relaxed font-medium">
+              What began as an idea in 2025 evolved through development, administrative discussions and real-world testing into a working civic technology platform. Udupi Civic Watch continues to operate in pilot mode, with the experience from the initial implementation being used to refine the platform and explore its potential for replication across other local bodies.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* The Impact of Land Waste */}
       <section className="py-20 mb-16 bg-primary/5 border-y border-primary/10" data-testid="about-impact">
         <div className="max-w-6xl mx-auto px-6 md:px-12">
@@ -129,38 +253,6 @@ export default function About() {
                   Our shores and streets are where we gather, play, and connect. Responsible disposal and active citizen reporting help keep these public spaces welcoming and safe for everyone to enjoy.
                 </p>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* The Story - Split Layout */}
-      <section className="py-16 mb-16 rounded-[3rem] bg-card border border-border shadow-sm px-6 md:px-12 relative overflow-hidden" data-testid="about-story-section">
-        <div className="absolute top-0 right-0 w-full h-full bg-texture-noise opacity-5" />
-        
-        <div className="relative z-10 max-w-6xl mx-auto flex flex-col lg:flex-row gap-16 items-center">
-          <div className="flex-1 w-full relative">
-            <div className="absolute -inset-4 bg-primary/5 rounded-[2.5rem] transform -rotate-3 transition-transform hover:rotate-0 duration-500"></div>
-            <img 
-              src="/plastic-water.png" 
-              alt="Plastic pollution affecting water bodies" 
-              className="relative rounded-[2rem] object-cover aspect-square w-full shadow-lg"
-              data-testid="about-story-img"
-            />
-          </div>
-          
-          <div className="flex-1 space-y-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-2">
-              <Sparkles className="w-7 h-7" />
-            </div>
-            <h2 className="text-3xl md:text-4xl font-black text-foreground">A Collaborative Vision</h2>
-            <div className="space-y-6 text-lg text-muted-foreground leading-relaxed font-medium">
-              <p data-testid="about-conceptualization">
-                Udupi Civic Watch was conceptualized, designed and developed by Anudeep Hegde as a citizen-led civic technology initiative. The platform was later adopted by the Udupi District Administration for pilot implementation, bringing together the original citizen-led initiative with the administration’s institutional framework and field-level teams with the shared vision of making waste management more transparent, responsive, and community-driven.
-              </p>
-              <p data-testid="about-evolution">
-                What began as an idea to simplify waste reporting has evolved into a collaborative civic platform that empowers citizens to actively participate in keeping their surroundings clean.
-              </p>
             </div>
           </div>
         </div>
