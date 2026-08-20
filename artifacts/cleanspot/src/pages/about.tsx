@@ -156,7 +156,7 @@ export default function About() {
             <h2 className="text-3xl md:text-4xl font-black text-foreground">A Collaborative Vision</h2>
             <div className="space-y-6 text-lg text-muted-foreground leading-relaxed font-medium">
               <p data-testid="about-conceptualization">
-                Udupi Civic Sense digital application is a civic technology initiative conceptualized by Anudeep Hegde and developed in close collaboration with Udupi District Administration with the shared vision of making waste management more transparent, responsive, and community-driven.
+                Udupi Civic Watch was conceptualized, designed and developed by Anudeep Hegde as a citizen-led civic technology initiative. The platform was subsequently adopted for pilot implementation by the Udupi district administration with the shared vision of making waste management more transparent, responsive, and community-driven.
               </p>
               <p data-testid="about-evolution">
                 What began as an idea to simplify waste reporting has evolved into a collaborative civic platform that empowers citizens to actively participate in keeping their surroundings clean.
