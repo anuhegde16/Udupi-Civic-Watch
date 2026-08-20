@@ -103,14 +103,11 @@ export default function About() {
       </section>
 
       {/* The Journey of Udupi Civic Watch */}
-      <section className="relative py-16 md:py-20 mb-16 overflow-hidden" data-testid="about-journey">
+      <section id="about-journey" className="relative py-16 md:py-20 mb-16 overflow-hidden" data-testid="about-journey">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
           <div className="max-w-3xl mx-auto text-center space-y-4">
             <p className="text-xs font-black uppercase tracking-[0.24em] text-primary">A living civic story</p>
             <h2 className="text-3xl md:text-5xl font-black text-foreground">The Journey of Udupi Civic Watch</h2>
-            <p className="text-lg text-muted-foreground font-medium leading-relaxed">
-              From a citizen-led idea to a working platform shaped alongside the people who use it.
-            </p>
           </div>
 
           <div className="relative mt-12">
