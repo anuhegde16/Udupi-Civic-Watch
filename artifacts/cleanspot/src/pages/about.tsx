@@ -31,7 +31,7 @@ export default function About() {
   return (
     <div className="flex flex-col h-full w-full bg-background selection:bg-primary/20 selection:text-primary">
       {/* Hero Section */}
-      <section className="relative w-full rounded-[2rem] overflow-hidden min-h-[70vh] flex flex-col justify-end p-6 md:p-12 mb-16 shadow-2xl">
+      <section className="relative w-full rounded-[2rem] overflow-hidden min-h-[58vh] md:min-h-[64vh] flex flex-col justify-end p-6 md:p-12 mb-10 md:mb-12 shadow-2xl">
         <img 
           src="/hero-coast.png" 
           alt="Plastic waste scattered along a beach beside the Arabian Sea"
@@ -58,9 +58,9 @@ export default function About() {
       </section>
 
       {/* Mission Statement */}
-      <section className="py-12 mb-16 px-6 md:px-12 relative">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <div className="w-16 h-2 bg-secondary rounded-full mb-8"></div>
+      <section className="py-8 md:py-10 mb-10 md:mb-12 px-6 md:px-12 relative">
+        <div className="max-w-4xl mx-auto space-y-6">
+          <div className="w-16 h-2 bg-secondary rounded-full mb-6"></div>
           <h2 className="text-3xl md:text-5xl font-black text-foreground leading-[1.2]" data-testid="about-mission">
             Waste management is not just about collecting garbage. It is about protecting public health, preserving our environment, safeguarding water bodies, preventing pollution, and creating a better future for the next generation.
           </h2>
@@ -71,10 +71,10 @@ export default function About() {
       </section>
 
       {/* The Story - Split Layout */}
-      <section className="py-16 mb-16 rounded-[3rem] bg-card border border-border shadow-sm px-6 md:px-12 relative overflow-hidden" data-testid="about-story-section">
+      <section className="py-10 md:py-12 mb-10 md:mb-12 rounded-[3rem] bg-card border border-border shadow-sm px-6 md:px-12 relative overflow-hidden" data-testid="about-story-section">
         <div className="absolute top-0 right-0 w-full h-full bg-texture-noise opacity-5" />
         
-        <div className="relative z-10 max-w-6xl mx-auto flex flex-col lg:flex-row gap-16 items-center">
+        <div className="relative z-10 max-w-6xl mx-auto flex flex-col lg:flex-row gap-10 md:gap-12 items-center">
           <div className="flex-1 w-full relative">
             <div className="absolute -inset-4 bg-primary/5 rounded-[2.5rem] transform -rotate-3 transition-transform hover:rotate-0 duration-500"></div>
             <img 
@@ -85,12 +85,12 @@ export default function About() {
             />
           </div>
           
-          <div className="flex-1 space-y-8">
+          <div className="flex-1 space-y-6">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 text-primary mb-2">
               <Sparkles className="w-7 h-7" />
             </div>
             <h2 className="text-3xl md:text-4xl font-black text-foreground">A Collaborative Vision</h2>
-            <div className="space-y-6 text-lg text-muted-foreground leading-relaxed font-medium">
+            <div className="space-y-4 text-lg text-muted-foreground leading-relaxed font-medium">
               <p data-testid="about-conceptualization">
                 Udupi Civic Watch was conceptualized, designed and developed by Anudeep Hegde as a citizen-led civic technology initiative. The platform was later adopted by the Udupi District Administration for pilot implementation, bringing together the original citizen-led initiative with the administration’s institutional framework and field-level teams with the shared vision of making waste management more transparent, responsive, and community-driven.
               </p>
@@ -103,22 +103,22 @@ export default function About() {
       </section>
 
       {/* The Journey of Udupi Civic Watch */}
-      <section id="about-journey" className="relative py-16 md:py-20 mb-16 overflow-hidden" data-testid="about-journey">
+      <section id="about-journey" className="relative py-10 md:py-14 mb-10 md:mb-12 overflow-hidden" data-testid="about-journey">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
           <div className="max-w-3xl mx-auto text-center space-y-4">
             <p className="text-xs font-black uppercase tracking-[0.24em] text-primary">A living civic story</p>
             <h2 className="text-3xl md:text-5xl font-black text-foreground">The Journey of Udupi Civic Watch</h2>
           </div>
 
-          <div className="relative mt-12">
+          <div className="relative mt-8 md:mt-10">
             <div
               className="absolute left-5 top-5 bottom-8 w-px bg-gradient-to-b from-secondary via-primary/30 to-primary md:left-1/2 md:-translate-x-1/2"
               aria-hidden="true"
             />
-            <div className="space-y-6 md:space-y-8">
+            <div className="space-y-4 md:space-y-6">
               <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-2025">
                 <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-secondary ring-8 ring-background md:left-1/2" aria-hidden="true" />
-                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
+                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-5 md:p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/15 text-secondary-foreground">
                       <Lightbulb className="h-5 w-5" aria-hidden="true" />
@@ -134,7 +134,7 @@ export default function About() {
 
               <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-april-2026">
                 <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-primary ring-8 ring-background md:left-1/2" aria-hidden="true" />
-                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
+                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-5 md:p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                       <Landmark className="h-5 w-5" aria-hidden="true" />
@@ -150,7 +150,7 @@ export default function About() {
 
               <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-june-2026">
                 <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-primary ring-8 ring-background md:left-1/2" aria-hidden="true" />
-                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
+                <article className="ml-10 rounded-3xl border border-primary/20 bg-card/90 p-5 md:p-6 shadow-sm md:col-start-1 md:mr-0 md:ml-0 md:pr-8">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                       <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
@@ -166,7 +166,7 @@ export default function About() {
 
               <div className="relative md:grid md:grid-cols-2 md:gap-12 md:items-center" data-testid="journey-august-2026">
                 <div className="absolute left-5 top-7 z-10 w-3 h-3 -translate-x-1/2 rounded-full bg-secondary ring-8 ring-background md:left-1/2" aria-hidden="true" />
-                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
+                <article className="ml-10 rounded-3xl border border-secondary/25 bg-card/90 p-5 md:p-6 shadow-sm md:col-start-2 md:ml-0 md:pl-8">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary/15 text-secondary-foreground">
                       <Rocket className="h-5 w-5" aria-hidden="true" />
@@ -182,7 +182,7 @@ export default function About() {
             </div>
           </div>
 
-          <div className="mt-10 rounded-3xl bg-primary p-7 md:p-9 text-primary-foreground shadow-xl shadow-primary/15" data-testid="journey-conclusion">
+          <div className="mt-6 md:mt-8 rounded-3xl bg-primary p-6 md:p-7 text-primary-foreground shadow-xl shadow-primary/15" data-testid="journey-conclusion">
             <h3 className="text-2xl md:text-3xl font-black mb-3">From an Idea to a Working Civic Platform</h3>
             <p className="text-primary-foreground/80 leading-relaxed font-medium">
               What began as an idea in 2025 evolved through development, administrative discussions and real-world testing into a working civic technology platform. Udupi Civic Watch continues to operate in pilot mode, with the experience from the initial implementation being used to refine the platform and explore its potential for replication across other local bodies.
@@ -192,16 +192,16 @@ export default function About() {
       </section>
 
       {/* The Impact of Land Waste */}
-      <section className="py-20 mb-16 bg-primary/5 border-y border-primary/10" data-testid="about-impact">
+      <section className="py-12 md:py-16 mb-10 md:mb-12 bg-primary/5 border-y border-primary/10" data-testid="about-impact">
         <div className="max-w-6xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-16 space-y-4">
+          <div className="text-center mb-10 md:mb-12 space-y-4">
             <h2 className="text-3xl md:text-5xl font-black text-foreground">The Journey of Land Waste</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-medium">What happens on land never stays on land. Stopping pollution at the source protects the entire ecosystem.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
             {/* Drains & Waterways */}
-            <div className="bg-card p-8 rounded-3xl shadow-sm border border-border flex gap-6 items-start transition-transform hover:-translate-y-1" data-testid="impact-waterways">
+            <div className="bg-card p-6 md:p-7 rounded-3xl shadow-sm border border-border flex gap-4 md:gap-5 items-start transition-transform hover:-translate-y-1" data-testid="impact-waterways">
               <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-sm">
                 <Droplets className="w-6 h-6" />
               </div>
@@ -214,7 +214,7 @@ export default function About() {
             </div>
 
             {/* Wildlife */}
-            <div className="bg-card p-8 rounded-3xl shadow-sm border border-border flex gap-6 items-start transition-transform hover:-translate-y-1" data-testid="impact-wildlife">
+            <div className="bg-card p-6 md:p-7 rounded-3xl shadow-sm border border-border flex gap-4 md:gap-5 items-start transition-transform hover:-translate-y-1" data-testid="impact-wildlife">
               <div className="w-12 h-12 rounded-2xl bg-secondary/15 text-secondary-foreground flex items-center justify-center shrink-0 shadow-sm">
                 <Fish className="w-6 h-6" />
               </div>
@@ -227,7 +227,7 @@ export default function About() {
             </div>
 
             {/* Public Health */}
-            <div className="bg-card p-8 rounded-3xl shadow-sm border border-border flex gap-6 items-start transition-transform hover:-translate-y-1" data-testid="impact-health">
+            <div className="bg-card p-6 md:p-7 rounded-3xl shadow-sm border border-border flex gap-4 md:gap-5 items-start transition-transform hover:-translate-y-1" data-testid="impact-health">
               <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0 shadow-sm">
                 <ShieldAlert className="w-6 h-6" />
               </div>
@@ -240,7 +240,7 @@ export default function About() {
             </div>
 
             {/* Shared Spaces */}
-            <div className="bg-card p-8 rounded-3xl shadow-sm border border-border flex gap-6 items-start transition-transform hover:-translate-y-1" data-testid="impact-spaces">
+            <div className="bg-card p-6 md:p-7 rounded-3xl shadow-sm border border-border flex gap-4 md:gap-5 items-start transition-transform hover:-translate-y-1" data-testid="impact-spaces">
               <div className="w-12 h-12 rounded-2xl bg-accent/40 text-accent-foreground flex items-center justify-center shrink-0 shadow-sm">
                 <Sun className="w-6 h-6" />
               </div>
@@ -256,17 +256,17 @@ export default function About() {
       </section>
 
       {/* Acknowledgements Grid */}
-      <section className="py-16 mb-16" data-testid="about-acknowledgements">
+      <section className="py-10 md:py-12 mb-10 md:mb-12" data-testid="about-acknowledgements">
         <div className="max-w-6xl mx-auto px-6 md:px-12">
-          <div className="text-center mb-16 space-y-4">
+          <div className="text-center mb-10 md:mb-12 space-y-4">
             <h2 className="text-4xl md:text-5xl font-black text-foreground">Our Heroes & Supporters</h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">This initiative is built on the dedication of countless individuals.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 md:gap-6">
             {/* Leadership */}
-            <div className="bg-primary/5 p-10 rounded-[2rem] border border-primary/10 shadow-sm relative overflow-hidden group hover:bg-primary/10 transition-colors" data-testid="ack-leadership">
-              <div className="w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-8 shadow-md">
+            <div className="bg-primary/5 p-6 md:p-8 rounded-[2rem] border border-primary/10 shadow-sm relative overflow-hidden group hover:bg-primary/10 transition-colors" data-testid="ack-leadership">
+              <div className="w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-6 shadow-md">
                 <Anchor className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-4 leading-snug">District Leadership</h3>
@@ -276,8 +276,8 @@ export default function About() {
             </div>
 
             {/* Unseen Heroes */}
-            <div className="bg-secondary/10 p-10 rounded-[2rem] border border-secondary/20 shadow-sm relative overflow-hidden group hover:bg-secondary/20 transition-colors" data-testid="ack-heroes">
-              <div className="w-14 h-14 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center mb-8 shadow-md">
+            <div className="bg-secondary/10 p-6 md:p-8 rounded-[2rem] border border-secondary/20 shadow-sm relative overflow-hidden group hover:bg-secondary/20 transition-colors" data-testid="ack-heroes">
+              <div className="w-14 h-14 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center mb-6 shadow-md">
                 <ShieldCheck className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-4 leading-snug">The Unseen Heroes</h3>
@@ -287,8 +287,8 @@ export default function About() {
             </div>
 
             {/* Community */}
-            <div className="bg-accent/30 p-10 rounded-[2rem] border border-accent/50 shadow-sm relative overflow-hidden group hover:bg-accent/50 transition-colors" data-testid="ack-community">
-              <div className="w-14 h-14 rounded-2xl bg-foreground text-background flex items-center justify-center mb-8 shadow-md">
+            <div className="bg-accent/30 p-6 md:p-8 rounded-[2rem] border border-accent/50 shadow-sm relative overflow-hidden group hover:bg-accent/50 transition-colors" data-testid="ack-community">
+              <div className="w-14 h-14 rounded-2xl bg-foreground text-background flex items-center justify-center mb-6 shadow-md">
                 <HeartHandshake className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-bold text-foreground mb-4 leading-snug">Community Partners</h3>
@@ -301,7 +301,7 @@ export default function About() {
       </section>
 
       {/* Belonging Statement */}
-      <section className="py-20 mb-16 relative rounded-[3rem] overflow-hidden" data-testid="about-belonging">
+      <section className="py-12 md:py-16 mb-10 md:mb-12 relative rounded-[3rem] overflow-hidden" data-testid="about-belonging">
         <img 
           src="/clean-sand.png" 
           alt="Discarded plastic bottles and bags on beach sand"
@@ -310,7 +310,7 @@ export default function About() {
         <div className="absolute inset-0 bg-primary/95 mix-blend-multiply" />
         <div className="absolute inset-0 bg-gradient-to-br from-primary/90 to-primary/60" />
         
-        <div className="relative z-10 max-w-4xl mx-auto px-6 md:px-12 text-center text-primary-foreground space-y-10">
+        <div className="relative z-10 max-w-4xl mx-auto px-6 md:px-12 text-center text-primary-foreground space-y-6 md:space-y-8">
           <Users className="w-16 h-16 mx-auto opacity-80" />
           <h2 className="text-3xl md:text-5xl font-black leading-[1.3]">
             This platform does not belong to any individual or institution alone.
@@ -322,12 +322,12 @@ export default function About() {
       </section>
 
       {/* Trial Mode Warning */}
-      <section className="max-w-4xl mx-auto px-6 md:px-12 mb-20" data-testid="about-trial-mode">
-        <div className="bg-destructive/10 border-2 border-destructive/20 p-8 md:p-10 rounded-[2rem] flex flex-col md:flex-row gap-8 items-start shadow-sm">
+      <section className="max-w-4xl mx-auto px-6 md:px-12 mb-12 md:mb-16" data-testid="about-trial-mode">
+        <div className="bg-destructive/10 border-2 border-destructive/20 p-6 md:p-8 rounded-[2rem] flex flex-col md:flex-row gap-5 md:gap-6 items-start shadow-sm">
           <div className="w-14 h-14 rounded-full bg-destructive/20 text-destructive flex items-center justify-center shrink-0">
             <AlertCircle className="w-7 h-7" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <h2 className="text-2xl font-bold text-foreground">Operating in Trial Mode</h2>
             <p className="text-muted-foreground text-lg leading-relaxed font-medium">
               Udupi Civic Watch is currently operating in trial mode. As we continue to improve the platform, users may occasionally experience delays, technical issues, or operational challenges. We request your patience, understanding, and feedback during this phase as we work together to build a more effective and reliable civic engagement platform.
@@ -337,12 +337,12 @@ export default function About() {
       </section>
 
       {/* Conclusion & CTA */}
-      <section className="py-16 text-center max-w-4xl mx-auto px-6 md:px-12 space-y-10" data-testid="about-conclusion">
+      <section className="py-10 md:py-12 text-center max-w-4xl mx-auto px-6 md:px-12 space-y-6 md:space-y-8" data-testid="about-conclusion">
         <h2 className="text-3xl md:text-5xl font-black text-foreground leading-tight">
           Udupi Civic Watch is our collective effort, our shared responsibility, and our commitment towards a cleaner, greener, and more accountable Udupi.
         </h2>
         
-        <div className="pt-8 flex flex-col sm:flex-row gap-4 justify-center">
+        <div className="pt-4 md:pt-6 flex flex-col sm:flex-row gap-4 justify-center">
           <Button asChild size="lg" className="w-full sm:w-auto h-16 px-10 text-lg font-bold rounded-2xl bg-secondary hover:bg-secondary/90 text-secondary-foreground shadow-xl shadow-secondary/20 transition-transform hover:-translate-y-1">
             <Link href="/report" data-testid="about-cta-report">
               <Camera className="w-5 h-5 mr-3" />
