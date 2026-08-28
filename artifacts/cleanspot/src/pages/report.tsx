@@ -48,6 +48,20 @@ function isWithinServiceArea(lat: number, lng: number): boolean {
   return false;
 }
 
+// Which panchayat (Udupi / Saligrama / future areas) does this point fall inside?
+// Mirrors the server's detectPanchayat() so the citizen sees an instant warning
+// instead of only finding out after tapping Submit.
+function detectPanchayat(lat: number, lng: number): string | null {
+  for (const feature of geofencesData.features) {
+    const props = feature.properties as { type?: string; panchayat?: string };
+    if (feature.geometry.type === "Polygon" && props.type !== "ward") {
+      const ring = feature.geometry.coordinates[0] as [number, number][];
+      if (pointInPolygon(lat, lng, ring)) return props.panchayat ?? null;
+    }
+  }
+  return null;
+}
+
 type PhotoEntry = { id: string; preview: string; url: string; uploadedAt: string; progress: number; error: string | null };
 const MAX_CITIZEN_PHOTOS = 2;
 
@@ -94,6 +108,12 @@ export default function Report() {
   });
   const testMode = testModeData?.testMode ?? false;
 
+  const { data: panchayatVisibility } = useQuery({
+    queryKey: ["panchayat-visibility"],
+    queryFn: () => customFetch<Record<string, boolean>>("/api/panchayat-visibility"),
+    refetchInterval: 30000,
+  });
+
   const geofenceRing = useMemo<[number, number][] | undefined>(() => {
     const first = geofencesData.features[0];
     if (first?.geometry.type === "Polygon") {
@@ -120,6 +140,15 @@ export default function Report() {
     if (!location) return false;
     return !isWithinServiceArea(location.lat, location.lng);
   }, [location?.lat, location?.lng]);
+
+  // True when the pin sits in a panchayat a master admin has temporarily
+  // paused for the public (no data lost — just paused for new reports).
+  const areaHidden = useMemo(() => {
+    if (!location || !panchayatVisibility) return false;
+    const panchayat = detectPanchayat(location.lat, location.lng);
+    if (!panchayat) return false;
+    return panchayatVisibility[panchayat] === false;
+  }, [location?.lat, location?.lng, panchayatVisibility]);
 
   useEffect(() => {
     // Check & watch camera + location permission states
@@ -328,6 +357,10 @@ export default function Report() {
     }
     if (outsideFence && !testMode) {
       toast({ title: "Outside service area", description: "Please move the pin inside a service boundary (Saligrama or Udupi).", variant: "destructive" });
+      return;
+    }
+    if (areaHidden && !testMode) {
+      toast({ title: "Not live in your area yet", description: "A word to your local administration can help speed things up. Thanks for caring enough to report; check back soon!", variant: "destructive" });
       return;
     }
     setReporterEmail("");
@@ -621,7 +654,17 @@ export default function Report() {
             </div>
           )}
 
-          {location && !outsideFence && (
+          {!outsideFence && areaHidden && location && !testMode && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-700">Not live in your area yet</p>
+                <p className="text-xs text-red-600 mt-0.5">A word to your local administration can help speed things up. Thanks for caring enough to report; check back soon!</p>
+              </div>
+            </div>
+          )}
+
+          {location && !outsideFence && !areaHidden && (
             <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 animate-in fade-in slide-in-from-bottom-1 duration-300">
               <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
                 <MapPin className="w-4 h-4" />
@@ -657,7 +700,7 @@ export default function Report() {
             type="submit"
             size="lg"
             className="w-full h-16 text-xl font-black rounded-2xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/30 transition-all hover:-translate-y-1 disabled:opacity-70 disabled:shadow-none disabled:transform-none disabled:cursor-not-allowed"
-            disabled={photos.length === 0 || !allPhotosUploaded || !location || isLocating || isUploading || createReport.isPending || (outsideFence && !testMode)}
+            disabled={photos.length === 0 || !allPhotosUploaded || !location || isLocating || isUploading || createReport.isPending || (outsideFence && !testMode) || (areaHidden && !testMode)}
           >
             {createReport.isPending ? (
               <Loader2 className="w-6 h-6 mr-2 animate-spin" />
@@ -665,6 +708,8 @@ export default function Report() {
               <span className="flex items-center"><Loader2 className="ml-2 w-5 h-5 mr-2 animate-spin" /> Uploading...</span>
             ) : outsideFence && !testMode ? (
               <span className="flex items-center"><AlertTriangle className="ml-2 w-5 h-5 mr-2" /> Outside Service Area</span>
+            ) : areaHidden && !testMode ? (
+              <span className="flex items-center"><AlertTriangle className="ml-2 w-5 h-5 mr-2" /> Not Live Yet</span>
             ) : (
               <span className="flex items-center">Submit Report <ArrowRight className="ml-2 w-6 h-6" /></span>
             )}

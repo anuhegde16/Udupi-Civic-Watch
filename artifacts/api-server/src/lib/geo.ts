@@ -3,10 +3,10 @@ import type { Officer } from "@workspace/db";
 import { isNull } from "drizzle-orm";
 import geofencesData from "../data/geofences.json";
 
-// ── Internal: which panchayat does a lat/lng fall inside? ───────────────────
+// ── Which panchayat does a lat/lng fall inside? ──────────────────────────────
 // Uses district-level (non-ward) polygons so it matches the service-area gate.
 // Returns null when the point is outside all known municipalities.
-function detectPanchayat(lat: number, lng: number): string | null {
+export function detectPanchayat(lat: number, lng: number): string | null {
   for (const feature of geofencesData.features) {
     const props = feature.properties as { type?: string; panchayat?: string };
     if (feature.geometry.type === "Polygon" && props.type !== "ward") {

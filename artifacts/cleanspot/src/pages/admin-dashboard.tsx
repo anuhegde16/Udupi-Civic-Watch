@@ -349,6 +349,27 @@ export default function AdminDashboard() {
     onError: (err: any) => toast({ title: "Failed to update test mode", description: err.message, variant: "destructive" }),
   });
 
+  // Per-panchayat public visibility (hide/unhide an area for the public without deleting any data)
+  const PANCHAYAT_DISPLAY_NAMES: Record<string, string> = {
+    Saligrama: "Saligrama Panchayat",
+    Udupi: "Udupi Municipality",
+  };
+  const { data: panchayatVisibility } = useQuery<Record<string, boolean>>({
+    queryKey: ["panchayat-visibility"],
+    queryFn: () => customFetch("/api/panchayat-visibility"),
+    staleTime: 30_000,
+  });
+  const setPanchayatVisibilityMutation = useMutation({
+    mutationFn: ({ panchayatName, isVisible }: { panchayatName: string; isVisible: boolean }) =>
+      customFetch("/api/admin/panchayat-visibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ panchayatName, isVisible }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["panchayat-visibility"] }),
+    onError: (err: any) => toast({ title: "Failed to update area visibility", description: err.message, variant: "destructive" }),
+  });
+
   const createPaForm = useForm<CreatePanchayatAdminValues>({
     resolver: zodResolver(createPanchayatAdminSchema),
     defaultValues: { name: "", email: "", password: "", panchayatName: "" },
@@ -1649,6 +1670,47 @@ export default function AdminDashboard() {
             </span>
             .
           </p>
+        </div>
+      </div>
+
+      {/* ── Area Availability ── */}
+      <div className="mt-5 sm:mt-8 bg-card rounded-2xl sm:rounded-3xl border border-border/50 shadow-sm p-5 sm:p-8">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+            <MapPin className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-foreground">Area Availability</h2>
+            <p className="text-xs text-muted-foreground font-medium">Hide an area from the public without deleting any data</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {Object.entries(panchayatVisibility ?? {}).map(([panchayatName, isVisible]) => (
+            <div key={panchayatName} className="flex items-center justify-between gap-4 p-4 bg-muted/40 rounded-2xl border border-border/50">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-black text-foreground">{PANCHAYAT_DISPLAY_NAMES[panchayatName] ?? panchayatName}</p>
+                  {isVisible ? (
+                    <span className="text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">Visible</span>
+                  ) : (
+                    <span className="text-[10px] font-bold bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">Hidden</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground font-medium">
+                  {isVisible
+                    ? "Citizens can report new issues here and existing reports show on the public map."
+                    : "New complaints are paused and existing reports are hidden from the public map. Staff can still manage the existing backlog — nothing was deleted."}
+                </p>
+              </div>
+              <Switch
+                checked={isVisible}
+                onCheckedChange={(checked) => setPanchayatVisibilityMutation.mutate({ panchayatName, isVisible: checked })}
+                disabled={setPanchayatVisibilityMutation.isPending}
+                className="shrink-0"
+              />
+            </div>
+          ))}
         </div>
       </div>
 

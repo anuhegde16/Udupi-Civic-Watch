@@ -12,10 +12,11 @@ import {
   ListReportsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth, getSessionUser } from "../lib/auth";
-import { findOfficerForLocation, isWithinServiceArea, udupiWardRings, pointInPolygon as pip, inUdupi } from "../lib/geo";
+import { findOfficerForLocation, isWithinServiceArea, udupiWardRings, pointInPolygon as pip, inUdupi, detectPanchayat } from "../lib/geo";
 import { notifyAndPush, sendPushToReportSubscriptions } from "../lib/push";
 import { analyseWastePhoto, toPublicImageUrl } from "../lib/waste-analysis";
 import { getTestMode } from "../lib/test-mode";
+import { getAllPanchayatVisibility, isPanchayatVisible } from "../lib/panchayat-visibility";
 
 const router: IRouter = Router();
 
@@ -74,7 +75,22 @@ router.get("/reports/public/map", async (req, res): Promise<void> => {
     .where(and(isNull(reportsTable.deletedAt), sql`${reportsTable.status} IN ('reported', 'cleaning', 'cleaned')`))
     .orderBy(sql`${reportsTable.createdAt} DESC`);
 
-  res.json(spots);
+  // Drop reports located in a panchayat a master admin has hidden from the
+  // public — the data isn't deleted, it just doesn't appear on the public map.
+  const visibility = await getAllPanchayatVisibility();
+  const visibleSpots = spots.filter((spot) => {
+    const panchayat = detectPanchayat(Number(spot.latitude), Number(spot.longitude));
+    return panchayat ? (visibility[panchayat] ?? true) : true;
+  });
+
+  res.json(visibleSpots);
+});
+
+// Public — lets the citizen-facing app know which areas are currently open,
+// so the report form can warn before submission instead of only after.
+router.get("/panchayat-visibility", async (req, res): Promise<void> => {
+  const visibility = await getAllPanchayatVisibility();
+  res.json(visibility);
 });
 
 router.get("/reports", requireAuth, async (req, res): Promise<void> => {
@@ -236,6 +252,17 @@ router.post("/reports", async (req, res): Promise<void> => {
   // Geo-fence: reject if outside the defined service area
   if (!isWithinServiceArea(latitude, longitude)) {
     res.status(422).json({ error: "Outside service area", message: "This location is outside the designated service area. Reports can only be submitted within the Saligrama or Udupi service zones." });
+    return;
+  }
+
+  // Area paused: a master admin has temporarily turned off complaint intake
+  // for this panchayat (existing reports and staff access are unaffected).
+  const reportPanchayat = detectPanchayat(latitude, longitude);
+  if (reportPanchayat && !(await isPanchayatVisible(reportPanchayat))) {
+    res.status(422).json({
+      error: "Area not active",
+      message: "Not active in your area yet — a word to your local administration can help speed things up. Thanks for caring enough to report; check back soon!",
+    });
     return;
   }
 

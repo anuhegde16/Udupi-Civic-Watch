@@ -40,6 +40,20 @@ router.post("/admin/test-mode", requireControlCenter, (req, res): void => {
   res.json({ testMode: getTestMode() });
 });
 
+// ── Panchayat public visibility (persisted — survives restarts) ────────────
+import { getAllPanchayatVisibility, setPanchayatVisibility } from "../lib/panchayat-visibility";
+
+router.post("/admin/panchayat-visibility", requireControlCenter, async (req, res): Promise<void> => {
+  const parsed = z.object({ panchayatName: z.string().min(1), isVisible: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "panchayatName (string) and isVisible (boolean) are required" });
+    return;
+  }
+  const adminUser = (req as any).user;
+  await setPanchayatVisibility(parsed.data.panchayatName, parsed.data.isVisible, adminUser?.email ?? null);
+  res.json(await getAllPanchayatVisibility());
+});
+
 router.get("/admin/reports", requireAdmin, async (req, res): Promise<void> => {
   const queryParsed = AdminListReportsQueryParams.safeParse(req.query);
   const status = queryParsed.success ? queryParsed.data.status : undefined;
