@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
 import geofencesData from "@/data/geofences.json";
 import { formatWardLabel } from "@/lib/ward-names";
@@ -80,20 +82,30 @@ const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 const DISTRICT_CENTER: [number, number] = [13.3409, 74.7421];
 const DISTRICT_ZOOM = 11;
 
-const zones: Zone[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
-  .map((f) => {
-    const coords = f.geometry.coordinates[0];
-    const lats = coords.map(([, lat]) => lat);
-    const lons = coords.map(([lon]) => lon);
-    return {
-      name: (f.properties as any)?.name ?? "Zone",
-      bounds: [
-        [Math.min(...lats), Math.min(...lons)],
-        [Math.max(...lats), Math.max(...lons)],
-      ],
-    };
-  });
+// Districts (Saligrama, Udupi, ...) a master admin has paused for the public
+// are left out entirely here — no chip, no boundary drawn on the map. The
+// area's data isn't touched; it's just not shown as an active service zone.
+function buildZones(visibility: Record<string, boolean>): Zone[] {
+  return geofencesData.features
+    .filter((f) => {
+      if (f.geometry.type !== "Polygon") return false;
+      const props = f.properties as any;
+      if (props?.type !== "district") return false;
+      return (visibility[props?.panchayat ?? props?.name] ?? true) !== false;
+    })
+    .map((f) => {
+      const coords = f.geometry.coordinates[0];
+      const lats = coords.map(([, lat]) => lat);
+      const lons = coords.map(([lon]) => lon);
+      return {
+        name: (f.properties as any)?.name ?? "Zone",
+        bounds: [
+          [Math.min(...lats), Math.min(...lons)],
+          [Math.max(...lats), Math.max(...lons)],
+        ],
+      };
+    });
+}
 
 async function fetchSpots(): Promise<WasteSpot[]> {
   const res = await fetch(`${BASE_URL}/api/reports/public/map`);
@@ -110,10 +122,27 @@ export function LiveWasteMap() {
   const youAreHereRef = useRef<any>(null);
   const [count, setCount] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
-  const [activeZone, setActiveZone] = useState<string | null>(zones[0]?.name ?? null);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [activeZone, setActiveZone] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const { lightbox, open: openLightbox } = useImageLightbox();
+
+  // Which areas are currently open to the public. A master admin can pause
+  // one (e.g. Udupi) without deleting anything — this just keeps it off the
+  // "available service areas" list and off the map until it's turned back on.
+  const {
+    data: panchayatVisibility,
+    isFetched: visibilityFetched,
+    isError: visibilityErrored,
+  } = useQuery<Record<string, boolean>>({
+    queryKey: ["panchayat-visibility"],
+    queryFn: () => customFetch("/api/panchayat-visibility"),
+    staleTime: 30_000,
+  });
+  // Wait for the visibility list (success or failure) before drawing the map
+  // so a paused area never flashes on screen for a moment before disappearing.
+  const visibilityReady = visibilityFetched || visibilityErrored;
   const openLightboxRef = useRef(openLightbox);
   useEffect(() => {
     openLightboxRef.current = openLightbox;
@@ -167,6 +196,16 @@ export function LiveWasteMap() {
   };
 
   useEffect(() => {
+    // Wait for the area-visibility list before drawing anything — this is
+    // what keeps a paused area (e.g. Udupi) off the map and out of the
+    // service-area chips from the very first paint.
+    if (!visibilityReady) return;
+
+    const visibility = panchayatVisibility ?? {};
+    const filteredZones = buildZones(visibility);
+    setZones(filteredZones);
+    setActiveZone(filteredZones[0]?.name ?? null);
+
     async function init() {
       const L = (await import("leaflet")).default;
       await import("leaflet/dist/leaflet.css");
@@ -179,9 +218,9 @@ export function LiveWasteMap() {
         scrollWheelZoom: false,
       });
 
-      // Start fitted to the first service zone (Saligrama); fall back to district
-      if (zones[0]) {
-        map.fitBounds(zones[0].bounds, { padding: [24, 24] });
+      // Start fitted to the first available service zone; fall back to district
+      if (filteredZones[0]) {
+        map.fitBounds(filteredZones[0].bounds, { padding: [24, 24] });
       } else {
         map.setView(DISTRICT_CENTER, DISTRICT_ZOOM);
       }
@@ -193,6 +232,10 @@ export function LiveWasteMap() {
       for (const feature of geofencesData.features) {
         if (feature.geometry.type === "Polygon") {
           const props = feature.properties as any;
+          // Skip a panchayat a master admin has paused for the public — no
+          // district frame, no ward lines, as if it isn't part of the
+          // service footprint right now. Nothing is deleted server-side.
+          if ((visibility[props?.panchayat] ?? true) === false) continue;
           const isWard = props?.type === "ward";
           const latlngs = feature.geometry.coordinates[0].map(
             ([lon, lat]) => [lat, lon] as [number, number]
@@ -243,7 +286,7 @@ export function LiveWasteMap() {
         youAreHereRef.current = null;
       }
     };
-  }, []);
+  }, [visibilityReady]);
 
   function placeMarkers(L: any, map: any, data: WasteSpot[]) {
     markersRef.current.forEach((m) => m.remove());
@@ -531,7 +574,7 @@ export function LiveWasteMap() {
               Live Waste Map
             </span>
             <span className="text-xs text-muted-foreground font-medium ml-1">
-              — {count} active {count === 1 ? "report" : "reports"}{activeZone ? ` in ${activeZone}` : " in Udupi District"}
+              — {count} active {count === 1 ? "report" : "reports"}{activeZone ? ` in ${activeZone}` : " across active service areas"}
             </span>
           </div>
           <button

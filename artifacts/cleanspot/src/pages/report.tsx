@@ -122,8 +122,12 @@ export default function Report() {
     return undefined;
   }, []);
 
-  const udupiWardRings = useMemo(() => (
-    geofencesData.features
+  const udupiWardRings = useMemo(() => {
+    // Don't draw Udupi's ward boundaries at all while a master admin has
+    // paused the area for the public — the map should look like the area
+    // simply isn't part of the service footprint right now.
+    if (panchayatVisibility?.Udupi === false) return [];
+    return geofencesData.features
       .filter(
         (feature) =>
           feature.geometry.type === "Polygon" &&
@@ -133,8 +137,8 @@ export default function Report() {
       .map((feature) => ({
         name: (feature.properties as { name?: string }).name ?? "Udupi ward",
         ring: feature.geometry.coordinates[0] as [number, number][],
-      }))
-  ), []);
+      }));
+  }, [panchayatVisibility]);
 
   const outsideFence = useMemo(() => {
     if (!location) return false;
