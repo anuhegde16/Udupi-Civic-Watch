@@ -40,6 +40,14 @@ export default defineConfig({
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
+      injectManifest: {
+        // Default cap is 2 MiB. The main JS bundle inlines the panchayat ward-boundary
+        // GeoJSON data (src/data/geofences.json), which grows every time a new
+        // panchayat/municipality is onboarded (Saligrama + Udupi + Kundapura pushed it
+        // to ~2.16 MB). Raised to give headroom for future areas; bump again if this
+        // build error reappears ("Configure injectManifest.maximumFileSizeToCacheInBytes").
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      },
       manifest: {
         name: "Udupi Civic Watch",
         short_name: "Udupi Civic Watch",
