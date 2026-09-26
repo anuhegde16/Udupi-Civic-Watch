@@ -38,28 +38,61 @@ export const UDUPI_WARD_NAMES: Record<number, string> = {
 };
 
 /**
- * Formats a geofence ward identifier (e.g. "Udupi Ward 16") into a human-readable
- * label that includes the number and the official ward name (e.g. "16 · Parkala").
- *
- * Udupi wards have official names on file, so they get the fuller "N · Name"
- * label. Every other panchayat's ward identifier — "Ward 1" for Saligrama,
- * "Kundapura Ward 4" for Kundapura, or any future "<Panchayat> Ward N" — has
- * no name mapping yet, so it's shortened to a plain "Ward N" (dropping the
- * panchayat prefix, which is only needed internally to keep ward keys unique
- * across panchayats). Anything that doesn't match either shape is returned
- * unchanged.
+ * Ward names for Kundapura, transliterated from the Kundapura Town Municipal
+ * Council's ward-level nodal officer list. These are phonetic English
+ * spellings, not official gazetted names, but they're what residents and
+ * staff will recognize each ward by until an official list is available.
+ */
+export const KUNDAPURA_WARD_NAMES: Record<number, string> = {
+  1: "Ferry",
+  2: "Maddugudde",
+  3: "East Block",
+  4: "Khaarvi Keri",
+  5: "Bahaddur Sha",
+  6: "Chikkan Sal Raste Edabadi",
+  7: "Meenu Market",
+  8: "Chikkan Sal Balabadi",
+  9: "Sarkari Aspatre",
+  10: "Church Raste",
+  11: "Central",
+  12: "West Block",
+  13: "Mangaluru Tiles Factory",
+  14: "Kodi Dakshina",
+  15: "Kodi Madhya",
+  16: "Kodi Uttara",
+  17: "TT",
+  18: "Nana Saheb",
+  19: "JLB",
+  20: "Kundeshwar",
+  21: "Huncher Bettu",
+  22: "Shanti Niketan",
+  23: "Kallangar",
+};
+
+/** Ward-name lookups, keyed by panchayat, for every panchayat that has one on file. */
+const WARD_NAMES_BY_PANCHAYAT: Record<string, Record<number, string>> = {
+  Udupi: UDUPI_WARD_NAMES,
+  Kundapura: KUNDAPURA_WARD_NAMES,
+};
+
+/**
+ * Formats a geofence ward identifier (e.g. "Udupi Ward 16" or "Kundapura Ward 4")
+ * into a human-readable label. When a name is on file for that panchayat's ward
+ * (Udupi, Kundapura), it's shown as "N · Name" (e.g. "16 · Parkala"). Otherwise
+ * — Saligrama's own "Ward 1" … "Ward 16" (no panchayat prefix at all), a future
+ * panchayat with no name list yet, or an unmatched string — it falls back to
+ * a plain "Ward N" (dropping the panchayat prefix, which is only needed
+ * internally to keep ward keys unique across panchayats) or is returned
+ * unchanged if it isn't a ward identifier at all.
  */
 export function formatWardLabel(geoName: string | null | undefined): string {
   if (!geoName) return "";
-  const udupiMatch = geoName.match(/^Udupi Ward (\d+)$/);
-  if (udupiMatch) {
-    const num = parseInt(udupiMatch[1], 10);
-    const name = UDUPI_WARD_NAMES[num];
-    return name ? `${num} · ${name}` : geoName;
-  }
-  const genericMatch = geoName.match(/^(?:[A-Za-z]+\s+)?Ward (\d+)$/);
-  if (genericMatch) return `Ward ${genericMatch[1]}`;
-  return geoName;
+  const match = geoName.match(/^(?:([A-Za-z]+)\s+)?Ward (\d+)$/);
+  if (!match) return geoName;
+  const [, panchayat, numStr] = match;
+  const num = parseInt(numStr, 10);
+  const name = panchayat ? WARD_NAMES_BY_PANCHAYAT[panchayat]?.[num] : undefined;
+  return name ? `${num} · ${name}` : `Ward ${num}`;
 }
 
 /**

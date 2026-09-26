@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatWardLabel, formatWardChartLabel, UDUPI_WARD_NAMES } from "./ward-names";
+import { formatWardLabel, formatWardChartLabel, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES } from "./ward-names";
 
 describe("formatWardLabel", () => {
   it("formats a known Udupi ward identifier", () => {
@@ -23,12 +23,24 @@ describe("formatWardLabel", () => {
     expect(formatWardLabel("Ward 16")).toBe("Ward 16");
   });
 
-  it("shortens Kundapura (and any other panchayat's) ward identifiers to plain \"Ward N\"", () => {
-    // Kundapura has no official ward-name mapping yet, so its geofence keys
-    // ("Kundapura Ward 4") are shown without the panchayat prefix, which is
-    // only needed internally to keep ward keys unique across panchayats.
-    expect(formatWardLabel("Kundapura Ward 4")).toBe("Ward 4");
-    expect(formatWardLabel("Kundapura Ward 23")).toBe("Ward 23");
+  it("formats a known Kundapura ward identifier with its name", () => {
+    expect(formatWardLabel("Kundapura Ward 4")).toBe("4 · Khaarvi Keri");
+    expect(formatWardLabel("Kundapura Ward 1")).toBe("1 · Ferry");
+    expect(formatWardLabel("Kundapura Ward 23")).toBe("23 · Kallangar");
+  });
+
+  it("formats all 23 Kundapura wards without returning the original string", () => {
+    for (let i = 1; i <= 23; i++) {
+      const input = `Kundapura Ward ${i}`;
+      const result = formatWardLabel(input);
+      expect(result).not.toBe(input);
+      expect(result).toBe(`${i} · ${KUNDAPURA_WARD_NAMES[i]}`);
+    }
+  });
+
+  it("shortens a panchayat's ward identifier to plain \"Ward N\" when no name is on file", () => {
+    // A future panchayat (or any typo'd/unknown one) with no name mapping yet
+    // still gets the panchayat prefix dropped, just without a name attached.
     expect(formatWardLabel("Unknown Ward 99")).toBe("Ward 99");
   });
 
