@@ -23,9 +23,17 @@ describe("formatWardLabel", () => {
     expect(formatWardLabel("Ward 16")).toBe("Ward 16");
   });
 
+  it("shortens Kundapura (and any other panchayat's) ward identifiers to plain \"Ward N\"", () => {
+    // Kundapura has no official ward-name mapping yet, so its geofence keys
+    // ("Kundapura Ward 4") are shown without the panchayat prefix, which is
+    // only needed internally to keep ward keys unique across panchayats.
+    expect(formatWardLabel("Kundapura Ward 4")).toBe("Ward 4");
+    expect(formatWardLabel("Kundapura Ward 23")).toBe("Ward 23");
+    expect(formatWardLabel("Unknown Ward 99")).toBe("Ward 99");
+  });
+
   it("leaves unknown or arbitrary strings unchanged", () => {
     expect(formatWardLabel("Saligrama")).toBe("Saligrama");
-    expect(formatWardLabel("Unknown Ward 99")).toBe("Unknown Ward 99");
     expect(formatWardLabel("")).toBe("");
   });
 

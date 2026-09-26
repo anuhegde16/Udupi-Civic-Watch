@@ -41,18 +41,25 @@ export const UDUPI_WARD_NAMES: Record<number, string> = {
  * Formats a geofence ward identifier (e.g. "Udupi Ward 16") into a human-readable
  * label that includes the number and the official ward name (e.g. "16 · Parkala").
  *
- * Only transforms strings that match the exact pattern "Udupi Ward <N>" so that
- * Saligrama ward identifiers ("Ward 1" … "Ward 16") and any other strings are
- * returned unchanged.
+ * Udupi wards have official names on file, so they get the fuller "N · Name"
+ * label. Every other panchayat's ward identifier — "Ward 1" for Saligrama,
+ * "Kundapura Ward 4" for Kundapura, or any future "<Panchayat> Ward N" — has
+ * no name mapping yet, so it's shortened to a plain "Ward N" (dropping the
+ * panchayat prefix, which is only needed internally to keep ward keys unique
+ * across panchayats). Anything that doesn't match either shape is returned
+ * unchanged.
  */
 export function formatWardLabel(geoName: string | null | undefined): string {
   if (!geoName) return "";
-  const m = geoName.match(/^Udupi Ward (\d+)$/);
-  if (!m) return geoName;
-  const num = parseInt(m[1], 10);
-  const name = UDUPI_WARD_NAMES[num];
-  if (!name) return geoName;
-  return `${num} · ${name}`;
+  const udupiMatch = geoName.match(/^Udupi Ward (\d+)$/);
+  if (udupiMatch) {
+    const num = parseInt(udupiMatch[1], 10);
+    const name = UDUPI_WARD_NAMES[num];
+    return name ? `${num} · ${name}` : geoName;
+  }
+  const genericMatch = geoName.match(/^(?:[A-Za-z]+\s+)?Ward (\d+)$/);
+  if (genericMatch) return `Ward ${genericMatch[1]}`;
+  return geoName;
 }
 
 /**
