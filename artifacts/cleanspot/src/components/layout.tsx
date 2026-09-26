@@ -410,14 +410,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             Trip Nirvigna
           </a>{" "}
-          | Digital marketing by{" "}
           <a
             href="https://www.marketing.tripnirvigna.com"
             target="_blank"
             rel="noopener"
+            aria-label="Digital marketing by Trip Nirvigna Marketing"
             className="text-inherit hover:underline"
           >
-            Trip Nirvigna Marketing
+            &middot;
           </a>
         </p>
       </footer>
