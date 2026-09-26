@@ -132,6 +132,11 @@ router.post("/officers", requirePanchayatOrControlCenter, async (req, res): Prom
     role: "field_officer",
     officerId: String(officer.id),
     panchayatName: panchayatName ?? null,
+    // Store the raw phone number too, so the officer can log in by typing
+    // just their phone number (no "@") — the login route looks this column
+    // up directly for phone-style identifiers. Mirrors the pattern already
+    // used for Udupi hierarchy accounts (see index.ts ensureUser()).
+    phone: phone ?? null,
   });
 
   sendWelcomeEmail(officer).catch((err) => logger.warn({ err }, "Unhandled error in welcome email"));
