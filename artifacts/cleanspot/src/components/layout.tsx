@@ -389,7 +389,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-border/50 bg-card/50 py-4 px-4 text-center space-y-1">
         <p className="text-xs text-muted-foreground font-medium">
-          Conceptualized, Designed &amp; Developed by Anudeep Hegde | Implemented in collaboration with Udupi District Administration
+          A civic initiative by Anudeep Hegde | Implemented in collaboration with the Udupi District Administration, led by Deputy Commissioner Smt. Swaroopa T.K., IAS
         </p>
         <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
           © 2026 Udupi Civic Watch. All rights reserved. | | Powered by Trip Nirvigna
