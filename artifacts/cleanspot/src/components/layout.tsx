@@ -389,10 +389,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="border-t border-border/50 bg-card/50 py-4 px-4 text-center space-y-1">
         <p className="text-xs text-muted-foreground font-medium">
-          A civic initiative by Anudeep Hegde | Implemented in collaboration with the Udupi District Administration, led by Deputy Commissioner Smt. Swaroopa T.K., IAS
+          A civic initiative by{" "}
+          <a
+            href="https://www.anudeephegde.com"
+            target="_blank"
+            rel="noopener"
+            className="text-inherit hover:underline"
+          >
+            Anudeep Hegde
+          </a>{" "}
+          | Implemented in collaboration with the Udupi District Administration, led by Deputy Commissioner Smt. Swaroopa T.K., IAS
         </p>
         <p className="text-[10px] text-muted-foreground/50 font-medium tracking-wide">
-          © 2026 Udupi Civic Watch. All rights reserved. | | Powered by Trip Nirvigna
+          © 2026 Udupi Civic Watch. All rights reserved. | Powered by{" "}
+          <a
+            href="https://www.tripnirvigna.com"
+            target="_blank"
+            rel="noopener"
+            className="text-inherit hover:underline"
+          >
+            Trip Nirvigna
+          </a>{" "}
+          | Digital marketing by{" "}
+          <a
+            href="https://www.marketing.tripnirvigna.com"
+            target="_blank"
+            rel="noopener"
+            className="text-inherit hover:underline"
+          >
+            Trip Nirvigna Marketing
+          </a>
         </p>
       </footer>
 
