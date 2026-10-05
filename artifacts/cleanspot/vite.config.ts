@@ -39,7 +39,7 @@ export default defineConfig({
       filename: "sw.ts",
       registerType: "autoUpdate",
       injectRegister: "auto",
-      includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png"],
+      includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"],
       injectManifest: {
         // Default cap is 2 MiB. The main JS bundle inlines the panchayat ward-boundary
         // GeoJSON data (src/data/geofences.json), which grows every time a new
@@ -49,27 +49,23 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       manifest: {
+        id: "/",
         name: "Udupi Civic Watch",
         short_name: "Udupi Civic Watch",
         description: "Report and track waste in Udupi District — Swachh Bharat Mission",
+        lang: "en-IN",
         display: "standalone",
         orientation: "portrait-primary",
         start_url: "/",
+        scope: "/",
         background_color: "#0d9488",
         theme_color: "#0d9488",
+        categories: ["utilities", "government"],
         icons: [
-          {
-            src: "icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-            purpose: "any maskable",
-          },
-          {
-            src: "icon-512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any maskable",
-          },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icon-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: "icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       devOptions: {
