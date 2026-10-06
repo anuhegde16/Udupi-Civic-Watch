@@ -16,13 +16,8 @@ import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { NotificationBell } from "@/components/notification-bell";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
+import { useInstallPwa } from "@/hooks/use-install-pwa";
 import { getAnalyticsPath, getDashboardLabel, getDashboardPath } from "@/lib/role-navigation";
-
-// BeforeInstallPromptEvent is not in standard TS DOM lib
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
 
 // ── Push Permission Modal ─────────────────────────────────────────────────────
 function PushPermissionModal() {
@@ -114,43 +109,18 @@ function PushPermissionModal() {
 // ── PWA Install Banner ────────────────────────────────────────────────────────
 function PwaInstallBanner() {
   const { isAuthenticated } = useAuth();
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const { isInstalled, hasNativePrompt, promptInstall } = useInstallPwa();
   const [dismissed, setDismissed] = useState(() => localStorage.getItem("pwa-install-dismissed") === "1");
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  useEffect(() => {
-    // Already running as installed PWA
-    if (
-      window.matchMedia("(display-mode: standalone)").matches ||
-      ("standalone" in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true)
-    ) {
-      setIsStandalone(true);
-      return;
-    }
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
 
   // Only show on mobile-ish viewports
   const isMobile =
     typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
-  if (!isAuthenticated || isStandalone || dismissed || !deferredPrompt || !isMobile) return null;
+  if (!isAuthenticated || isInstalled || dismissed || !hasNativePrompt || !isMobile) return null;
 
   const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      localStorage.setItem("pwa-install-dismissed", "1");
-    }
+    await promptInstall();
     setDismissed(true);
-    setDeferredPrompt(null);
   };
 
   const handleDismiss = () => {

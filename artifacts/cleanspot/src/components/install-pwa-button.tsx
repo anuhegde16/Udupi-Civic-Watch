@@ -4,7 +4,8 @@ import { Download, X, Share, Smartphone } from "lucide-react";
 import { useInstallPwa } from "@/hooks/use-install-pwa";
 
 export function InstallPwaButton() {
-  const { isInstalled, isIos, hasNativePrompt, promptInstall } = useInstallPwa();
+  const { isInstalled, isIos, isIosSafari, isAndroid, inAppBrowser, hasNativePrompt, promptInstall, openInChromeUrl } =
+    useInstallPwa();
   const [showGuide, setShowGuide] = useState(false);
 
   if (isInstalled) return null;
@@ -42,6 +43,13 @@ export function InstallPwaButton() {
           {isIos ? (
             <>
               <p className="font-bold text-sm mb-3">Install on iPhone / iPad</p>
+              {!isIosSafari && (
+                <p className="text-sm text-amber-700 bg-amber-50 rounded-lg p-2 mb-3">
+                  {inAppBrowser
+                    ? "You are inside another app's browser. Tap ⋯ or the compass icon and choose \"Open in Safari\", then follow these steps."
+                    : "For the best result, open this page in Safari, then follow these steps."}
+                </p>
+              )}
               <ol className="space-y-3 text-sm text-gray-700">
                 <li className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center shrink-0 font-bold mt-0.5">1</span>
@@ -69,17 +77,39 @@ export function InstallPwaButton() {
                 <Smartphone className="w-4 h-4 text-primary" />
                 Install on your phone
               </p>
-              <p className="text-sm text-gray-600 mb-3">Open this page on your phone's browser to install.</p>
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">Android:</span>
-                  <span>Tap <span className="font-semibold">⋮ Menu → Add to Home Screen</span> in Chrome</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold">iPhone:</span>
-                  <span>Tap <span className="font-semibold">Share → Add to Home Screen</span> in Safari</span>
-                </li>
-              </ul>
+              {isAndroid ? (
+                <>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {inAppBrowser
+                      ? "This page is open inside another app. One-tap install works in Chrome."
+                      : "One-tap install is not offered in this browser right now."}
+                  </p>
+                  <a
+                    href={openInChromeUrl}
+                    className="inline-flex items-center justify-center w-full h-10 rounded-xl bg-primary text-white text-sm font-bold mb-3"
+                  >
+                    Open in Chrome to install
+                  </a>
+                  <p className="text-xs text-gray-600">
+                    Already in Chrome? Tap <span className="font-semibold">⋮ Menu → Install app</span> (or{" "}
+                    <span className="font-semibold">Add to Home screen</span>).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-600 mb-3">Open this page on your phone's browser to install.</p>
+                  <ul className="space-y-2 text-sm text-gray-700">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold">Android:</span>
+                      <span>Open in Chrome, then tap <span className="font-semibold">⋮ Menu → Install app</span></span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary font-bold">iPhone:</span>
+                      <span>Tap <span className="font-semibold">Share → Add to Home Screen</span> in Safari</span>
+                    </li>
+                  </ul>
+                </>
+              )}
             </>
           )}
         </div>
