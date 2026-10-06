@@ -169,6 +169,16 @@ export default function Report() {
     getLocation();
   }, []);
 
+  // GPS acquisition runs in two stages so a usable position appears quickly and then
+  // sharpens, instead of failing outright.
+  //
+  // Previously this asked for a high-accuracy fix with a 5s timeout and maximumAge: 0.
+  // A cold GPS lock routinely takes 15-45s outdoors and may never resolve indoors, so
+  // on many phones the request simply expired and the report could not be submitted.
+  //
+  // Stage 1 takes a fast coarse fix (cell/wifi, recent cached value allowed) so the user
+  // can proceed within a second or two. Stage 2 asks for a precise fix with a realistic
+  // timeout and silently upgrades the pin when it arrives.
   const getLocation = () => {
     setIsLocating(true);
     if (!navigator.geolocation) {
@@ -177,44 +187,65 @@ export default function Report() {
       return;
     }
 
-    let resolved = false;
+    let haveFix = false;
+    let bestAccuracy = Infinity;
+    let pendingStages = 2;
 
-    const fallbackTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        setIsLocating(false);
-        toast({ title: "Location unavailable", description: "Could not get your GPS location. Please ensure location permission is granted and try again.", variant: "destructive" });
-      }
-    }, 5000);
+    const accept = (pos: GeolocationPosition) => {
+      const accuracy = pos.coords.accuracy ?? Infinity;
+      // Keep the sharpest fix seen; a late coarse result must not replace a precise one.
+      if (haveFix && accuracy >= bestAccuracy) return;
+      bestAccuracy = accuracy;
+      haveFix = true;
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setGeoLocation(coords);
+      setGpsCoords(coords);
+      setIsLocating(false);
+    };
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(fallbackTimer);
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGeoLocation(coords);
-        setGpsCoords(coords);
-        setIsLocating(false);
-      },
-      (err) => {
-        if (resolved) return;
-        resolved = true;
-        clearTimeout(fallbackTimer);
+    const fail = (err: GeolocationPositionError) => {
+      pendingStages -= 1;
+      // Permission denial is final — no later stage can succeed.
+      if (err.code === err.PERMISSION_DENIED) {
+        pendingStages = 0;
+        if (haveFix) return;
         setIsLocating(false);
         if (testMode) {
           setLocationMode("manual");
           toast({ title: "GPS unavailable — using manual placement", description: "Test mode active: drag the pin to set the report location." });
         } else {
-          if (err.code === 1) {
-            setLocationPermState("denied");
-          } else {
-            toast({ title: "Location unavailable", description: "Could not get your GPS location. Please ensure location permission is granted and try again.", variant: "destructive" });
-          }
+          setLocationPermState("denied");
         }
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
+        return;
+      }
+      // Otherwise only report failure once every stage has given up.
+      if (pendingStages > 0 || haveFix) return;
+      setIsLocating(false);
+      if (testMode) {
+        setLocationMode("manual");
+        toast({ title: "GPS unavailable — using manual placement", description: "Test mode active: drag the pin to set the report location." });
+      } else {
+        toast({
+          title: "Location unavailable",
+          description: "Could not get a GPS fix. Step outside or near a window, make sure location is switched on, then tap Retry.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    // Stage 1 — quick and coarse. Usually answers in well under a second.
+    navigator.geolocation.getCurrentPosition(accept, fail, {
+      enableHighAccuracy: false,
+      timeout: 10000,
+      maximumAge: 120000,
+    });
+
+    // Stage 2 — precise, with a timeout long enough for a real satellite lock.
+    navigator.geolocation.getCurrentPosition(accept, fail, {
+      enableHighAccuracy: true,
+      timeout: 30000,
+      maximumAge: 0,
+    });
   };
 
   const startUpload = (photoId: string, dataUrl: string) => {
@@ -264,27 +295,24 @@ export default function Report() {
     setPhotos(prev => prev.filter(p => p.id !== id));
   };
 
-  // Trigger the hidden file input and add a visibilitychange heuristic to detect
-  // silent camera denial (browser returns to foreground without onChange firing).
+  // Opens the phone's own camera app via the hidden file input.
+  //
+  // IMPORTANT: <input type="file" capture="environment"> hands off to the native camera
+  // app. It does NOT use the browser's camera permission, so it keeps working even when
+  // getUserMedia (live stream access) is blocked or unsupported. Nothing here may gate
+  // this call behind a permission check.
   const triggerFileInput = () => {
     fileInputRef.current?.click();
-    if (!("permissions" in navigator)) return;
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      document.removeEventListener("visibilitychange", onVisible);
-      // Small delay so onChange can fire before we check the permission state
-      setTimeout(() => {
-        navigator.permissions.query({ name: "camera" as PermissionName }).then((s) => {
-          if (s.state === "denied") setCameraPermState("denied");
-        }).catch(() => {});
-      }, 400);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    // Clean up listener if user never opened the picker (e.g. cancelled immediately)
-    setTimeout(() => document.removeEventListener("visibilitychange", onVisible), 60_000);
   };
 
-  // Invoke browser camera permission dialog via getUserMedia, then open file input on grant.
+  // Optional nicety: ask for the browser camera permission so the user sees a single
+  // familiar prompt. The result never decides whether the camera opens — the native
+  // camera app is always launched afterwards.
+  //
+  // Previously a getUserMedia rejection marked the camera "denied" and returned early,
+  // so the picker never opened. getUserMedia fails for many reasons that have nothing to
+  // do with permission (another app holding the camera, no WebRTC video device, browser
+  // quirks on budget handsets), which is why the camera appeared dead on some phones.
   const handleEnableCamera = async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       triggerFileInput();
@@ -294,10 +322,14 @@ export default function Report() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach(t => t.stop());
       setCameraPermState("granted");
-      triggerFileInput();
-    } catch {
-      setCameraPermState("denied");
+    } catch (err) {
+      // Only an explicit refusal counts as denial; every other failure is irrelevant
+      // to the native camera app.
+      const name = (err as DOMException | undefined)?.name;
+      setCameraPermState(name === "NotAllowedError" || name === "SecurityError" ? "denied" : "unknown");
     }
+    // Always open the camera, whatever happened above.
+    triggerFileInput();
   };
 
   const doSubmit = (email?: string, force?: boolean) => {
@@ -449,11 +481,11 @@ export default function Report() {
               </div>
               <div>
                 <p className="font-bold text-amber-800 dark:text-amber-300">
-                  {cameraPermState === "denied" ? "Camera access blocked" : "Camera access needed"}
+                  {cameraPermState === "denied" ? "Camera permission blocked" : "Camera access needed"}
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
                   {cameraPermState === "denied"
-                    ? "Your browser has blocked camera access. Tap below to try again."
+                    ? "Your browser blocked in-page camera access, but you can still take a photo — tap below to open your phone's camera."
                     : "Tap below to grant camera access so you can take a photo."}
                 </p>
               </div>
@@ -466,7 +498,7 @@ export default function Report() {
               </Button>
               {cameraPermState === "denied" && (
                 <p className="text-[11px] text-amber-600/80 dark:text-amber-500">
-                  If still blocked, tap the lock icon in your browser's address bar and allow Camera access
+                  If the camera still does not open, tap the lock icon in your browser's address bar and allow Camera access
                 </p>
               )}
             </div>
