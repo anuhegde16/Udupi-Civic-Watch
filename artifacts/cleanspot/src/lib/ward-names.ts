@@ -99,11 +99,40 @@ export const KAUP_WARD_NAMES: Record<number, string> = {
   23: "Ahmadhi Mohalla",
 };
 
+/**
+ * Ward names for Byndoor, read from the Byndoor Town Panchayat's ward list (Kannada)
+ * and written in English letters. These are phonetic spellings, not gazetted names;
+ * the KGIS ward layer that the polygons come from has no names for Byndoor.
+ */
+export const BYNDOOR_WARD_NAMES: Record<number, string> = {
+  1: "Tarapati",
+  2: "Virupakshi",
+  3: "Dombe",
+  4: "Someshwara",
+  5: "Panchalingeshwara",
+  6: "Alandur",
+  7: "Kadke Maddodi",
+  8: "Yojananagara",
+  9: "Bankeshwara",
+  10: "Byndoor Pete",
+  11: "Venkatramana",
+  12: "Pantigaradi",
+  13: "Yedthare",
+  14: "Mayyadi Kalavadi",
+  15: "Bada Biyara",
+  16: "Surkunda",
+  17: "Ganganadu",
+  18: "Chandana Vasre",
+  19: "Taggarse Pete",
+  20: "Nelyadi Kadodi",
+};
+
 /** Ward-name lookups, keyed by panchayat, for every panchayat that has one on file. */
 const WARD_NAMES_BY_PANCHAYAT: Record<string, Record<number, string>> = {
   Udupi: UDUPI_WARD_NAMES,
   Kundapura: KUNDAPURA_WARD_NAMES,
   Kaup: KAUP_WARD_NAMES,
+  Byndoor: BYNDOOR_WARD_NAMES,
 };
 
 /**
