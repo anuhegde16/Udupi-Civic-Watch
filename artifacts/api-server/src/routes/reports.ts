@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, reportsTable, officersTable, usersTable } from "@workspace/db";
-import { eq, sql, and, gte, inArray, isNull } from "drizzle-orm";
+import { eq, sql, and, gte, inArray, isNull, isNotNull, desc } from "drizzle-orm";
 import { sendAssignmentEmail, sendStatusUpdateEmail, sendNewReportToPanchayatAdmins, sendReporterAcknowledgement, sendReporterStatusUpdate, type EmailAnalytics } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
@@ -84,6 +84,68 @@ router.get("/reports/public/map", async (req, res): Promise<void> => {
   });
 
   res.json(visibleSpots);
+});
+
+// Public — recent cleanups that have both a "before" and an "after" photo,
+// for the home-page gallery. Test reports and hidden panchayats are left out.
+router.get("/reports/public/before-after", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: reportsTable.id,
+      latitude: reportsTable.latitude,
+      longitude: reportsTable.longitude,
+      address: reportsTable.address,
+      createdAt: reportsTable.createdAt,
+      cleanedAt: reportsTable.cleanedAt,
+      imageUrl: reportsTable.imageUrl,
+      imageUrls: reportsTable.imageUrls,
+      cleanupImageUrl: reportsTable.cleanupImageUrl,
+      cleanupImageUrls: reportsTable.cleanupImageUrls,
+    })
+    .from(reportsTable)
+    .where(
+      and(
+        isNull(reportsTable.deletedAt),
+        eq(reportsTable.status, "cleaned"),
+        eq(reportsTable.isTest, false),
+        isNotNull(reportsTable.cleanedAt),
+      ),
+    )
+    .orderBy(desc(reportsTable.cleanedAt))
+    .limit(60);
+
+  const visibility = await getAllPanchayatVisibility();
+  const pairs: {
+    id: number;
+    panchayat: string | null;
+    address: string | null;
+    cleanedAt: Date;
+    daysToClean: number;
+    beforeUrl: string;
+    afterUrl: string;
+  }[] = [];
+
+  for (const r of rows) {
+    const panchayat = detectPanchayat(Number(r.latitude), Number(r.longitude));
+    if (panchayat && (visibility[panchayat] ?? true) === false) continue;
+    const beforeUrl = r.imageUrls?.[0]?.url ?? r.imageUrl;
+    const afterUrl = r.cleanupImageUrls?.[0]?.url ?? r.cleanupImageUrl;
+    if (!beforeUrl || !afterUrl || !r.cleanedAt) continue;
+    const days = Math.round((r.cleanedAt.getTime() - r.createdAt.getTime()) / 86_400_000);
+    pairs.push({
+      id: r.id,
+      panchayat,
+      address: r.address,
+      cleanedAt: r.cleanedAt,
+      daysToClean: Math.max(0, days),
+      beforeUrl,
+      afterUrl,
+    });
+    if (pairs.length === 6) break;
+  }
+
+  res.set("Cache-Control", "public, max-age=300");
+  res.json(pairs);
 });
 
 // Public — lets the citizen-facing app know which areas are currently open,

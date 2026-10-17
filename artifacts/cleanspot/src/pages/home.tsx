@@ -5,6 +5,7 @@ import { LiveWasteMap } from "@/components/live-waste-map";
 import { InstallPwaButton } from "@/components/install-pwa-button";
 import { NotificationHomePill } from "@/components/notification-cta-banner";
 import { MyReports } from "@/components/my-reports";
+import { BeforeAfterGallery } from "@/components/before-after-gallery";
 
 export default function Home() {
   return (
@@ -69,6 +70,9 @@ export default function Home() {
           <LiveWasteMap />
         </div>
       </section>
+
+      {/* Before / after gallery (hidden until there is a cleanup with both photos) */}
+      <BeforeAfterGallery />
 
       {/* Stats Section */}
       <section className="py-12 mb-16">

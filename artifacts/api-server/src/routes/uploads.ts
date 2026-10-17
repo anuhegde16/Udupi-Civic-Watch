@@ -20,6 +20,11 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/bmp",
 ]);
 
+/** Widths the image route will resize to on request (?w=...). */
+const THUMB_WIDTHS = new Set([480, 800]);
+const THUMB_CACHE_MAX = 200;
+const thumbCache = new Map<string, Buffer>();
+
 /** Maximum raw (decoded) file size: 10 MB. */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -85,6 +90,31 @@ router.get("/uploads/files/:filename", async (req, res): Promise<void> => {
     const result = await driver.read(filename);
     if (!result) {
       res.status(404).json({ error: "File not found" });
+      return;
+    }
+
+    // Optional smaller copy (?w=480 or ?w=800) for phones on mobile data.
+    // Stored files never change, so the resized copy is cached in memory.
+    const width = Number(req.query.w);
+    if (THUMB_WIDTHS.has(width)) {
+      const key = `${width}:${filename}`;
+      let thumb = thumbCache.get(key);
+      if (!thumb) {
+        const sharp = (await import("sharp")).default;
+        thumb = await sharp(result.buffer)
+          .rotate()
+          .resize({ width, withoutEnlargement: true })
+          .jpeg({ quality: 75 })
+          .toBuffer();
+        if (thumbCache.size >= THUMB_CACHE_MAX) {
+          const oldest = thumbCache.keys().next().value;
+          if (oldest !== undefined) thumbCache.delete(oldest);
+        }
+        thumbCache.set(key, thumb);
+      }
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.send(thumb);
       return;
     }
 
