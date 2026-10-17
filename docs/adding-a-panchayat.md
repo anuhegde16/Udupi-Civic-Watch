@@ -35,7 +35,9 @@ pnpm --filter @workspace/scripts run add:officers -- --panchayat <Name> --file p
 pnpm --filter @workspace/scripts run add:officers -- --panchayat <Name> --file private/<name>.csv --apply  # save
 ```
 Each officer gets a random temporary password (written to a private file, never printed)
-and must choose a new one at first login. Re-running is safe: existing accounts are skipped.
+and must choose a new one at first login. Add `--password phone` to use each officer's own
+phone number as the temporary password instead (easier to hand out, but anyone who knows the
+number can log in first, so ask officers to change it the same day). Re-running is safe: existing accounts are skipped.
 
 ## 6. Until officers exist
 Reports in an area without officers are saved but unassigned. A master admin can switch the

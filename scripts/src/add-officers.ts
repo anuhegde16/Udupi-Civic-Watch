@@ -3,6 +3,7 @@
  *
  *   pnpm --filter @workspace/scripts run add:officers -- --panchayat Byndoor --file /path/officers.csv
  *   pnpm --filter @workspace/scripts run add:officers -- --panchayat Byndoor --file /path/officers.csv --apply
+ *   add  --password phone  to use each officer's phone number as the temporary password
  *
  * Without --apply nothing is written: it only shows what WOULD happen (a dry run).
  *
@@ -14,7 +15,13 @@
  * What it does for each row (same result as adding the officer in the admin screen):
  *   - creates the officer, linked to that ward, with the ward's centre point
  *   - creates the login (role field_officer) so they can sign in with phone or email
- *   - gives a random temporary password and forces a new one at first login
+ *   - gives a temporary password and forces a new one at first login
+ *
+ * Temporary password (--password):
+ *   random (default) - a random 10-character password per officer, saved to a private file.
+ *   phone            - the officer's own 10-digit phone number (easy to hand out, but anyone who
+ *                      knows the number can log in first - ask officers to sign in and change it
+ *                      the same day). Nothing is written to a password file in this mode.
  * Everything is written in ONE transaction: if any row is wrong, nothing is saved.
  * Rows whose phone or email already exists are skipped, so re-running is safe.
  *
@@ -41,6 +48,11 @@ const panchayat = arg("panchayat");
 const fileArg = arg("file");
 const file = fileArg ? resolve(baseDir, fileArg) : undefined;
 const apply = process.argv.includes("--apply");
+const passwordMode = arg("password") ?? "random";
+if (passwordMode !== "random" && passwordMode !== "phone") {
+  console.error('--password must be "random" or "phone"');
+  process.exit(1);
+}
 const outFile = resolve(
   baseDir,
   arg("out") ?? `officer-passwords-${(panchayat ?? "x").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`,
@@ -139,7 +151,7 @@ async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
-    console.log(`${apply ? "ADDING" : "DRY RUN for"} ${rows.length} officers in ${panchayat}\n`);
+    console.log(`${apply ? "ADDING" : "DRY RUN for"} ${rows.length} officers in ${panchayat} (temporary password: ${passwordMode})\n`);
     await client.query("BEGIN");
     const created: { ward: string; name: string; phone: string; password: string }[] = [];
 
@@ -164,7 +176,7 @@ async function main() {
         continue;
       }
 
-      const password = tempPassword();
+      const password = passwordMode === "phone" ? r.phone : tempPassword();
       const hash = await bcryptjs.hash(password, 10);
       const { rows: o } = await client.query(
         `INSERT INTO officers (name, email, password_hash, phone, area_name, panchayat_name, center_lat, center_lng)
@@ -186,7 +198,11 @@ async function main() {
       return;
     }
     await client.query("COMMIT");
-    if (created.length) {
+    if (created.length && passwordMode === "phone") {
+      console.log(`\nSaved ${created.length} officers.`);
+      console.log("Each officer logs in with their phone number as BOTH the username and the password,");
+      console.log("and is asked to set a new password straight away. Ask them to do it today.");
+    } else if (created.length) {
       const csv =
         "ward,name,phone,temporary_password\n" +
         created.map((c) => [c.ward, c.name, c.phone, c.password].join(",")).join("\n") +
