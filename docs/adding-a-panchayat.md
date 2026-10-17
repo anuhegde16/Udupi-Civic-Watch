@@ -39,6 +39,13 @@ and must choose a new one at first login. Add `--password phone` to use each off
 phone number as the temporary password instead (easier to hand out, but anyone who knows the
 number can log in first, so ask officers to change it the same day). Re-running is safe: existing accounts are skipped.
 
+Short form on the server (loads the database settings for you, run from anywhere):
+```
+bash scripts/server-run.sh add:officers --panchayat <Name> --file private/<name>.csv --password phone
+```
+To give already-added officers a new temporary password (only those who have not yet chosen
+their own), add `--reset`. Everything is a dry run until `--apply` is added.
+
 ## 6. Until officers exist
 Reports in an area without officers are saved but unassigned. A master admin can switch the
 area off for the public (Panchayat visibility) until officers are in place.
