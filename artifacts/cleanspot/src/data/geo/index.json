@@ -377,6 +377,88 @@
      "name": "Karkala Ward 23"
     }
    ]
+  },
+  {
+   "name": "Kaup",
+   "slug": "kaup",
+   "wardCount": 23,
+   "bbox": [
+    13.19534,
+    74.72994,
+    13.25955,
+    74.7744
+   ],
+   "wards": [
+    {
+     "name": "Kaup Ward 1"
+    },
+    {
+     "name": "Kaup Ward 2"
+    },
+    {
+     "name": "Kaup Ward 3"
+    },
+    {
+     "name": "Kaup Ward 4"
+    },
+    {
+     "name": "Kaup Ward 5"
+    },
+    {
+     "name": "Kaup Ward 6"
+    },
+    {
+     "name": "Kaup Ward 7"
+    },
+    {
+     "name": "Kaup Ward 8"
+    },
+    {
+     "name": "Kaup Ward 9"
+    },
+    {
+     "name": "Kaup Ward 10"
+    },
+    {
+     "name": "Kaup Ward 11"
+    },
+    {
+     "name": "Kaup Ward 12"
+    },
+    {
+     "name": "Kaup Ward 13"
+    },
+    {
+     "name": "Kaup Ward 14"
+    },
+    {
+     "name": "Kaup Ward 15"
+    },
+    {
+     "name": "Kaup Ward 16"
+    },
+    {
+     "name": "Kaup Ward 17"
+    },
+    {
+     "name": "Kaup Ward 18"
+    },
+    {
+     "name": "Kaup Ward 19"
+    },
+    {
+     "name": "Kaup Ward 20"
+    },
+    {
+     "name": "Kaup Ward 21"
+    },
+    {
+     "name": "Kaup Ward 22"
+    },
+    {
+     "name": "Kaup Ward 23"
+    }
+   ]
   }
  ]
 }

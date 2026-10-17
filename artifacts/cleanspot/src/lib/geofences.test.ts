@@ -73,6 +73,7 @@ describe("ward data split", () => {
     expect(panchayatsNearPoint(13.4945, 74.7158)).toContain("Saligrama");
     expect(panchayatsNearPoint(13.6232, 74.6869)).toContain("Kundapura");
     expect(panchayatsNearPoint(13.2133, 74.9946)).toContain("Karkala");
+    expect(panchayatsNearPoint(13.2276, 74.7527)).toContain("Kaup");
     expect(panchayatsNearPoint(12.9, 77.6)).toEqual([]); // Bengaluru
   });
 

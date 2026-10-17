@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatWardLabel, formatWardChartLabel, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES } from "./ward-names";
+import { formatWardLabel, formatWardChartLabel, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES, KAUP_WARD_NAMES } from "./ward-names";
 
 describe("formatWardLabel", () => {
   it("formats a known Udupi ward identifier", () => {
@@ -35,6 +35,13 @@ describe("formatWardLabel", () => {
       const result = formatWardLabel(input);
       expect(result).not.toBe(input);
       expect(result).toBe(`${i} · ${KUNDAPURA_WARD_NAMES[i]}`);
+    }
+  });
+
+  it("formats all 23 Kaup wards with their names", () => {
+    expect(formatWardLabel("Kaup Ward 1")).toBe("1 · Kaipunjalu");
+    for (let i = 1; i <= 23; i++) {
+      expect(formatWardLabel(`Kaup Ward ${i}`)).toBe(`${i} · ${KAUP_WARD_NAMES[i]}`);
     }
   });
 

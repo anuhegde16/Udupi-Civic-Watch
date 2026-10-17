@@ -69,10 +69,41 @@ export const KUNDAPURA_WARD_NAMES: Record<number, string> = {
   23: "Kallangar",
 };
 
+/**
+ * Ward names for Kaup (Kapu), taken from the Karnataka KGIS ward-boundary data
+ * (KGISWardName) that the ward polygons themselves come from.
+ */
+export const KAUP_WARD_NAMES: Record<number, string> = {
+  1: "Kaipunjalu",
+  2: "Kothalakatte",
+  3: "Karavali",
+  4: "Polipugudde",
+  5: "Danda Thirtha",
+  6: "Kalya",
+  7: "Bharath Nagara",
+  8: "Beedubadi",
+  9: "Polipu",
+  10: "Kapu Pete",
+  11: "Light House",
+  12: "Koppalangadi",
+  13: "Thottam",
+  14: "Duggana Thota",
+  15: "Mangala Pete",
+  16: "Janardhana Temple",
+  17: "Badagara Gutthu",
+  18: "Kombagudde",
+  19: "General School",
+  20: "Gujji",
+  21: "Garadi",
+  22: "Kudthimar",
+  23: "Ahmadhi Mohalla",
+};
+
 /** Ward-name lookups, keyed by panchayat, for every panchayat that has one on file. */
 const WARD_NAMES_BY_PANCHAYAT: Record<string, Record<number, string>> = {
   Udupi: UDUPI_WARD_NAMES,
   Kundapura: KUNDAPURA_WARD_NAMES,
+  Kaup: KAUP_WARD_NAMES,
 };
 
 /**
