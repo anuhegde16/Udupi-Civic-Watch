@@ -459,6 +459,79 @@
      "name": "Kaup Ward 23"
     }
    ]
+  },
+  {
+   "name": "Byndoor",
+   "slug": "byndoor",
+   "wardCount": 20,
+   "bbox": [
+    13.83185,
+    74.59667,
+    13.98098,
+    74.71493
+   ],
+   "wards": [
+    {
+     "name": "Byndoor Ward 1"
+    },
+    {
+     "name": "Byndoor Ward 2"
+    },
+    {
+     "name": "Byndoor Ward 3"
+    },
+    {
+     "name": "Byndoor Ward 4"
+    },
+    {
+     "name": "Byndoor Ward 5"
+    },
+    {
+     "name": "Byndoor Ward 6"
+    },
+    {
+     "name": "Byndoor Ward 7"
+    },
+    {
+     "name": "Byndoor Ward 8"
+    },
+    {
+     "name": "Byndoor Ward 9"
+    },
+    {
+     "name": "Byndoor Ward 10"
+    },
+    {
+     "name": "Byndoor Ward 11"
+    },
+    {
+     "name": "Byndoor Ward 12"
+    },
+    {
+     "name": "Byndoor Ward 13"
+    },
+    {
+     "name": "Byndoor Ward 14"
+    },
+    {
+     "name": "Byndoor Ward 15"
+    },
+    {
+     "name": "Byndoor Ward 16"
+    },
+    {
+     "name": "Byndoor Ward 17"
+    },
+    {
+     "name": "Byndoor Ward 18"
+    },
+    {
+     "name": "Byndoor Ward 19"
+    },
+    {
+     "name": "Byndoor Ward 20"
+    }
+   ]
   }
  ]
 }
