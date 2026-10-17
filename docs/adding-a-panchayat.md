@@ -28,7 +28,7 @@ If a ward-name list exists, add `<PANCHAYAT>_WARD_NAMES` in
 Without it, wards show as "Ward N".
 
 ## 5. Add the officers (on the server)
-Keep the staff list OUT of git: put it in `/var/www/udupi-civic-watch/private/` (ignored).
+Keep the staff list OUT of git: put it in `private/` at the repo root (ignored). Run the commands from the repo root.
 CSV header: `ward,name,phone,email`
 ```
 pnpm --filter @workspace/scripts run add:officers -- --panchayat <Name> --file private/<name>.csv          # dry run

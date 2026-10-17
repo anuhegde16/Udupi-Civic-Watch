@@ -27,7 +27,7 @@ import pg from "pg";
 import { randomInt } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 
 const { Pool } = pg;
 
@@ -35,11 +35,16 @@ function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
+// pnpm runs scripts from inside the scripts/ folder; INIT_CWD is where the command was typed.
+const baseDir = process.env.INIT_CWD ?? process.cwd();
 const panchayat = arg("panchayat");
-const file = arg("file");
+const fileArg = arg("file");
+const file = fileArg ? resolve(baseDir, fileArg) : undefined;
 const apply = process.argv.includes("--apply");
-const outFile =
-  arg("out") ?? `officer-passwords-${(panchayat ?? "x").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+const outFile = resolve(
+  baseDir,
+  arg("out") ?? `officer-passwords-${(panchayat ?? "x").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`,
+);
 
 if (!panchayat || !file) {
   console.error("Usage: add:officers -- --panchayat <Name> --file <officers.csv> [--apply] [--out <passwords.csv>]");
