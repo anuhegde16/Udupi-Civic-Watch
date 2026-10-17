@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 export type UdupiSupervisorMapReport = {
@@ -38,8 +38,10 @@ export function UdupiSupervisorZoneMap({
   const markerRef = useRef<any[]>([]);
   const boundsRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
+  const { features: geoFeatures, ready: geoReady } = useGeofences("all");
 
   useEffect(() => {
+    if (!geoReady) return;
     let cancelled = false;
     (async () => {
       const L = (await import("leaflet")).default;
@@ -53,7 +55,7 @@ export function UdupiSupervisorZoneMap({
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
 
       const wardPolygons: any[] = [];
-      for (const feature of geofencesData.features) {
+      for (const feature of geoFeatures) {
         if (feature.geometry.type !== "Polygon") continue;
         const properties = feature.properties as { name?: string; type?: string };
         if (properties.type !== "ward" || !wardGeoNames.includes(properties.name ?? "")) continue;
@@ -88,7 +90,7 @@ export function UdupiSupervisorZoneMap({
         mapRef.current = null;
       }
     };
-  }, [wardGeoNames]);
+  }, [wardGeoNames, geoReady]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;

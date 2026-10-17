@@ -10,7 +10,7 @@ import { useCreateReport, customFetch, ApiError } from "@workspace/api-client-re
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { MapPicker } from "@/components/map-picker";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences, panchayatsNearPoint, type GeoFeature } from "@/lib/geofences";
 import { getRandomMotivationalQuote } from "@/lib/motivational-quotes";
 import { saveReport } from "@/hooks/use-saved-reports";
 import {
@@ -38,8 +38,8 @@ function pointInPolygon(lat: number, lng: number, ring: [number, number][]): boo
   return inside;
 }
 
-function isWithinServiceArea(lat: number, lng: number): boolean {
-  for (const feature of geofencesData.features) {
+function isWithinServiceArea(features: GeoFeature[], lat: number, lng: number): boolean {
+  for (const feature of features) {
     if (feature.geometry.type === "Polygon") {
       const ring = feature.geometry.coordinates[0] as [number, number][];
       if (pointInPolygon(lat, lng, ring)) return true;
@@ -51,8 +51,8 @@ function isWithinServiceArea(lat: number, lng: number): boolean {
 // Which panchayat (Udupi / Saligrama / future areas) does this point fall inside?
 // Mirrors the server's detectPanchayat() so the citizen sees an instant warning
 // instead of only finding out after tapping Submit.
-function detectPanchayat(lat: number, lng: number): string | null {
-  for (const feature of geofencesData.features) {
+function detectPanchayat(features: GeoFeature[], lat: number, lng: number): string | null {
+  for (const feature of features) {
     const props = feature.properties as { type?: string; panchayat?: string };
     if (feature.geometry.type === "Polygon" && props.type !== "ward") {
       const ring = feature.geometry.coordinates[0] as [number, number][];
@@ -114,45 +114,61 @@ export default function Report() {
     refetchInterval: 30000,
   });
 
-  const geofenceRing = useMemo<[number, number][] | undefined>(() => {
-    const first = geofencesData.features[0];
-    if (first?.geometry.type === "Polygon") {
-      return first.geometry.coordinates[0] as [number, number][];
-    }
-    return undefined;
-  }, []);
+  // Only the boundary file(s) for the area the citizen is standing in are downloaded —
+  // not every panchayat. A cheap bounding-box check picks which file(s) are needed.
+  const nearNames = useMemo(
+    () => (location ? panchayatsNearPoint(location.lat, location.lng) : []),
+    [location?.lat, location?.lng],
+  );
+  const { features: nearFeatures, ready: geoReady } = useGeofences(nearNames);
 
-  const udupiWardRings = useMemo(() => {
-    // Don't draw Udupi's ward boundaries at all while a master admin has
+  // Outline of the area the citizen is in, drawn as a dashed frame on the map.
+  const geofenceRing = useMemo<[number, number][] | undefined>(() => {
+    const outline = nearFeatures.find((f) => f.geometry.type === "Polygon" && f.properties.type !== "ward");
+    return outline ? (outline.geometry.coordinates[0] as [number, number][]) : undefined;
+  }, [nearFeatures]);
+
+  const wardRings = useMemo(() => {
+    // Don't draw a panchayat's ward boundaries at all while a master admin has
     // paused the area for the public — the map should look like the area
     // simply isn't part of the service footprint right now.
-    if (panchayatVisibility?.Udupi === false) return [];
-    return geofencesData.features
+    return nearFeatures
       .filter(
         (feature) =>
           feature.geometry.type === "Polygon" &&
-          (feature.properties as { type?: string; panchayat?: string }).type === "ward" &&
-          (feature.properties as { type?: string; panchayat?: string }).panchayat === "Udupi",
+          feature.properties.type === "ward" &&
+          panchayatVisibility?.[feature.properties.panchayat] !== false,
       )
       .map((feature) => ({
-        name: (feature.properties as { name?: string }).name ?? "Udupi ward",
+        name: feature.properties.name ?? "Ward",
         ring: feature.geometry.coordinates[0] as [number, number][],
       }));
-  }, [panchayatVisibility]);
+  }, [nearFeatures, panchayatVisibility]);
 
+  // While the boundary data is still downloading we must not claim the citizen is
+  // outside the service area, so "not ready" counts as "not outside".
   const outsideFence = useMemo(() => {
-    if (!location) return false;
-    return !isWithinServiceArea(location.lat, location.lng);
-  }, [location?.lat, location?.lng]);
+    if (!location || !geoReady) return false;
+    return !isWithinServiceArea(nearFeatures, location.lat, location.lng);
+  }, [location?.lat, location?.lng, nearFeatures, geoReady]);
 
   // True when the pin sits in a panchayat a master admin has temporarily
   // paused for the public (no data lost — just paused for new reports).
   const areaHidden = useMemo(() => {
-    if (!location || !panchayatVisibility) return false;
-    const panchayat = detectPanchayat(location.lat, location.lng);
+    if (!location || !panchayatVisibility || !geoReady) return false;
+    const panchayat = detectPanchayat(nearFeatures, location.lat, location.lng);
     if (!panchayat) return false;
     return panchayatVisibility[panchayat] === false;
-  }, [location?.lat, location?.lng, panchayatVisibility]);
+  }, [location?.lat, location?.lng, panchayatVisibility, nearFeatures, geoReady]);
+
+  // Once the map has been shown with its boundaries, keep it mounted even if a later
+  // location change (e.g. dragging the pin in test mode) briefly needs another boundary
+  // file. Only remembered once a real location is known, so the first (location-less)
+  // render can't pin an empty map in place.
+  const mapShownRef = useRef(false);
+  const showMap = !isLocating && (geoReady || mapShownRef.current);
+  if (showMap && geoReady && location) mapShownRef.current = true;
+  if (isLocating) mapShownRef.current = false;
 
   useEffect(() => {
     // Check & watch camera + location permission states
@@ -660,7 +676,7 @@ export default function Report() {
           )}
 
           <div className="rounded-2xl overflow-hidden border border-border shadow-inner bg-muted" style={{ height: "300px" }}>
-            {isLocating ? (
+            {!showMap ? (
               <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
                 <span className="font-bold">Finding your location...</span>
@@ -671,7 +687,7 @@ export default function Report() {
                 onChange={setGeoLocation}
                 height="300px"
                 geofenceRing={geofenceRing}
-                wardRings={udupiWardRings}
+                wardRings={wardRings}
                 outsideFence={outsideFence}
                 readonly={!testMode || locationMode === "auto"}
                 userLocation={gpsCoords}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences, type GeoFeature, type GeoScope } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
@@ -34,7 +34,8 @@ type WardFeature = {
 };
 
 // All wards from all municipalities — filtered per-component by panchayatName prop
-const allWardFeatures: WardFeature[] = geofencesData.features
+function buildWardFeatures(features: GeoFeature[]): WardFeature[] {
+  return features
   .filter(
     (f) =>
       f.geometry.type === "Polygon" &&
@@ -58,10 +59,11 @@ const allWardFeatures: WardFeature[] = geofencesData.features
       ],
     };
   });
+}
 
 // All district outlines — selected per-component by panchayatName prop
-const allDistrictFeatures: { panchayat: string; latlngs: [number, number][] }[] =
-  geofencesData.features
+function buildDistrictFeatures(features: GeoFeature[]): { panchayat: string; latlngs: [number, number][] }[] {
+  return features
     .filter(
       (f) =>
         f.geometry.type === "Polygon" &&
@@ -74,6 +76,7 @@ const allDistrictFeatures: { panchayat: string; latlngs: [number, number][] }[] 
         latlngs: coords.map(([lon, lat]) => [lat, lon] as [number, number]),
       };
     });
+}
 
 export type PanchayatMapOfficer = {
   id: number;
@@ -122,6 +125,12 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
   const openLightboxRef = useRef(openLightbox);
   useEffect(() => { openLightboxRef.current = openLightbox; }, [openLightbox]);
 
+  // Only the panchayat being shown is downloaded ("all" only when no panchayat is given).
+  const geoScope: GeoScope = panchayatName ? [panchayatName] : requirePanchayat ? [] : "all";
+  const { features: geoFeatures } = useGeofences(geoScope);
+  const allWardFeatures = useMemo(() => buildWardFeatures(geoFeatures), [geoFeatures]);
+  const allDistrictFeatures = useMemo(() => buildDistrictFeatures(geoFeatures), [geoFeatures]);
+
   // Filter wards and district to the relevant municipality when panchayatName is set.
   // When requirePanchayat is true and panchayatName is falsy, return empty rather
   // than falling back to all municipalities — prevents cross-panchayat data leaks
@@ -133,7 +142,7 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
         : requirePanchayat
           ? []
           : allWardFeatures,
-    [panchayatName, requirePanchayat]
+    [panchayatName, requirePanchayat, allWardFeatures]
   );
 
   const districtFeature = useMemo(() => {
@@ -142,7 +151,7 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
       ? allDistrictFeatures.find((d) => d.panchayat === panchayatName)
       : allDistrictFeatures[0];
     return match?.latlngs ?? null;
-  }, [panchayatName, requirePanchayat]);
+  }, [panchayatName, requirePanchayat, allDistrictFeatures]);
 
   // Init effect: create map + tiles only; all layer drawing is in the redraw effect
   useEffect(() => {

@@ -9,6 +9,56 @@
     74.68643,
     13.52092,
     74.7365
+   ],
+   "wards": [
+    {
+     "name": "Ward 1"
+    },
+    {
+     "name": "Ward 2"
+    },
+    {
+     "name": "Ward 3"
+    },
+    {
+     "name": "Ward 4"
+    },
+    {
+     "name": "Ward 5"
+    },
+    {
+     "name": "Ward 6"
+    },
+    {
+     "name": "Ward 7"
+    },
+    {
+     "name": "Ward 8"
+    },
+    {
+     "name": "Ward 9"
+    },
+    {
+     "name": "Ward 10"
+    },
+    {
+     "name": "Ward 11"
+    },
+    {
+     "name": "Ward 12"
+    },
+    {
+     "name": "Ward 13"
+    },
+    {
+     "name": "Ward 14"
+    },
+    {
+     "name": "Ward 15"
+    },
+    {
+     "name": "Ward 16"
+    }
    ]
   },
   {
@@ -16,10 +66,152 @@
    "slug": "udupi",
    "wardCount": 35,
    "bbox": [
-    13.31336,
+    13.31337,
     74.69725,
     13.3942,
     74.82593
+   ],
+   "wards": [
+    {
+     "name": "Udupi Ward 1",
+     "label": "Kola"
+    },
+    {
+     "name": "Udupi Ward 2",
+     "label": "Vadabhandeshwara"
+    },
+    {
+     "name": "Udupi Ward 3",
+     "label": "Malpe Central"
+    },
+    {
+     "name": "Udupi Ward 4",
+     "label": "Kodavoor"
+    },
+    {
+     "name": "Udupi Ward 5",
+     "label": "Kalmady"
+    },
+    {
+     "name": "Udupi Ward 6",
+     "label": "Moodubettu"
+    },
+    {
+     "name": "Udupi Ward 7",
+     "label": "Kodankuru"
+    },
+    {
+     "name": "Udupi Ward 8",
+     "label": "Nittur"
+    },
+    {
+     "name": "Udupi Ward 9",
+     "label": "Subhrahmanya Nagar"
+    },
+    {
+     "name": "Udupi Ward 10",
+     "label": "Gopalapura"
+    },
+    {
+     "name": "Udupi Ward 11",
+     "label": "Kakkunje"
+    },
+    {
+     "name": "Udupi Ward 12",
+     "label": "Karamballi"
+    },
+    {
+     "name": "Udupi Ward 13",
+     "label": "Moodu Perampalli"
+    },
+    {
+     "name": "Udupi Ward 14",
+     "label": "Saralabettu"
+    },
+    {
+     "name": "Udupi Ward 15",
+     "label": "Shettibettu"
+    },
+    {
+     "name": "Udupi Ward 16",
+     "label": "Parkala"
+    },
+    {
+     "name": "Udupi Ward 17",
+     "label": "Eshwar Nagar"
+    },
+    {
+     "name": "Udupi Ward 18",
+     "label": "Manipal"
+    },
+    {
+     "name": "Udupi Ward 19",
+     "label": "Moodu Sagri"
+    },
+    {
+     "name": "Udupi Ward 20",
+     "label": "Indrali"
+    },
+    {
+     "name": "Udupi Ward 21",
+     "label": "Indira Nagar"
+    },
+    {
+     "name": "Udupi Ward 22",
+     "label": "76 Badagubettu"
+    },
+    {
+     "name": "Udupi Ward 23",
+     "label": "Chitpady"
+    },
+    {
+     "name": "Udupi Ward 24",
+     "label": "Kasthurba Nagar"
+    },
+    {
+     "name": "Udupi Ward 25",
+     "label": "Kunjibettu"
+    },
+    {
+     "name": "Udupi Ward 26",
+     "label": "Kadiyali"
+    },
+    {
+     "name": "Udupi Ward 27",
+     "label": "Gundibailu"
+    },
+    {
+     "name": "Udupi Ward 28",
+     "label": "Bannanje"
+    },
+    {
+     "name": "Udupi Ward 29",
+     "label": "Tenkapete"
+    },
+    {
+     "name": "Udupi Ward 30",
+     "label": "Olakadu"
+    },
+    {
+     "name": "Udupi Ward 31",
+     "label": "Bailoor"
+    },
+    {
+     "name": "Udupi Ward 32",
+     "label": "Kinnimulky"
+    },
+    {
+     "name": "Udupi Ward 33",
+     "label": "Ajjarakadu"
+    },
+    {
+     "name": "Udupi Ward 34",
+     "label": "Shiribeedu"
+    },
+    {
+     "name": "Udupi Ward 35",
+     "label": "Ambalapady"
+    }
    ]
   },
   {
@@ -31,6 +223,77 @@
     74.66784,
     13.63899,
     74.70817
+   ],
+   "wards": [
+    {
+     "name": "Kundapura Ward 1"
+    },
+    {
+     "name": "Kundapura Ward 2"
+    },
+    {
+     "name": "Kundapura Ward 3"
+    },
+    {
+     "name": "Kundapura Ward 4"
+    },
+    {
+     "name": "Kundapura Ward 5"
+    },
+    {
+     "name": "Kundapura Ward 6"
+    },
+    {
+     "name": "Kundapura Ward 7"
+    },
+    {
+     "name": "Kundapura Ward 8"
+    },
+    {
+     "name": "Kundapura Ward 9"
+    },
+    {
+     "name": "Kundapura Ward 10"
+    },
+    {
+     "name": "Kundapura Ward 11"
+    },
+    {
+     "name": "Kundapura Ward 12"
+    },
+    {
+     "name": "Kundapura Ward 13"
+    },
+    {
+     "name": "Kundapura Ward 14"
+    },
+    {
+     "name": "Kundapura Ward 15"
+    },
+    {
+     "name": "Kundapura Ward 16"
+    },
+    {
+     "name": "Kundapura Ward 17"
+    },
+    {
+     "name": "Kundapura Ward 18"
+    },
+    {
+     "name": "Kundapura Ward 19"
+    },
+    {
+     "name": "Kundapura Ward 20"
+    },
+    {
+     "name": "Kundapura Ward 21"
+    },
+    {
+     "name": "Kundapura Ward 22"
+    },
+    {
+     "name": "Kundapura Ward 23"
+    }
    ]
   },
   {
@@ -42,6 +305,77 @@
     74.96815,
     13.24579,
     75.03185
+   ],
+   "wards": [
+    {
+     "name": "Karkala Ward 1"
+    },
+    {
+     "name": "Karkala Ward 2"
+    },
+    {
+     "name": "Karkala Ward 3"
+    },
+    {
+     "name": "Karkala Ward 4"
+    },
+    {
+     "name": "Karkala Ward 5"
+    },
+    {
+     "name": "Karkala Ward 6"
+    },
+    {
+     "name": "Karkala Ward 7"
+    },
+    {
+     "name": "Karkala Ward 8"
+    },
+    {
+     "name": "Karkala Ward 9"
+    },
+    {
+     "name": "Karkala Ward 10"
+    },
+    {
+     "name": "Karkala Ward 11"
+    },
+    {
+     "name": "Karkala Ward 12"
+    },
+    {
+     "name": "Karkala Ward 13"
+    },
+    {
+     "name": "Karkala Ward 14"
+    },
+    {
+     "name": "Karkala Ward 15"
+    },
+    {
+     "name": "Karkala Ward 16"
+    },
+    {
+     "name": "Karkala Ward 17"
+    },
+    {
+     "name": "Karkala Ward 18"
+    },
+    {
+     "name": "Karkala Ward 19"
+    },
+    {
+     "name": "Karkala Ward 20"
+    },
+    {
+     "name": "Karkala Ward 21"
+    },
+    {
+     "name": "Karkala Ward 22"
+    },
+    {
+     "name": "Karkala Ward 23"
+    }
    ]
   }
  ]

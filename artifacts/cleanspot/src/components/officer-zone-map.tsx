@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Report } from "@workspace/api-client-react";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 interface OfficerZoneMapProps {
@@ -18,10 +18,12 @@ export function OfficerZoneMap({
 }: OfficerZoneMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
+  const { features: geoFeatures, ready: geoReady } = useGeofences("all");
   const markersRef = useRef<any[]>([]);
   const boundsRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!geoReady) return;
     async function init() {
       const L = (await import("leaflet")).default;
       await import("leaflet/dist/leaflet.css");
@@ -41,7 +43,7 @@ export function OfficerZoneMap({
       // Draw ward + district boundaries from geofences; highlight the officer's own ward
       let officerWard: any = null;
       let districtBounds: any = null;
-      for (const feature of geofencesData.features) {
+      for (const feature of geoFeatures) {
         if (feature.geometry.type !== "Polygon") continue;
         const props = feature.properties as any;
         const latlngs = (feature.geometry.coordinates[0] as [number, number][]).map(
@@ -94,7 +96,8 @@ export function OfficerZoneMap({
         leafletMapRef.current = null;
       }
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoReady]);
 
   useEffect(() => {
     if (!leafletMapRef.current) return;

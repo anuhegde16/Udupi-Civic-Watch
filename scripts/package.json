@@ -9,6 +9,8 @@
     "gen:pwa-icons": "tsx ./src/generate-pwa-icons.ts",
     "test:emails": "tsx ./src/test-emails.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "geo:split": "tsx ./src/split-geofences.ts",
+    "geo:check": "tsx ./src/split-geofences.ts --check",
     "validate:geo": "tsx ./src/validate-geo-routing.ts",
     "seed:ward-reports": "tsx ./src/seed-udupi-ward-reports.ts",
     "seed:clean": "tsx ./src/clean-seed-reports.ts",

@@ -5,7 +5,7 @@
  * officers (one ward each, explicit report assignment) and the Udupi hierarchy
  * (EE → HI → supervisor, wards assigned geographically) — into one list.
  */
-import geofencesData from "@/data/geofences.json";
+import { PANCHAYATS, getWardLabel } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 export const STAFF_TYPES = [
@@ -91,8 +91,7 @@ export function keyToSupervisorWard(key: string): string | null {
   const m = key.match(/^Udupi Ward (\d+)$/);
   if (!m) return null;
   const num = parseInt(m[1], 10);
-  const feature = (geofencesData.features as any[]).find((f) => f.properties?.name === key);
-  const wardName = feature?.properties?.wardName;
+  const wardName = getWardLabel(key);
   return wardName ? `Ward ${num}/${wardName}` : `Ward ${num}`;
 }
 
@@ -102,11 +101,9 @@ export function wardChipLabel(key: string): string {
 
 export const PANCHAYAT_WARDS: Record<string, string[]> = (() => {
   const out: Record<string, string[]> = {};
-  for (const f of geofencesData.features as any[]) {
-    if (f.properties?.type !== "ward") continue;
-    const p = f.properties?.panchayat;
-    if (!p) continue;
-    (out[p] ??= []).push(f.properties.name as string);
+  for (const p of PANCHAYATS) {
+    if (p.wards.length === 0) continue;
+    out[p.name] = p.wards.map((w) => w.name);
   }
   for (const wards of Object.values(out)) {
     wards.sort((a, b) => {

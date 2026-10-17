@@ -11,7 +11,7 @@
 // To add a panchayat: drop <slug>.json into src/data/geo/ and add one line to index.json.
 // No code changes are needed.
 
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 import indexData from "@/data/geo/index.json";
 
 export interface GeoFeature {
@@ -25,8 +25,8 @@ export interface GeoFeature {
   };
   geometry: {
     type: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    coordinates: any;
+    /** Polygon rings as [lon, lat] pairs; ring 0 is the outer boundary. */
+    coordinates: number[][][];
   };
 }
 
@@ -36,6 +36,8 @@ export interface PanchayatMeta {
   wardCount: number;
   /** [south, west, north, east] in degrees */
   bbox: [number, number, number, number];
+  /** Every ward in this panchayat (name as used in reports/officers, optional display label). */
+  wards: { name: string; label?: string }[];
 }
 
 /** Small, always-available list of panchayats, in display order. */
@@ -51,6 +53,28 @@ export function getPanchayatMeta(name: string): PanchayatMeta | undefined {
 
 export function getWardCount(name: string): number {
   return getPanchayatMeta(name)?.wardCount ?? 0;
+}
+
+/** Ward names of one panchayat, e.g. "Udupi Ward 5", in the order stored in the data. */
+export function getWardNames(panchayat: string): string[] {
+  return getPanchayatMeta(panchayat)?.wards.map((w) => w.name) ?? [];
+}
+
+/** Every ward name across all panchayats. */
+export const ALL_WARD_NAMES: string[] = PANCHAYATS.flatMap((p) => p.wards.map((w) => w.name));
+
+/** ward name -> panchayat name (if two panchayats share a ward name the later one wins). */
+export const WARD_PANCHAYAT: Record<string, string> = Object.fromEntries(
+  PANCHAYATS.flatMap((p) => p.wards.map((w) => [w.name, p.name] as const)),
+);
+
+/** Optional display label (the area name, e.g. "Kola") of a ward, if it has one. */
+export function getWardLabel(wardName: string): string | undefined {
+  for (const p of PANCHAYATS) {
+    const hit = p.wards.find((w) => w.name === wardName);
+    if (hit) return hit.label;
+  }
+  return undefined;
 }
 
 /**
@@ -111,8 +135,16 @@ function resolveNames(scope: GeoScope): string[] {
 
 const EMPTY: GeoFeature[] = [];
 
+// Concatenated feature lists, remembered per scope so repeated reads return the SAME array
+// (React hooks and memoised calculations rely on that to avoid redoing work).
+const joined = new Map<string, GeoFeature[]>();
+
 /** Concatenated features (in index order) if every requested panchayat is already loaded. */
 function peek(names: string[]): GeoFeature[] | null {
+  if (names.length === 0) return EMPTY;
+  const key = names.join("|");
+  const hit = joined.get(key);
+  if (hit) return hit;
   const out: GeoFeature[] = [];
   for (const n of PANCHAYAT_NAMES) {
     if (!names.includes(n)) continue;
@@ -120,6 +152,7 @@ function peek(names: string[]): GeoFeature[] | null {
     if (!f) return null;
     out.push(...f);
   }
+  joined.set(key, out);
   return out;
 }
 
@@ -131,44 +164,43 @@ export async function loadGeoScope(scope: GeoScope): Promise<GeoFeature[]> {
 
 export interface UseGeofences {
   features: GeoFeature[];
-  /** true once every requested panchayat has loaded (or there was nothing to load) */
+  /** true once every requested panchayat has loaded (immediately when none are requested) */
   ready: boolean;
+  /** true if a download failed (for example the phone went offline) */
   error: boolean;
 }
 
 /**
  * React hook: boundary features for the given panchayats ("all" = every panchayat).
- * Returns instantly when the data was loaded before, otherwise loads it and re-renders.
+ * Returns instantly when the data was loaded before, otherwise downloads it and re-renders.
+ * `ready` is false from the very first render in which the scope changes, so callers never
+ * mistake "not loaded yet" for "outside the service area".
  */
 export function useGeofences(scope: GeoScope): UseGeofences {
-  const names = resolveNames(scope);
+  // Sorted into index order so the same set of panchayats always gives the same key.
+  const names = PANCHAYAT_NAMES.filter((n) => resolveNames(scope).includes(n));
   const key = names.join("|");
+  const [, rerender] = useReducer((n: number) => n + 1, 0);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
 
-  const [state, setState] = useState<UseGeofences>(() => {
-    const hit = names.length === 0 ? EMPTY : peek(names);
-    return { features: hit ?? EMPTY, ready: hit !== null, error: false };
-  });
+  const hit = peek(names);
+  const loaded = hit !== null;
 
   useEffect(() => {
+    if (loaded) return;
     let cancelled = false;
-    const hit = names.length === 0 ? EMPTY : peek(names);
-    if (hit) {
-      setState((s) => (s.ready && s.features === hit ? s : { features: hit, ready: true, error: false }));
-      return;
-    }
-    setState({ features: EMPTY, ready: false, error: false });
     loadGeoScope(names)
-      .then((features) => {
-        if (!cancelled) setState({ features, ready: true, error: false });
+      .then(() => {
+        if (!cancelled) rerender();
       })
       .catch(() => {
-        if (!cancelled) setState({ features: EMPTY, ready: false, error: true });
+        if (!cancelled) setFailedKey(key);
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, loaded]);
 
-  return state;
+  return { features: hit ?? EMPTY, ready: loaded, error: !loaded && failedKey === key };
 }

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, Globe, Building2 } from "lucide-react";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences, type GeoFeature } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
@@ -36,7 +36,8 @@ interface GeoFeatureMeta extends GeoZone {
   panchayat?: string;
 }
 
-const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
+function buildGeoFeatureMeta(features: GeoFeature[]): GeoFeatureMeta[] {
+  return features
   .filter((f) => f.geometry.type === "Polygon")
   .map((f) => {
     const coords = f.geometry.coordinates[0] as [number, number][];
@@ -56,11 +57,10 @@ const allGeoFeatures: GeoFeatureMeta[] = geofencesData.features
       centroid: [centroidLat, centroidLon],
     };
   });
-
-const geoZones: GeoZone[] = allGeoFeatures;
+}
 
 // Bounding box that fits ALL district polygons — used for the "All Panchayats" view.
-const allDistrictsBounds: [[number, number], [number, number]] = (() => {
+function computeAllDistrictsBounds(allGeoFeatures: GeoFeatureMeta[]): [[number, number], [number, number]] {
   const districts = allGeoFeatures.filter((f) => f.featureType === "district");
   if (districts.length === 0) return DISTRICT_BOUNDS;
   const allLats = districts.flatMap((d) => [d.bounds[0][0], d.bounds[1][0]]);
@@ -69,7 +69,7 @@ const allDistrictsBounds: [[number, number], [number, number]] = (() => {
     [Math.min(...allLats), Math.min(...allLngs)],
     [Math.max(...allLats), Math.max(...allLngs)],
   ];
-})();
+}
 
 export type MapReport = {
   id: number;
@@ -116,9 +116,12 @@ export function AdminDistrictMap({
 }: AdminDistrictMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
-  const [activeZone, setActiveZone] = useState<string | null>(
-    geoZones[0]?.name ?? null
-  );
+  // Ward outlines load as a separate download the first time this map is shown.
+  const { features: geoFeatures } = useGeofences("all");
+  const allGeoFeatures = useMemo(() => buildGeoFeatureMeta(geoFeatures), [geoFeatures]);
+  const geoZones: GeoZone[] = allGeoFeatures;
+  const allDistrictsBounds = useMemo(() => computeAllDistrictsBounds(allGeoFeatures), [allGeoFeatures]);
+  const [activeZone, setActiveZone] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const { lightbox, open: openLightbox } = useImageLightbox();
   const openLightboxRef = useRef(openLightbox);
@@ -199,7 +202,7 @@ export function AdminDistrictMap({
     }, 60);
 
     return () => clearTimeout(t);
-  }, [activeZone, activePanchayat, mapReady]);
+  }, [activeZone, activePanchayat, mapReady, allGeoFeatures, allDistrictsBounds]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -485,7 +488,7 @@ export function AdminDistrictMap({
     return () => {
       if (rafId !== undefined) cancelAnimationFrame(rafId);
     };
-  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady, activePanchayat, activeZone]);
+  }, [reports, officers, selectedOfficerId, onZoneSelect, mapReady, activePanchayat, activeZone, allGeoFeatures]);
 
   const chipBase =
     "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer";
