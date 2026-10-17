@@ -90,7 +90,7 @@ export function panchayatsNearPoint(lat: number, lng: number, marginDeg = 0.01):
 
 // Vite turns each matching file into its own lazily-downloaded chunk.
 const fileLoaders = import.meta.glob<GeoFeature[] | { features: GeoFeature[] }>(
-  "../data/geo/*.json",
+  ["../data/geo/*.json", "!../data/geo/index.json"],
   { import: "default" },
 );
 
