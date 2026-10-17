@@ -296,9 +296,11 @@ export function AdminDistrictMap({
 
           if (isInActivePanchayat) {
             const wardNum = zone.name.replace(/\D+/g, "");
+            // "10 · Byndoor Pete" where a name is on file, otherwise "Ward 10".
+            const wardLabelText = formatWardLabel(zone.name) || wardNum;
             const labelColor = assignedOfficer ? wardColor : WARD_AMBER;
             // Plain text only — no background, border, or chip of any kind.
-            const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">${wardNum}</div>`;
+            const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">${wardLabelText}</div>`;
             const icon = L.divIcon({ html: labelHtml, className: "", iconAnchor: [0, 8] });
             L.marker(zone.centroid, { icon, interactive: false }).addTo(map);
           }
@@ -594,7 +596,7 @@ export function AdminDistrictMap({
                     }
                   >
                     <MapPin className="w-3 h-3 shrink-0" />
-                    {zone.name}
+                    {formatWardLabel(zone.name)}
                   </button>
                 );
               })

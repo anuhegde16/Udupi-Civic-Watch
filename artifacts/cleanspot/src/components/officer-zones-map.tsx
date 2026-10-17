@@ -166,7 +166,7 @@ export function OfficerZonesMap({
                 white-space: nowrap;
                 box-shadow: 0 2px 6px rgba(0,0,0,0.25);
                 cursor: pointer;
-              ">${zone.name}${suffix}</div>`,
+              ">${formatWardLabel(zone.name)}${suffix}</div>`,
               iconAnchor: [0, 0],
             });
             const marker = L.marker([cLat, cLng], { icon: label, interactive: true }).addTo(map);
@@ -188,7 +188,7 @@ export function OfficerZonesMap({
             box-shadow: 0 2px 6px rgba(0,0,0,0.25);
             opacity: 0.75;
             cursor: pointer;
-          ">${zone.name}</div>`,
+          ">${formatWardLabel(zone.name)}</div>`,
           iconAnchor: [0, 0],
         });
         const m = L.marker([zone.centerLat, zone.centerLng], { icon }).addTo(map);
