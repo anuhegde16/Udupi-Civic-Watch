@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatWardLabel, formatWardChartLabel, wardMapLabelHtml, bindWardNameZoom, WARD_NAME_ZOOM, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES, KAUP_WARD_NAMES, BYNDOOR_WARD_NAMES } from "./ward-names";
+import { formatWardLabel, formatWardChartLabel, wardMapLabelHtml, bindWardNameZoom, WARD_NAME_ZOOM, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES, KAUP_WARD_NAMES, BYNDOOR_WARD_NAMES, KARKALA_WARD_NAMES } from "./ward-names";
 
 describe("formatWardLabel", () => {
   it("formats a known Udupi ward identifier", () => {
@@ -42,6 +42,13 @@ describe("formatWardLabel", () => {
     expect(formatWardLabel("Kaup Ward 1")).toBe("1 · Kaipunjalu");
     for (let i = 1; i <= 23; i++) {
       expect(formatWardLabel(`Kaup Ward ${i}`)).toBe(`${i} · ${KAUP_WARD_NAMES[i]}`);
+    }
+  });
+
+  it("formats all 23 Karkala wards with their names", () => {
+    expect(formatWardLabel("Karkala Ward 16")).toBe("16 · Madhyapete");
+    for (let i = 1; i <= 23; i++) {
+      expect(formatWardLabel(`Karkala Ward ${i}`)).toBe(`${i} · ${KARKALA_WARD_NAMES[i]}`);
     }
   });
 
@@ -91,7 +98,7 @@ describe("wardMapLabelHtml", () => {
   });
 
   it("shows only the number when no name is on file", () => {
-    expect(wardMapLabelHtml("Karkala Ward 7")).toBe("7");
+    expect(wardMapLabelHtml("Newtown Ward 7")).toBe("7");
     expect(wardMapLabelHtml("Ward 3")).toBe("3");
   });
 

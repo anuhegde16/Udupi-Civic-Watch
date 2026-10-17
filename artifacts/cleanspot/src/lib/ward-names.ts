@@ -127,10 +127,42 @@ export const BYNDOOR_WARD_NAMES: Record<number, string> = {
   20: "Nelyadi Kadodi",
 };
 
+/**
+ * Karkala's 23 ward names, copied from the ward list the Karkala office gave
+ * (address column of its ward / staff table), in English letters. Ward 8 is
+ * spelled exactly as that list has it ("Market Attrinagr"), so it may be a typo.
+ */
+export const KARKALA_WARD_NAMES: Record<number, string> = {
+  1: "Banglegudde Kaje",
+  2: "Banglegudde Paraneeru",
+  3: "Pervaje-Sadbhavana Nagar",
+  4: "Pervaje-Bandimatha",
+  5: "Salmara Jarigudde",
+  6: "Shrinivas Nagar-Pervaje",
+  7: "Pervaje-Pattonjikatte",
+  8: "Market Attrinagr",
+  9: "Bobbala-Vinayakabettu",
+  10: "Tellar-Merinapura",
+  11: "Ananthashayana-College",
+  12: "Varnabettu-Gommatabetta",
+  13: "Danashale",
+  14: "Kalikamba",
+  15: "Anekere",
+  16: "Madhyapete",
+  17: "Gandhi Maidana-Havaldarbettu",
+  18: "Gandhi Maidana Atturu",
+  19: "Kabettu-Hiriyangadi",
+  20: "Kuntalpadi-Hiriyangadi",
+  21: "Taluq Office-Kabettu",
+  22: "Kabettu-Rotary",
+  23: "Kabettu-Cholpadi",
+};
+
 /** Ward-name lookups, keyed by panchayat, for every panchayat that has one on file. */
 const WARD_NAMES_BY_PANCHAYAT: Record<string, Record<number, string>> = {
   Udupi: UDUPI_WARD_NAMES,
   Kundapura: KUNDAPURA_WARD_NAMES,
+  Karkala: KARKALA_WARD_NAMES,
   Kaup: KAUP_WARD_NAMES,
   Byndoor: BYNDOOR_WARD_NAMES,
 };
