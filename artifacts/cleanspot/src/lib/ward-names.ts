@@ -155,6 +155,37 @@ export function formatWardLabel(geoName: string | null | undefined): string {
   return name ? `${num} · ${name}` : `Ward ${num}`;
 }
 
+/** Map zoom level at which ward names appear next to ward numbers on the maps. */
+export const WARD_NAME_ZOOM = 14;
+
+/**
+ * HTML for an on-map ward label. The bare number is always visible; the name
+ * ("· Parkala") sits in a span that the .ck-show-ward-names CSS rule reveals
+ * once the map is zoomed in to WARD_NAME_ZOOM, so a zoomed-out map stays
+ * readable. Wards with no name on file (Karkala, Saligrama for now) just show
+ * the number. Falls back to the raw key when it isn't a ward identifier.
+ */
+export function wardMapLabelHtml(geoName: string | null | undefined): string {
+  if (!geoName) return "";
+  const label = formatWardLabel(geoName);
+  const sep = label.indexOf(" · ");
+  if (sep === -1) return label.replace(/^Ward /, "").replace(/[&<>]/g, "");
+  const num = label.slice(0, sep);
+  const name = label.slice(sep + 3).replace(/[&<>]/g, "");
+  return `${num}<span class="ward-name-part"> · ${name}</span>`;
+}
+
+/**
+ * Keeps a map's container class in step with its zoom level so the CSS can
+ * show or hide the ward names. Call once after creating the map.
+ */
+export function bindWardNameZoom(map: { getZoom(): number; getContainer(): HTMLElement; on(ev: string, fn: () => void): unknown }): void {
+  const update = () => map.getContainer().classList.toggle("ck-show-ward-names", map.getZoom() >= WARD_NAME_ZOOM);
+  map.on("zoomend", update);
+  map.on("moveend", update);
+  update();
+}
+
 /**
  * Formats a short analytics ward label (e.g. "W16") to "16 · Parkala".
  * These short labels are produced by buildWardBacklog in the API.

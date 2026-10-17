@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useGeofences, type GeoFeature, type GeoScope } from "@/lib/geofences";
-import { formatWardLabel } from "@/lib/ward-names";
+import { wardMapLabelHtml, bindWardNameZoom } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -178,6 +178,7 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
       }).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      bindWardNameZoom(map);
 
       setMapReady(true);
     }
@@ -266,15 +267,8 @@ export function PanchayatMap({ officers, reports, highlightedWard, onReportClick
           // Show compact ward label (number · name) instead of officer name to avoid clutter.
           // Plain text only — no background, border, or chip of any kind.
           const wardNum = ward.name.replace(/\D+/g, "");
-          // Udupi wards have official names worth the extra width ("16 · Parkala").
-          // Every other panchayat's wards are numerous/small on the map (e.g.
-          // Kundapura's 23), so the map itself just shows the bare number — the
-          // fuller "Ward N" label still appears in list/table views via
-          // formatWardLabel directly.
-          const isUdupiWard = /^Udupi Ward \d+$/.test(ward.name);
-          const labelText = isUdupiWard
-            ? formatWardLabel(ward.name) || (wardNum ? wardNum : ward.name.slice(0, 4))
-            : wardNum || formatWardLabel(ward.name) || ward.name.slice(0, 4);
+          // Number always; "· Name" appears when zoomed in (CSS, see bindWardNameZoom).
+          const labelText = wardMapLabelHtml(ward.name) || wardNum || ward.name.slice(0, 4);
           const labelColor = isHighlighted ? "#0d9488" : color;
           const icon = L.divIcon({
             html: `<div style="

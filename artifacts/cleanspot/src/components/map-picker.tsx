@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
+import { formatWardLabel } from "@/lib/ward-names";
 import "leaflet/dist/leaflet.css";
 import { Crosshair } from "lucide-react";
 
@@ -134,7 +135,7 @@ export function MapPicker({
           bubblingMouseEvents: false,
         },
       ).addTo(map);
-      layer.bindTooltip(name, {
+      layer.bindTooltip(formatWardLabel(name) || name, {
         sticky: true,
         direction: "center",
         className: "text-xs font-bold",

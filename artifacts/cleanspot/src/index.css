@@ -205,3 +205,7 @@
 .waste-popup .leaflet-popup-tip {
   box-shadow: none;
 }
+
+/* On-map ward labels: number always, name only when zoomed in (see WARD_NAME_ZOOM) */
+.ward-name-part { display: none; }
+.ck-show-ward-names .ward-name-part { display: inline; }

@@ -555,7 +555,7 @@ export function LiveWasteMap() {
               }`}
             >
               <MapPin className="w-3 h-3 shrink-0" />
-              {zone.name}
+              {formatWardLabel(zone.name)}
             </button>
           ))}
           {/* Coming soon placeholder — guides future additions */}
