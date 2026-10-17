@@ -55,3 +55,7 @@ test-results/
 # User-uploaded report photos must never be committed (public repo)
 /uploads-data/
 /artifacts/api-server/uploads-data/
+
+# Private staff lists and generated passwords - never commit
+/private/
+officer-passwords-*.csv

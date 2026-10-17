@@ -69,10 +69,70 @@ export const KUNDAPURA_WARD_NAMES: Record<number, string> = {
   23: "Kallangar",
 };
 
+/**
+ * Ward names for Kaup (Kapu), taken from the Karnataka KGIS ward-boundary data
+ * (KGISWardName) that the ward polygons themselves come from.
+ */
+export const KAUP_WARD_NAMES: Record<number, string> = {
+  1: "Kaipunjalu",
+  2: "Kothalakatte",
+  3: "Karavali",
+  4: "Polipugudde",
+  5: "Danda Thirtha",
+  6: "Kalya",
+  7: "Bharath Nagara",
+  8: "Beedubadi",
+  9: "Polipu",
+  10: "Kapu Pete",
+  11: "Light House",
+  12: "Koppalangadi",
+  13: "Thottam",
+  14: "Duggana Thota",
+  15: "Mangala Pete",
+  16: "Janardhana Temple",
+  17: "Badagara Gutthu",
+  18: "Kombagudde",
+  19: "General School",
+  20: "Gujji",
+  21: "Garadi",
+  22: "Kudthimar",
+  23: "Ahmadhi Mohalla",
+};
+
+/**
+ * Ward names for Byndoor, read from the Byndoor Town Panchayat's ward list (Kannada)
+ * and written in English letters. These are phonetic spellings, not gazetted names;
+ * the KGIS ward layer that the polygons come from has no names for Byndoor.
+ */
+export const BYNDOOR_WARD_NAMES: Record<number, string> = {
+  1: "Tarapati",
+  2: "Virupakshi",
+  3: "Dombe",
+  4: "Someshwara",
+  5: "Panchalingeshwara",
+  6: "Alandur",
+  7: "Kadke Maddodi",
+  8: "Yojananagara",
+  9: "Bankeshwara",
+  10: "Byndoor Pete",
+  11: "Venkatramana",
+  12: "Pantigaradi",
+  13: "Yedthare",
+  14: "Mayyadi Kalavadi",
+  15: "Bada Biyara",
+  16: "Surkunda",
+  17: "Ganganadu",
+  18: "Chandana Vasre",
+  19: "Taggarse Pete",
+  20: "Nelyadi Kadodi",
+};
+
 /** Ward-name lookups, keyed by panchayat, for every panchayat that has one on file. */
 const WARD_NAMES_BY_PANCHAYAT: Record<string, Record<number, string>> = {
   Udupi: UDUPI_WARD_NAMES,
   Kundapura: KUNDAPURA_WARD_NAMES,
+  Kaup: KAUP_WARD_NAMES,
+  Byndoor: BYNDOOR_WARD_NAMES,
 };
 
 /**

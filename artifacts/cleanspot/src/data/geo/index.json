@@ -377,6 +377,161 @@
      "name": "Karkala Ward 23"
     }
    ]
+  },
+  {
+   "name": "Kaup",
+   "slug": "kaup",
+   "wardCount": 23,
+   "bbox": [
+    13.19534,
+    74.72994,
+    13.25955,
+    74.7744
+   ],
+   "wards": [
+    {
+     "name": "Kaup Ward 1"
+    },
+    {
+     "name": "Kaup Ward 2"
+    },
+    {
+     "name": "Kaup Ward 3"
+    },
+    {
+     "name": "Kaup Ward 4"
+    },
+    {
+     "name": "Kaup Ward 5"
+    },
+    {
+     "name": "Kaup Ward 6"
+    },
+    {
+     "name": "Kaup Ward 7"
+    },
+    {
+     "name": "Kaup Ward 8"
+    },
+    {
+     "name": "Kaup Ward 9"
+    },
+    {
+     "name": "Kaup Ward 10"
+    },
+    {
+     "name": "Kaup Ward 11"
+    },
+    {
+     "name": "Kaup Ward 12"
+    },
+    {
+     "name": "Kaup Ward 13"
+    },
+    {
+     "name": "Kaup Ward 14"
+    },
+    {
+     "name": "Kaup Ward 15"
+    },
+    {
+     "name": "Kaup Ward 16"
+    },
+    {
+     "name": "Kaup Ward 17"
+    },
+    {
+     "name": "Kaup Ward 18"
+    },
+    {
+     "name": "Kaup Ward 19"
+    },
+    {
+     "name": "Kaup Ward 20"
+    },
+    {
+     "name": "Kaup Ward 21"
+    },
+    {
+     "name": "Kaup Ward 22"
+    },
+    {
+     "name": "Kaup Ward 23"
+    }
+   ]
+  },
+  {
+   "name": "Byndoor",
+   "slug": "byndoor",
+   "wardCount": 20,
+   "bbox": [
+    13.83185,
+    74.59667,
+    13.98098,
+    74.71493
+   ],
+   "wards": [
+    {
+     "name": "Byndoor Ward 1"
+    },
+    {
+     "name": "Byndoor Ward 2"
+    },
+    {
+     "name": "Byndoor Ward 3"
+    },
+    {
+     "name": "Byndoor Ward 4"
+    },
+    {
+     "name": "Byndoor Ward 5"
+    },
+    {
+     "name": "Byndoor Ward 6"
+    },
+    {
+     "name": "Byndoor Ward 7"
+    },
+    {
+     "name": "Byndoor Ward 8"
+    },
+    {
+     "name": "Byndoor Ward 9"
+    },
+    {
+     "name": "Byndoor Ward 10"
+    },
+    {
+     "name": "Byndoor Ward 11"
+    },
+    {
+     "name": "Byndoor Ward 12"
+    },
+    {
+     "name": "Byndoor Ward 13"
+    },
+    {
+     "name": "Byndoor Ward 14"
+    },
+    {
+     "name": "Byndoor Ward 15"
+    },
+    {
+     "name": "Byndoor Ward 16"
+    },
+    {
+     "name": "Byndoor Ward 17"
+    },
+    {
+     "name": "Byndoor Ward 18"
+    },
+    {
+     "name": "Byndoor Ward 19"
+    },
+    {
+     "name": "Byndoor Ward 20"
+    }
+   ]
   }
  ]
 }
