@@ -1,0 +1,48 @@
+{
+ "panchayats": [
+  {
+   "name": "Saligrama",
+   "slug": "saligrama",
+   "wardCount": 16,
+   "bbox": [
+    13.46991,
+    74.68643,
+    13.52092,
+    74.7365
+   ]
+  },
+  {
+   "name": "Udupi",
+   "slug": "udupi",
+   "wardCount": 35,
+   "bbox": [
+    13.31336,
+    74.69725,
+    13.3942,
+    74.82593
+   ]
+  },
+  {
+   "name": "Kundapura",
+   "slug": "kundapura",
+   "wardCount": 23,
+   "bbox": [
+    13.60296,
+    74.66784,
+    13.63899,
+    74.70817
+   ]
+  },
+  {
+   "name": "Karkala",
+   "slug": "karkala",
+   "wardCount": 23,
+   "bbox": [
+    13.1935,
+    74.96815,
+    13.24579,
+    75.03185
+   ]
+  }
+ ]
+}
