@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import geofencesData from "../data/geofences.json";
+import { useGeofences, type GeoFeature } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 const SALIGRAMA_CENTER: [number, number] = [13.4945, 74.7158];
@@ -24,8 +24,8 @@ function buildMarkerIcon(color: string) {
 
 const WARD_AMBER = "#f59e0b";
 
-function getZoneRing(areaName: string): L.LatLng[] | null {
-  for (const feature of geofencesData.features) {
+function getZoneRing(features: GeoFeature[], areaName: string): L.LatLng[] | null {
+  for (const feature of features) {
     if (feature.geometry.type === "Polygon") {
       const name = (feature.properties as { name?: string })?.name;
       if (name === areaName) {
@@ -38,9 +38,9 @@ function getZoneRing(areaName: string): L.LatLng[] | null {
   return null;
 }
 
-function addWardContext(map: L.Map, activeAreaName?: string | null): L.Layer[] {
+function addWardContext(features: GeoFeature[], map: L.Map, activeAreaName?: string | null): L.Layer[] {
   const layers: L.Layer[] = [];
-  for (const feature of geofencesData.features) {
+  for (const feature of features) {
     if (feature.geometry.type !== "Polygon") continue;
     const props = feature.properties as any;
     if (props?.type === "ward") {
@@ -114,14 +114,16 @@ export function OfficerAreaEditMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  // Ward outlines load as a separate download; the map is created once they are ready.
+  const { features: geoFeatures, ready: geoReady } = useGeofences("all");
 
   const onCenterChangeRef = useRef(onCenterChange);
   useEffect(() => { onCenterChangeRef.current = onCenterChange; }, [onCenterChange]);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!geoReady || !containerRef.current || mapRef.current) return;
 
-    const zoneRing = areaName ? getZoneRing(areaName) : null;
+    const zoneRing = areaName ? getZoneRing(geoFeatures, areaName) : null;
     const initialCenter: [number, number] = lat && lng ? [lat, lng] : SALIGRAMA_CENTER;
 
     const map = L.map(containerRef.current, { zoomControl: true }).setView(initialCenter, 14);
@@ -132,7 +134,7 @@ export function OfficerAreaEditMap({
     }).addTo(map);
 
     // Draw all ward + district context polygons
-    addWardContext(map, areaName);
+    addWardContext(geoFeatures, map, areaName);
 
     if (zoneRing) {
       // Only use for fitBounds — addWardContext already renders the ward in amber
@@ -168,7 +170,8 @@ export function OfficerAreaEditMap({
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoReady]);
 
   useEffect(() => {
     if (!mapRef.current) return;

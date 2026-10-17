@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { MapPin, RefreshCw, Globe } from "lucide-react";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences, type GeoFeature } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
@@ -48,9 +48,9 @@ function pointInPolygon(lon: number, lat: number, ring: [number, number][]): boo
   return inside;
 }
 
-function countForZone(spots: WasteSpot[], zoneName: string | null): number {
+function countForZone(features: GeoFeature[], spots: WasteSpot[], zoneName: string | null): number {
   if (!zoneName) return spots.length;
-  const feat = geofencesData.features.find(
+  const feat = features.find(
     (f) => (f.properties as any)?.name === zoneName && f.geometry.type === "Polygon"
   );
   if (!feat) return 0;
@@ -85,8 +85,8 @@ const DISTRICT_ZOOM = 11;
 // Districts (Saligrama, Udupi, ...) a master admin has paused for the public
 // are left out entirely here — no chip, no boundary drawn on the map. The
 // area's data isn't touched; it's just not shown as an active service zone.
-function buildZones(visibility: Record<string, boolean>): Zone[] {
-  return geofencesData.features
+function buildZones(features: GeoFeature[], visibility: Record<string, boolean>): Zone[] {
+  return features
     .filter((f) => {
       if (f.geometry.type !== "Polygon") return false;
       const props = f.properties as any;
@@ -126,6 +126,10 @@ export function LiveWasteMap() {
   const [activeZone, setActiveZone] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  // Boundaries load as separate downloads (not part of the main app file).
+  const { features: geoFeatures, ready: geoReady } = useGeofences("all");
+  const geoRef = useRef<GeoFeature[]>(geoFeatures);
+  geoRef.current = geoFeatures;
   const { lightbox, open: openLightbox } = useImageLightbox();
 
   // Which areas are currently open to the public. A master admin can pause
@@ -151,8 +155,8 @@ export function LiveWasteMap() {
   // Recompute count from cached spots whenever the active zone changes
   useEffect(() => {
     activeZoneRef.current = activeZone;
-    setCount(countForZone(spotsRef.current, activeZone));
-  }, [activeZone]);
+    setCount(countForZone(geoRef.current, spotsRef.current, activeZone));
+  }, [activeZone, geoReady]);
 
   // Softly request geolocation — no forced prompt, silently skipped on denial
   useEffect(() => {
@@ -190,7 +194,7 @@ export function LiveWasteMap() {
   const loadSpots = async () => {
     const data = await fetchSpots();
     spotsRef.current = data;
-    setCount(countForZone(data, activeZoneRef.current));
+    setCount(countForZone(geoRef.current, data, activeZoneRef.current));
     setLastRefresh(new Date());
     return data;
   };
@@ -199,10 +203,10 @@ export function LiveWasteMap() {
     // Wait for the area-visibility list before drawing anything — this is
     // what keeps a paused area (e.g. Udupi) off the map and out of the
     // service-area chips from the very first paint.
-    if (!visibilityReady) return;
+    if (!visibilityReady || !geoReady) return;
 
     const visibility = panchayatVisibility ?? {};
-    const filteredZones = buildZones(visibility);
+    const filteredZones = buildZones(geoRef.current, visibility);
     setZones(filteredZones);
     setActiveZone(filteredZones[0]?.name ?? null);
 
@@ -229,7 +233,7 @@ export function LiveWasteMap() {
         maxZoom: 18,
       }).addTo(map);
 
-      for (const feature of geofencesData.features) {
+      for (const feature of geoRef.current) {
         if (feature.geometry.type === "Polygon") {
           const props = feature.properties as any;
           // Skip a panchayat a master admin has paused for the public — no
@@ -286,7 +290,7 @@ export function LiveWasteMap() {
         youAreHereRef.current = null;
       }
     };
-  }, [visibilityReady]);
+  }, [visibilityReady, geoReady]);
 
   function placeMarkers(L: any, map: any, data: WasteSpot[]) {
     markersRef.current.forEach((m) => m.remove());

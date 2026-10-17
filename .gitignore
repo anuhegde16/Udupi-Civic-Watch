@@ -51,3 +51,7 @@ test-results/
 
 # Agent scratch renders/exports (regenerate via .agents/scripts)
 .agents/outputs/
+
+# User-uploaded report photos must never be committed (public repo)
+/uploads-data/
+/artifacts/api-server/uploads-data/

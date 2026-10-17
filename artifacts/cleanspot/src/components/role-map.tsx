@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useState, useMemo } from "react";
 import { format } from "date-fns";
-import geofencesData from "@/data/geofences.json";
+import { useGeofences } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -150,6 +150,9 @@ export function RoleMap({
     return m;
   }, [reports]);
 
+  // Ward outlines load as a separate download the first time a map needs them.
+  const { features: geoFeatures } = useGeofences("all");
+
   // ── Leaflet init ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -194,7 +197,7 @@ export function RoleMap({
       const L = (await import("leaflet")).default;
       const map = mapRef.current;
       if (!map) return;
-      const feats = geofencesData.features.filter(
+      const feats = geoFeatures.filter(
         f => f.geometry.type === "Polygon" && wardGeoNames.includes((f.properties as any)?.name)
       );
       if (!feats.length) return;
@@ -206,7 +209,7 @@ export function RoleMap({
       );
       fittedRef.current = true;
     })();
-  }, [mapReady, wardGeoNames]);
+  }, [mapReady, wardGeoNames, geoFeatures]);
 
   // ── Draw layers (re-runs when data or filter changes) ─────────────────────
   useEffect(() => {
@@ -228,7 +231,7 @@ export function RoleMap({
         : reports.filter(r => r.status === activeLayer);
 
       // ── Ward polygons ──────────────────────────────────────────────────
-      for (const feature of geofencesData.features) {
+      for (const feature of geoFeatures) {
         if (feature.geometry.type !== "Polygon") continue;
         const props = feature.properties as any;
         const wardName: string = props?.name ?? "";
@@ -485,7 +488,7 @@ export function RoleMap({
     return () => cancelAnimationFrame(rafId);
   }, [reports, wardGeoNames, wardGroups, mapReady, activeLayer,
       wardColorMap, wardGroupResRate, wardOpenCount, wardReportedCount, highlightBacklogWards, onWardTap,
-       onReportClick, focusedWardGeoName]);
+       onReportClick, focusedWardGeoName, geoFeatures]);
 
   // ── Fly to focused ward ───────────────────────────────────────────────────
   useEffect(() => {
@@ -494,7 +497,7 @@ export function RoleMap({
       const L = (await import("leaflet")).default;
       const map = mapRef.current;
       if (!map) return;
-      const feat = geofencesData.features.find(
+      const feat = geoFeatures.find(
         f => f.geometry.type === "Polygon" && (f.properties as any)?.name === focusedWardGeoName
       );
       if (!feat) return;
@@ -506,7 +509,7 @@ export function RoleMap({
         { padding: [20, 20], duration: 0.5 }
       );
     })();
-  }, [mapReady, focusedWardGeoName]);
+  }, [mapReady, focusedWardGeoName, geoFeatures]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   const showLegend = wardGroups && wardGroups.length > 0;

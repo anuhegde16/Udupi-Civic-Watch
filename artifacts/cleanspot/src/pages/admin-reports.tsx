@@ -26,25 +26,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useImageLightbox } from "@/components/image-lightbox";
 import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail-sheet";
 import { ReportNumberSearch } from "@/components/report-number-search";
-import geofencesData from "@/data/geofences.json";
+import { PANCHAYAT_NAMES as GEO_PANCHAYAT_NAMES, getWardNames } from "@/lib/geofences";
 type AdminListReportsStatus = "reported" | "cleaning" | "cleaned";
 
-const GEOFENCE_PANCHAYATS: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
-  .map((f) => (f.properties as any)?.name ?? "")
-  .filter(Boolean);
+const GEOFENCE_PANCHAYATS: string[] = GEO_PANCHAYAT_NAMES;
 
 /** Geographic ward names belonging to a panchayat, e.g. "Udupi Ward 5". */
 function geofenceWardsFor(panchayat: string): string[] {
-  return geofencesData.features
-    .filter(
-      (f) =>
-        f.geometry.type === "Polygon" &&
-        (f.properties as any)?.type === "ward" &&
-        (f.properties as any)?.panchayat === panchayat
-    )
-    .map((f) => (f.properties as any)?.name ?? "")
-    .filter(Boolean);
+  return getWardNames(panchayat);
 }
 
 type Report = {

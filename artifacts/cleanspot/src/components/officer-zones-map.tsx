@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import geofencesData from "../data/geofences.json";
+import { useGeofences, type GeoFeature } from "@/lib/geofences";
 import { formatWardLabel } from "@/lib/ward-names";
 
 const PANCHAYAT_CENTERS: Record<string, [number, number]> = {
@@ -15,9 +15,9 @@ const ZONE_COLORS = ["#0d9488", "#f59e0b", "#f43f5e", "#8b5cf6", "#3b82f6", "#10
 const WARD_AMBER = "#f59e0b";
 
 // Build geofence ward name → Leaflet LatLng ring (source coords are [lon, lat])
-function buildZoneRings(): Map<string, L.LatLng[]> {
+function buildZoneRings(features: GeoFeature[]): Map<string, L.LatLng[]> {
   const map = new Map<string, L.LatLng[]>();
-  for (const feature of geofencesData.features) {
+  for (const feature of features) {
     if (feature.geometry.type === "Polygon") {
       const name = (feature.properties as { name?: string })?.name;
       if (name) {
@@ -32,9 +32,9 @@ function buildZoneRings(): Map<string, L.LatLng[]> {
 }
 
 /** Draw background ward polygons (amber) for context, optionally one panchayat only. */
-function drawWardBackground(map: L.Map, panchayat?: string | null): L.Layer[] {
+function drawWardBackground(features: GeoFeature[], map: L.Map, panchayat?: string | null): L.Layer[] {
   const layers: L.Layer[] = [];
-  for (const feature of geofencesData.features) {
+  for (const feature of features) {
     const props = feature.properties as any;
     if (feature.geometry.type !== "Polygon" || props?.type !== "ward") continue;
     if (panchayat && props?.panchayat !== panchayat) continue;
@@ -98,6 +98,7 @@ export function OfficerZonesMap({
 }: OfficerZonesMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const { features: geoFeatures } = useGeofences("all");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -124,12 +125,12 @@ export function OfficerZonesMap({
     const map = mapRef.current;
     if (!map) return;
 
-    const zoneRings = buildZoneRings();
+    const zoneRings = buildZoneRings(geoFeatures);
     const layers: L.Layer[] = [];
     const allBounds: L.LatLngBounds[] = [];
 
     // Ward backdrop first, so staff zones draw on top
-    layers.push(...drawWardBackground(map, panchayat));
+    layers.push(...drawWardBackground(geoFeatures, map, panchayat));
 
     zones.forEach((zone, idx) => {
       const color = ZONE_COLORS[idx % ZONE_COLORS.length];
@@ -212,7 +213,7 @@ export function OfficerZonesMap({
     return () => {
       layers.forEach((l) => map.removeLayer(l));
     };
-  }, [zones, onZoneClick, panchayat]);
+  }, [zones, onZoneClick, panchayat, geoFeatures]);
 
   return (
     <div

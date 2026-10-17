@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
-import { NetworkFirst, NetworkOnly } from "workbox-strategies";
+import { CacheFirst, NetworkFirst, NetworkOnly } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -14,6 +14,20 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// Ward-boundary files (one per panchayat) are downloaded on demand. File names contain a
+// content hash, so a cached copy never goes stale: keep each one after first use so the
+// report page still works offline for areas the person has already opened.
+registerRoute(
+  ({ url }) => /\/assets\/geo-[^/]+\.js$/.test(url.pathname),
+  new CacheFirst({
+    cacheName: "geo-data",
+    plugins: [
+      { cacheWillUpdate: async ({ response }) => (response.status === 200 ? response : null) },
+      new ExpirationPlugin({ maxEntries: 60, purgeOnQuotaError: true }),
+    ],
+  })
+);
 
 registerRoute(
   new NavigationRoute(

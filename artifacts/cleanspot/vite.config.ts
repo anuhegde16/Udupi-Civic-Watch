@@ -41,11 +41,12 @@ export default defineConfig({
       injectRegister: "auto",
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"],
       injectManifest: {
-        // Default cap is 2 MiB. The main JS bundle inlines the panchayat ward-boundary
-        // GeoJSON data (src/data/geofences.json), which grows every time a new
-        // panchayat/municipality is onboarded (Saligrama + Udupi + Kundapura pushed it
-        // to ~2.16 MB). Raised to give headroom for future areas; bump again if this
-        // build error reappears ("Configure injectManifest.maximumFileSizeToCacheInBytes").
+        // Ward boundaries (src/data/geo/*.json) are downloaded on demand as separate
+        // "geo-*" files, one per panchayat. They are deliberately NOT pre-downloaded
+        // with the app (that would put every panchayat back on first install); sw.ts
+        // caches each one the first time it is used instead.
+        globIgnores: ["**/geo-*.js"],
+        // Default cap is 2 MiB; the main bundle is larger than that.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
       manifest: {
@@ -98,6 +99,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Give each panchayat's boundary file a recognisable name ("geo-<slug>-<hash>.js")
+        // so the service worker can treat them separately from the main app files.
+        chunkFileNames: (chunk) =>
+          chunk.facadeModuleId?.includes("/src/data/geo/")
+            ? "assets/geo-[name]-[hash].js"
+            : "assets/[name]-[hash].js",
+      },
+    },
   },
   server: {
     port,

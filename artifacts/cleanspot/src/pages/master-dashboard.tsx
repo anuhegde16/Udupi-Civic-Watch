@@ -193,7 +193,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import geofencesData from "@/data/geofences.json";
+import { ALL_WARD_NAMES, WARD_PANCHAYAT } from "@/lib/geofences";
 import { PanchayatMap, type PanchayatMapReport } from "@/components/panchayat-map";
 import {
   Sheet,
@@ -205,16 +205,10 @@ import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail
 import { NotificationCTABanner } from "@/components/notification-cta-banner";
 import { ReportNumberSearch } from "@/components/report-number-search";
 
-const allWardNames: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
-  .map((f) => (f.properties as any)?.name ?? "");
+const allWardNames: string[] = ALL_WARD_NAMES;
 
-/** Maps ward name → panchayat name from geofences.json; used for exact-match scoping. */
-const wardPanchayatMap: Record<string, string> = Object.fromEntries(
-  geofencesData.features
-    .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "ward")
-    .map((f) => [(f.properties as any)?.name ?? "", (f.properties as any)?.panchayat ?? ""])
-);
+/** Maps ward name → panchayat name; used for exact-match scoping. */
+const wardPanchayatMap: Record<string, string> = WARD_PANCHAYAT;
 
 const ZONE_COLORS = ["#f97316", "#8b5cf6", "#f43f5e", "#3b82f6", "#10b981", "#ec4899", "#0ea5e9", "#eab308"];
 

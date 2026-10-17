@@ -79,7 +79,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import geofencesData from "@/data/geofences.json";
+import { PANCHAYAT_NAMES as GEO_PANCHAYAT_NAMES, getWardCount } from "@/lib/geofences";
 import { Link } from "wouter";
 import { startOfDay, endOfDay } from "date-fns";
 import { DateRangePicker, dateRangeToParams, type DateRange } from "@/components/date-range-picker";
@@ -102,10 +102,7 @@ import { ReportDetailSheet, type ReportDetail } from "@/components/report-detail
 import { ReportNumberSearch } from "@/components/report-number-search";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-const panchayatAreaNames: string[] = geofencesData.features
-  .filter((f) => f.geometry.type === "Polygon" && (f.properties as any)?.type === "district")
-  .map((f) => (f.properties as any)?.name ?? "")
-  .filter(Boolean);
+const panchayatAreaNames: string[] = GEO_PANCHAYAT_NAMES;
 
 const STATUS_COLORS = {
   reported: "#ef4444",
@@ -458,12 +455,7 @@ export default function AdminDashboard() {
       const coveredAreas = new Set(
         panchayatOfficers.map((officer) => officer.areaName).filter(Boolean)
       );
-      const zoneCount = geofencesData.features.filter(
-        (feature) =>
-          feature.geometry.type === "Polygon" &&
-          (feature.properties as any)?.type === "ward" &&
-          (feature.properties as any)?.panchayat === name
-      ).length;
+      const zoneCount = getWardCount(name);
 
       return {
         name,
