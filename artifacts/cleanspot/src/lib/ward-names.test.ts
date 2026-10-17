@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatWardLabel, formatWardChartLabel, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES, KAUP_WARD_NAMES, BYNDOOR_WARD_NAMES } from "./ward-names";
+import { formatWardLabel, formatWardChartLabel, wardMapLabelHtml, bindWardNameZoom, WARD_NAME_ZOOM, UDUPI_WARD_NAMES, KUNDAPURA_WARD_NAMES, KAUP_WARD_NAMES, BYNDOOR_WARD_NAMES } from "./ward-names";
 
 describe("formatWardLabel", () => {
   it("formats a known Udupi ward identifier", () => {
@@ -81,5 +81,48 @@ describe("formatWardChartLabel", () => {
     expect(formatWardChartLabel("Ward 1")).toBe("Ward 1");
     expect(formatWardChartLabel("W99")).toBe("W99");
     expect(formatWardChartLabel("")).toBe("");
+  });
+});
+
+describe("wardMapLabelHtml", () => {
+  it("keeps the number visible and puts the name in a zoom-revealed span", () => {
+    expect(wardMapLabelHtml("Byndoor Ward 10")).toBe('10<span class="ward-name-part"> · Byndoor Pete</span>');
+    expect(wardMapLabelHtml("Udupi Ward 16")).toBe('16<span class="ward-name-part"> · Parkala</span>');
+  });
+
+  it("shows only the number when no name is on file", () => {
+    expect(wardMapLabelHtml("Karkala Ward 7")).toBe("7");
+    expect(wardMapLabelHtml("Ward 3")).toBe("3");
+  });
+
+  it("returns an empty string for missing input", () => {
+    expect(wardMapLabelHtml(null)).toBe("");
+  });
+});
+
+describe("bindWardNameZoom", () => {
+  function fakeMap(zoom: number) {
+    const handlers: Record<string, () => void> = {};
+    const classes = new Set<string>();
+    const el = { classList: { toggle: (c: string, on: boolean) => void (on ? classes.add(c) : classes.delete(c)) } } as unknown as HTMLElement;
+    const map = {
+      zoom,
+      getZoom() { return this.zoom; },
+      getContainer: () => el,
+      on: (ev: string, fn: () => void) => { handlers[ev] = fn; },
+    };
+    return { map, handlers, classes };
+  }
+
+  it("shows names only at or above the threshold and follows zoom changes", () => {
+    const { map, handlers, classes } = fakeMap(WARD_NAME_ZOOM - 1);
+    bindWardNameZoom(map);
+    expect(classes.has("ck-show-ward-names")).toBe(false);
+    map.zoom = WARD_NAME_ZOOM;
+    handlers.zoomend();
+    expect(classes.has("ck-show-ward-names")).toBe(true);
+    map.zoom = WARD_NAME_ZOOM - 2;
+    handlers.zoomend();
+    expect(classes.has("ck-show-ward-names")).toBe(false);
   });
 });

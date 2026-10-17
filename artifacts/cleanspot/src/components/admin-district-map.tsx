@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, Globe, Building2 } from "lucide-react";
 import { useGeofences, type GeoFeature } from "@/lib/geofences";
-import { formatWardLabel } from "@/lib/ward-names";
+import { formatWardLabel, wardMapLabelHtml, bindWardNameZoom } from "@/lib/ward-names";
 import { useImageLightbox } from "@/components/image-lightbox";
 
 const ZONE_PALETTE = [
@@ -156,6 +156,7 @@ export function AdminDistrictMap({
       }).addTo(map);
 
       L.control.zoom({ position: "bottomright" }).addTo(map);
+      bindWardNameZoom(map);
       setMapReady(true);
     }
 
@@ -296,8 +297,8 @@ export function AdminDistrictMap({
 
           if (isInActivePanchayat) {
             const wardNum = zone.name.replace(/\D+/g, "");
-            // "10 · Byndoor Pete" where a name is on file, otherwise "Ward 10".
-            const wardLabelText = formatWardLabel(zone.name) || wardNum;
+            // Number always; "· Name" appears when zoomed in (CSS, see bindWardNameZoom).
+            const wardLabelText = wardMapLabelHtml(zone.name) || wardNum;
             const labelColor = assignedOfficer ? wardColor : WARD_AMBER;
             // Plain text only — no background, border, or chip of any kind.
             const labelHtml = `<div style="color:${labelColor};font-size:11px;font-weight:800;line-height:1.3;white-space:nowrap;text-shadow:0 1px 2px rgba(255,255,255,0.9), 0 0 3px rgba(255,255,255,0.9);pointer-events:none;opacity:${isSelected ? "1" : "0.85"};">${wardLabelText}</div>`;
