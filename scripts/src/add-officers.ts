@@ -17,6 +17,12 @@
  *   - creates the login (role field_officer) so they can sign in with phone or email
  *   - gives a temporary password and forces a new one at first login
  *
+ * Fixing passwords of officers who were already added (--reset):
+ *   Gives officers who were added earlier a new temporary password (random or phone, see below).
+ *   Only touches accounts that still have the forced-change flag on, i.e. the officer has NOT
+ *   yet chosen their own password. Anyone who already changed their password is left alone.
+ *   Like everything else it is a dry run until you add --apply.
+ *
  * Temporary password (--password):
  *   random (default) - a random 10-character password per officer, saved to a private file.
  *   phone            - the officer's own 10-digit phone number (easy to hand out, but anyone who
@@ -48,6 +54,7 @@ const panchayat = arg("panchayat");
 const fileArg = arg("file");
 const file = fileArg ? resolve(baseDir, fileArg) : undefined;
 const apply = process.argv.includes("--apply");
+const reset = process.argv.includes("--reset");
 const passwordMode = arg("password") ?? "random";
 if (passwordMode !== "random" && passwordMode !== "phone") {
   console.error('--password must be "random" or "phone"');
@@ -147,10 +154,57 @@ function tempPassword(): string {
   return Array.from({ length: 10 }, () => alphabet[randomInt(alphabet.length)]).join("");
 }
 
+async function resetExisting(client: pg.PoolClient) {
+  console.log(`${apply ? "RESETTING" : "DRY RUN reset for"} passwords in ${panchayat} (temporary password: ${passwordMode})\n`);
+  await client.query("BEGIN");
+  const done: { ward: string; name: string; phone: string; password: string }[] = [];
+  for (const r of rows) {
+    const { rows: u } = await client.query(
+      `SELECT id, email, password_reset_required AS must_change FROM users
+       WHERE phone = $1 AND panchayat_name = $2 AND role = 'field_officer' LIMIT 1`,
+      [r.phone, panchayat],
+    );
+    if (!u.length) {
+      console.log(`  skip   ${r.ward.name.padEnd(20)} ${r.name} - no account found`);
+      continue;
+    }
+    if (!u[0].must_change) {
+      console.log(`  keep   ${r.ward.name.padEnd(20)} ${r.name} - already chose their own password (not touched)`);
+      continue;
+    }
+    const password = passwordMode === "phone" ? r.phone : tempPassword();
+    const hash = await bcryptjs.hash(password, 10);
+    await client.query(`UPDATE users SET password_hash = $1, password_reset_required = true WHERE id = $2`, [hash, u[0].id]);
+    await client.query(`UPDATE officers SET password_hash = $1 WHERE email = $2`, [hash, u[0].email]);
+    done.push({ ward: r.ward.name, name: r.name, phone: r.phone, password });
+    console.log(`  reset  ${r.ward.name.padEnd(20)} ${r.name}`);
+  }
+  if (!apply) {
+    await client.query("ROLLBACK");
+    console.log(`\nDry run only - nothing was changed. ${done.length} would be reset. Add --apply to save.`);
+    return;
+  }
+  await client.query("COMMIT");
+  console.log(`\nReset ${done.length} officers.`);
+  if (done.length && passwordMode === "random") {
+    const csv =
+      "ward,name,phone,temporary_password\n" + done.map((c) => [c.ward, c.name, c.phone, c.password].join(",")).join("\n") + "\n";
+    writeFileSync(outFile, csv, { mode: 0o600 });
+    console.log(`Temporary passwords are in: ${outFile}  (private; message each officer, then delete the file)`);
+  } else if (done.length) {
+    console.log("Each officer logs in with their phone number as BOTH the username and the password,");
+    console.log("and is asked to set a new password straight away. Ask them to do it today.");
+  }
+}
+
 async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const client = await pool.connect();
   try {
+    if (reset) {
+      await resetExisting(client);
+      return;
+    }
     console.log(`${apply ? "ADDING" : "DRY RUN for"} ${rows.length} officers in ${panchayat} (temporary password: ${passwordMode})\n`);
     await client.query("BEGIN");
     const created: { ward: string; name: string; phone: string; password: string }[] = [];
